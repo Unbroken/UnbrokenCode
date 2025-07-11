@@ -32,7 +32,7 @@ export function convertSettings(oldSettings: ITextMateThemingRule[], result: { t
 					if (mappings) {
 						const colorHex = settings[key];
 						if (typeof colorHex === 'string') {
-							const color = Color.fromHex(colorHex);
+							const color = Color.fromString(colorHex);
 							for (const colorId of mappings) {
 								result.colors[colorId] = color;
 							}

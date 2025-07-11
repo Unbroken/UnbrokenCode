@@ -42,6 +42,9 @@ export class TestColorTheme implements IColorTheme {
 	get tokenFontMap(): IFontTokenOptions[] {
 		return [];
 	}
+
+	public readonly highlightingColorSpace = null;
+	public readonly colorSpace = null;
 }
 
 class TestFileIconTheme implements IFileIconTheme {

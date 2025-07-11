@@ -369,6 +369,10 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 					this.currentColorTheme.setCustomSemanticTokenColors(this.settings.semanticTokenColorCustomizations);
 					hasColorChanges = true;
 				}
+				if (e.affectsConfiguration('workbench.colorSpace')) {
+					this.currentColorTheme.setCustomColorSpace(this.settings.getColorSpace(this.currentColorTheme));
+					hasColorChanges = true;
+				}
 				if (hasColorChanges) {
 					this.updateDynamicCSSRules(this.currentColorTheme);
 					this.onColorThemeChange.fire(this.currentColorTheme);

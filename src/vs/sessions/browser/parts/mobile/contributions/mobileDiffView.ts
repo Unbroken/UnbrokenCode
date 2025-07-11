@@ -405,7 +405,7 @@ export class MobileDiffView extends Disposable {
 		const colorMap = TokenizationRegistry.getColorMap();
 		if (colorMap && hasRealTokens) {
 			const styleEl = document.createElement('style');
-			styleEl.textContent = generateTokensCSSForColorMap(colorMap);
+			styleEl.textContent = generateTokensCSSForColorMap(colorMap, TokenizationRegistry.getHighlightingColorSpace());
 			container.appendChild(styleEl);
 		}
 

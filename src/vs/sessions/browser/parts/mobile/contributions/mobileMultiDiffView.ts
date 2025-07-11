@@ -870,7 +870,7 @@ export class MobileMultiDiffView extends Disposable {
 		const colorMap = TokenizationRegistry.getColorMap();
 		if (colorMap && state.renderData.hasRealTokens) {
 			const styleEl = document.createElement('style');
-			styleEl.textContent = generateTokensCSSForColorMap(colorMap);
+			styleEl.textContent = generateTokensCSSForColorMap(colorMap, TokenizationRegistry.getHighlightingColorSpace());
 			inner.appendChild(styleEl);
 		}
 

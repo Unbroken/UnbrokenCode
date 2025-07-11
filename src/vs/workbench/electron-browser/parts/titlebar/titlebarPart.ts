@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Event } from '../../../../base/common/event.js';
+import { Color } from '../../../../base/common/color.js';
 import { getZoomFactor } from '../../../../base/browser/browser.js';
 import { $, addDisposableListener, append, EventType, getWindow, getWindowId, hide, show } from '../../../../base/browser/dom.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -260,10 +261,14 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 					this.cachedWindowControlStyles.bgColor !== this.element.style.backgroundColor ||
 					this.cachedWindowControlStyles.fgColor !== this.element.style.color
 				) {
+					// Convert colors to hex format for Electron's setTitleBarOverlay API
+					// which doesn't support CSS Color Level 4 color() function syntax
+					const bgColor = this.element.style.backgroundColor;
+					const fgColor = this.element.style.color;
 					this.nativeHostService.updateWindowControls({
 						targetWindowId: getWindowId(getWindow(this.element)),
-						backgroundColor: this.element.style.backgroundColor,
-						foregroundColor: this.element.style.color
+						backgroundColor: bgColor ? Color.Format.CSS.formatHex(Color.Format.CSS.parse(bgColor)!) : undefined,
+						foregroundColor: fgColor ? Color.Format.CSS.formatHex(Color.Format.CSS.parse(fgColor)!) : undefined
 					});
 				}
 			}

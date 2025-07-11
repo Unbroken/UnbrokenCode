@@ -10,6 +10,7 @@ import { IJSONSchema } from '../../../../base/common/jsonSchema.js';
 
 import { workbenchColorsSchemaId } from '../../../../platform/theme/common/colorRegistry.js';
 import { tokenStylingSchemaId } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
+import { COLOR_VALUE_PATTERN } from '../../../../platform/theme/common/colorUtils.js';
 
 const textMateScopes = [
 	'comment',
@@ -125,7 +126,7 @@ const textmateColorSchema: IJSONSchema = {
 			anyOf: [
 				{
 					type: 'string',
-					format: 'color-hex'
+					pattern: COLOR_VALUE_PATTERN
 				},
 				{
 					$ref: '#/definitions/settings'
@@ -139,7 +140,7 @@ const textmateColorSchema: IJSONSchema = {
 				foreground: {
 					type: 'string',
 					description: nls.localize('schema.token.foreground', 'Foreground color for the token.'),
-					format: 'color-hex',
+					pattern: COLOR_VALUE_PATTERN,
 					default: '#ff0000'
 				},
 				background: {

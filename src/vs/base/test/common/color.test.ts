@@ -709,4 +709,230 @@ suite('Color', () => {
 			assertContrastRatio(0xffffffff, 0x606060ff, 21, 0x000000ff);
 		});
 	});
+
+	suite('toColorSpaceString', () => {
+		test('outputs correct CSS for all supported color spaces', () => {
+			const color = new Color(new RGBA(10, 20, 30, 0.5));
+			assert.strictEqual(color.toColorSpaceString(null), 'rgba(10, 20, 30, 0.5)');
+			assert.strictEqual(color.toColorSpaceString('srgb'), 'rgba(10, 20, 30, 0.5)');
+			assert.strictEqual(color.toColorSpaceString('display-p3'), 'color(display-p3 0.039 0.078 0.118 / 0.5)');
+			assert.strictEqual(color.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0.039 0.078 0.118 / 0.5)');
+			assert.strictEqual(color.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 0.039 0.078 0.118 / 0.5)');
+			assert.strictEqual(color.toColorSpaceString('rec2020'), 'color(rec2020 0.039 0.078 0.118 / 0.5)');
+
+			const colorOpaque = new Color(new RGBA(10, 20, 30, 1));
+			assert.strictEqual(colorOpaque.toColorSpaceString(null), '#0a141e');
+			assert.strictEqual(colorOpaque.toColorSpaceString('srgb'), '#0a141e');
+			assert.strictEqual(colorOpaque.toColorSpaceString('display-p3'), 'color(display-p3 0.039 0.078 0.118)');
+			assert.strictEqual(colorOpaque.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0.039 0.078 0.118)');
+			assert.strictEqual(colorOpaque.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 0.039 0.078 0.118)');
+			assert.strictEqual(colorOpaque.toColorSpaceString('rec2020'), 'color(rec2020 0.039 0.078 0.118)');
+		});
+
+		test('outputs correct CSS for extreme color values', () => {
+			const black = new Color(new RGBA(0, 0, 0, 1));
+			const white = new Color(new RGBA(255, 255, 255, 1));
+			const blackAlpha = new Color(new RGBA(0, 0, 0, 0.5));
+			const whiteAlpha = new Color(new RGBA(255, 255, 255, 0.5));
+
+			// Black, opaque
+			assert.strictEqual(black.toColorSpaceString(null), '#000000');
+			assert.strictEqual(black.toColorSpaceString('srgb'), '#000000');
+			assert.strictEqual(black.toColorSpaceString('display-p3'), 'color(display-p3 0 0 0)');
+			assert.strictEqual(black.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0 0 0)');
+			assert.strictEqual(black.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 0 0 0)');
+			assert.strictEqual(black.toColorSpaceString('rec2020'), 'color(rec2020 0 0 0)');
+
+			// Black, alpha
+			assert.strictEqual(blackAlpha.toColorSpaceString(null), 'rgba(0, 0, 0, 0.5)');
+			assert.strictEqual(blackAlpha.toColorSpaceString('srgb'), 'rgba(0, 0, 0, 0.5)');
+			assert.strictEqual(blackAlpha.toColorSpaceString('display-p3'), 'color(display-p3 0 0 0 / 0.5)');
+			assert.strictEqual(blackAlpha.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0 0 0 / 0.5)');
+			assert.strictEqual(blackAlpha.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 0 0 0 / 0.5)');
+			assert.strictEqual(blackAlpha.toColorSpaceString('rec2020'), 'color(rec2020 0 0 0 / 0.5)');
+
+			// White, opaque
+			assert.strictEqual(white.toColorSpaceString(null), '#ffffff');
+			assert.strictEqual(white.toColorSpaceString('srgb'), '#ffffff');
+			assert.strictEqual(white.toColorSpaceString('display-p3'), 'color(display-p3 1 1 1)');
+			assert.strictEqual(white.toColorSpaceString('a98-rgb'), 'color(a98-rgb 1 1 1)');
+			assert.strictEqual(white.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 1 1 1)');
+			assert.strictEqual(white.toColorSpaceString('rec2020'), 'color(rec2020 1 1 1)');
+
+			// White, alpha
+			assert.strictEqual(whiteAlpha.toColorSpaceString(null), 'rgba(255, 255, 255, 0.5)');
+			assert.strictEqual(whiteAlpha.toColorSpaceString('srgb'), 'rgba(255, 255, 255, 0.5)');
+			assert.strictEqual(whiteAlpha.toColorSpaceString('display-p3'), 'color(display-p3 1 1 1 / 0.5)');
+			assert.strictEqual(whiteAlpha.toColorSpaceString('a98-rgb'), 'color(a98-rgb 1 1 1 / 0.5)');
+			assert.strictEqual(whiteAlpha.toColorSpaceString('prophoto-rgb'), 'color(prophoto-rgb 1 1 1 / 0.5)');
+			assert.strictEqual(whiteAlpha.toColorSpaceString('rec2020'), 'color(rec2020 1 1 1 / 0.5)');
+		});
+	});
+
+	test('parse color() function with color space preservation', () => {
+		// Display P3 color space
+		const p3Green = Color.Format.CSS.parse('color(display-p3 0.0 1.0 0.0)');
+		assert.ok(p3Green);
+		assert.deepStrictEqual(p3Green!.rgba, new RGBA(0, 255, 0, 1));
+		assert.deepStrictEqual(p3Green!.colorSpace, 'display-p3');
+
+		// Display P3 with alpha
+		const p3GreenAlpha = Color.Format.CSS.parse('color(display-p3 0.0 1.0 0.0 / 0.5)');
+		assert.ok(p3GreenAlpha);
+		assert.deepStrictEqual(p3GreenAlpha!.rgba, new RGBA(0, 255, 0, 0.5));
+		assert.deepStrictEqual(p3GreenAlpha!.colorSpace, 'display-p3');
+
+		// sRGB color space
+		const srgbRed = Color.Format.CSS.parse('color(srgb 1 0 0)');
+		assert.ok(srgbRed);
+		assert.deepStrictEqual(srgbRed!.rgba, new RGBA(255, 0, 0, 1));
+		assert.deepStrictEqual(srgbRed!.colorSpace, 'srgb');
+
+		// a98-rgb color space
+		const a98Blue = Color.Format.CSS.parse('color(a98-rgb 0 0 1)');
+		assert.ok(a98Blue);
+		assert.deepStrictEqual(a98Blue!.rgba, new RGBA(0, 0, 255, 1));
+		assert.deepStrictEqual(a98Blue!.colorSpace, 'a98-rgb');
+
+		// prophoto-rgb color space
+		const prophotoYellow = Color.Format.CSS.parse('color(prophoto-rgb 1 1 0)');
+		assert.ok(prophotoYellow);
+		assert.deepStrictEqual(prophotoYellow!.rgba, new RGBA(255, 255, 0, 1));
+		assert.deepStrictEqual(prophotoYellow!.colorSpace, 'prophoto-rgb');
+
+		// rec2020 color space
+		const rec2020Cyan = Color.Format.CSS.parse('color(rec2020 0 1 1)');
+		assert.ok(rec2020Cyan);
+		assert.deepStrictEqual(rec2020Cyan!.rgba, new RGBA(0, 255, 255, 1));
+		assert.deepStrictEqual(rec2020Cyan!.colorSpace, 'rec2020');
+
+		// Fractional values
+		const p3Gray = Color.Format.CSS.parse('color(display-p3 0.5 0.5 0.5)');
+		assert.ok(p3Gray);
+		assert.deepStrictEqual(p3Gray!.rgba, new RGBA(128, 128, 128, 1));
+		assert.deepStrictEqual(p3Gray!.colorSpace, 'display-p3');
+
+		// With whitespace variations
+		const p3WhiteSpace = Color.Format.CSS.parse('color(  display-p3   0.2   0.4   0.6  )');
+		assert.ok(p3WhiteSpace);
+		assert.deepStrictEqual(p3WhiteSpace!.rgba, new RGBA(51, 102, 153, 1));
+
+		// With alpha and whitespace
+		const p3AlphaWhiteSpace = Color.Format.CSS.parse('color( display-p3 0.1 0.2 0.3 / 0.8 )');
+		assert.ok(p3AlphaWhiteSpace);
+		assert.deepStrictEqual(p3AlphaWhiteSpace!.rgba, new RGBA(26, 51, 77, 0.8));
+
+		// Invalid cases
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(invalid 0 0 0)'), null);
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(display-p3 2 0 0)'), null); // out of range
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(display-p3 -1 0 0)'), null); // out of range
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(display-p3 0 0 0 / 1.5)'), null); // alpha out of range
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(display-p3)'), null); // missing values
+		assert.deepStrictEqual(Color.Format.CSS.parse('color(display-p3 0 0)'), null); // too few values
+	});
+
+	test('color() function preserves color space in toColorSpaceString', () => {
+		// Parse a Display P3 color and verify it round-trips
+		const p3Green = Color.Format.CSS.parse('color(display-p3 0 1 0)');
+		assert.ok(p3Green);
+		assert.deepStrictEqual(p3Green!.toColorSpaceString(null), 'color(display-p3 0 1 0)');
+
+		// Parse with alpha
+		const p3GreenAlpha = Color.Format.CSS.parse('color(display-p3 0 1 0 / 0.5)');
+		assert.ok(p3GreenAlpha);
+		assert.deepStrictEqual(p3GreenAlpha!.toColorSpaceString(null), 'color(display-p3 0 1 0 / 0.5)');
+
+		// Verify other color spaces
+		const srgbRed = Color.Format.CSS.parse('color(srgb 1 0 0)');
+		assert.ok(srgbRed);
+		// srgb should return regular toString() format
+		assert.deepStrictEqual(srgbRed!.toColorSpaceString(null), '#ff0000');
+
+		// A programmatically created color without colorSpace should use supplied parameter
+		const regularGreen = new Color(new RGBA(0, 255, 0, 1));
+		assert.deepStrictEqual(regularGreen.colorSpace, undefined);
+		assert.deepStrictEqual(regularGreen.toColorSpaceString('display-p3'), 'color(display-p3 0 1 0)');
+		assert.deepStrictEqual(regularGreen.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0 1 0)');
+	});
+
+	test('toString() respects stored color space', () => {
+		// Parse a Display P3 color and verify toString() uses the color space
+		const p3Green = Color.Format.CSS.parse('color(display-p3 0 1 0)');
+		assert.ok(p3Green);
+		assert.deepStrictEqual(p3Green!.toString(), 'color(display-p3 0 1 0)');
+
+		// With alpha
+		const p3GreenAlpha = Color.Format.CSS.parse('color(display-p3 0 1 0 / 0.5)');
+		assert.ok(p3GreenAlpha);
+		assert.deepStrictEqual(p3GreenAlpha!.toString(), 'color(display-p3 0 1 0 / 0.5)');
+
+		// Different color spaces
+		const a98Blue = Color.Format.CSS.parse('color(a98-rgb 0 0 1)');
+		assert.ok(a98Blue);
+		assert.deepStrictEqual(a98Blue!.toString(), 'color(a98-rgb 0 0 1)');
+
+		// sRGB returns regular format
+		const srgbRed = Color.Format.CSS.parse('color(srgb 1 0 0)');
+		assert.ok(srgbRed);
+		assert.deepStrictEqual(srgbRed!.toString(), '#ff0000');
+
+		// Colors without stored color space work as before
+		const regularGreen = new Color(new RGBA(0, 255, 0, 1));
+		assert.deepStrictEqual(regularGreen.toString(), '#00ff00');
+
+		const regularAlpha = new Color(new RGBA(0, 255, 0, 0.5));
+		assert.deepStrictEqual(regularAlpha.toString(), 'rgba(0, 255, 0, 0.5)');
+	});
+
+	test('explicit vs implicit color space behavior', () => {
+		// Explicit color space (from color() function) should not be overridden
+		const explicitP3Green = Color.Format.CSS.parse('color(display-p3 0 1 0)');
+		assert.ok(explicitP3Green);
+		assert.strictEqual(explicitP3Green.isColorSpaceExplicit, true);
+		assert.strictEqual(explicitP3Green.colorSpace, 'display-p3');
+		// toColorSpaceString should ignore the parameter and use the explicit color space
+		assert.strictEqual(explicitP3Green.toColorSpaceString('srgb'), 'color(display-p3 0 1 0)');
+		assert.strictEqual(explicitP3Green.toColorSpaceString('a98-rgb'), 'color(display-p3 0 1 0)');
+
+		// Implicit color space should honor toColorSpaceString parameter
+		const implicitGreen = new Color(new RGBA(0, 255, 0, 1), 'display-p3', false);
+		assert.strictEqual(implicitGreen.isColorSpaceExplicit, false);
+		assert.strictEqual(implicitGreen.colorSpace, 'display-p3');
+		// toColorSpaceString parameter should override implicit color space
+		assert.strictEqual(implicitGreen.toColorSpaceString('srgb'), '#00ff00');
+		assert.strictEqual(implicitGreen.toColorSpaceString('a98-rgb'), 'color(a98-rgb 0 1 0)');
+		// When no parameter, should use stored color space
+		assert.strictEqual(implicitGreen.toColorSpaceString(null), 'color(display-p3 0 1 0)');
+
+		// Colors without color space (default behavior)
+		const defaultGreen = new Color(new RGBA(0, 255, 0, 1));
+		assert.strictEqual(defaultGreen.isColorSpaceExplicit, false);
+		assert.strictEqual(defaultGreen.colorSpace, undefined);
+		// Should honor toColorSpaceString parameter
+		assert.strictEqual(defaultGreen.toColorSpaceString('display-p3'), 'color(display-p3 0 1 0)');
+		assert.strictEqual(defaultGreen.toColorSpaceString(null), '#00ff00');
+	});
+
+	test('color space propagation with explicit flag', () => {
+		// Test that parseColorFunction sets explicit flag
+		const parsed = Color.Format.CSS.parse('color(display-p3 0.5 0.5 0.5)');
+		assert.ok(parsed);
+		assert.strictEqual(parsed.isColorSpaceExplicit, true);
+		assert.strictEqual(parsed.colorSpace, 'display-p3');
+
+		// Test that hex parsing doesn't set explicit flag
+		const hexColor = Color.Format.CSS.parse('#808080');
+		assert.ok(hexColor);
+		assert.strictEqual(hexColor.isColorSpaceExplicit, false);
+		assert.strictEqual(hexColor.colorSpace, undefined);
+
+		// Test manual construction with explicit flag
+		const manualExplicit = new Color(new RGBA(128, 128, 128, 1), 'a98-rgb', true);
+		assert.strictEqual(manualExplicit.isColorSpaceExplicit, true);
+		assert.strictEqual(manualExplicit.toColorSpaceString('srgb'), 'color(a98-rgb 0.502 0.502 0.502)');
+
+		const manualImplicit = new Color(new RGBA(128, 128, 128, 1), 'a98-rgb', false);
+		assert.strictEqual(manualImplicit.isColorSpaceExplicit, false);
+		assert.strictEqual(manualImplicit.toColorSpaceString('srgb'), '#808080');
+	});
 });

@@ -121,7 +121,7 @@ export class ReleaseNotesManager extends Disposable {
 		await input.webview.postMessage({
 			type: 'releaseNotesTokenization',
 			documentId: document.documentId,
-			value: colorMap ? generateTokensCSSForColorMap(colorMap) : '',
+			value: colorMap ? generateTokensCSSForColorMap(colorMap, TokenizationRegistry.getHighlightingColorSpace()) : '',
 			codeBlocks,
 		});
 	}
@@ -374,7 +374,8 @@ export class ReleaseNotesManager extends Disposable {
 		const processedContent = await renderReleaseNotesMarkdown(fileContent.text, this._extensionService, this._languageService, this._simpleSettingRenderer, this._productService.quality, tryouts, codeBlocks);
 
 		const colorMap = TokenizationRegistry.getColorMap();
-		const css = colorMap ? generateTokensCSSForColorMap(colorMap) : '';
+		const highlightingColorSpace = TokenizationRegistry.getHighlightingColorSpace();
+		const css = colorMap ? generateTokensCSSForColorMap(colorMap, highlightingColorSpace) : '';
 		const showReleaseNotes = Boolean(this._configurationService.getValue<boolean>('update.showReleaseNotes'));
 
 		return `<!DOCTYPE html>

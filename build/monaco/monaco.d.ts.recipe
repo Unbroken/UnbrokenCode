@@ -72,6 +72,7 @@ declare namespace monaco {
 
 #include(vs/platform/markers/common/markers.js): MarkerTag, MarkerSeverity
 #include(vs/base/common/cancellation.js): CancellationTokenSource, CancellationToken
+#include(vs/base/common/color): RGBColorSpace
 #include(vs/base/common/uri.js): URI, UriComponents
 #include(vs/base/common/keyCodes.js): KeyCode
 #include(vs/editor/common/services/editorBaseApi.js): KeyMod

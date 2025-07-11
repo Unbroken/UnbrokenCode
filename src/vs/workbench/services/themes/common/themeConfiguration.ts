@@ -18,6 +18,7 @@ import { isWeb } from '../../../../base/common/platform.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { IHostColorSchemeService } from './hostColorSchemeService.js';
 import { IColorScheme } from '../../../../platform/window/common/window.js';
+import { RGBColorSpace } from '../../../../base/common/color.js';
 
 // Configuration: Themes
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -332,6 +333,14 @@ export class ThemeConfiguration {
 
 	public get semanticTokenColorCustomizations(): ISemanticTokenColorCustomizations | undefined {
 		return this.configurationService.getValue<ISemanticTokenColorCustomizations>(ThemeSettings.SEMANTIC_TOKEN_COLOR_CUSTOMIZATIONS);
+	}
+
+	public getColorSpace(theme: IWorkbenchColorTheme): RGBColorSpace | undefined {
+		const space = this.configurationService.getValue<RGBColorSpace | 'default'>('workbench.colorSpace');
+		if (space !== 'default') {
+			return space;
+		}
+		return undefined;
 	}
 
 	public getPreferredColorScheme(): ColorScheme | undefined {

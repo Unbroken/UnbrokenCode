@@ -10,6 +10,8 @@ function roundFloat(number: number, decimalPoints: number): number {
 	return Math.round(number * decimal) / decimal;
 }
 
+export type RGBColorSpace = null | 'srgb' | 'display-p3' | 'a98-rgb' | 'prophoto-rgb' | 'rec2020';
+
 export class RGBA {
 	_rgbaBrand: void = undefined;
 
@@ -259,6 +261,10 @@ export class Color {
 		return Color.Format.CSS.parseHex(hex) || Color.red;
 	}
 
+	static fromString(hex: string): Color {
+		return Color.Format.CSS.parse(hex) || Color.red;
+	}
+
 	static equals(a: Color | null, b: Color | null): boolean {
 		if (!a && !b) {
 			return true;
@@ -270,6 +276,8 @@ export class Color {
 	}
 
 	readonly rgba: RGBA;
+	readonly colorSpace?: RGBColorSpace;
+	readonly isColorSpaceExplicit: boolean;
 	private _hsla?: HSLA;
 	get hsla(): HSLA {
 		if (this._hsla) {
@@ -287,7 +295,7 @@ export class Color {
 		return HSVA.fromRGBA(this.rgba);
 	}
 
-	constructor(arg: RGBA | HSLA | HSVA) {
+	constructor(arg: RGBA | HSLA | HSVA, colorSpace?: RGBColorSpace, isColorSpaceExplicit = false) {
 		if (!arg) {
 			throw new Error('Color needs a value');
 		} else if (arg instanceof RGBA) {
@@ -301,6 +309,8 @@ export class Color {
 		} else {
 			throw new Error('Invalid color ctor argument');
 		}
+		this.colorSpace = colorSpace;
+		this.isColorSpaceExplicit = isColorSpaceExplicit;
 	}
 
 	equals(other: Color | null): boolean {
@@ -554,6 +564,30 @@ export class Color {
 		return this._toString;
 	}
 
+	/**
+	 * Returns a CSS color(<color-space> ...) string for this color.
+	 * If isColorSpaceExplicit is true, uses the stored colorSpace ignoring the parameter.
+	 * Otherwise, uses the supplied space parameter, falling back to stored colorSpace.
+	 */
+	toColorSpaceString(space: RGBColorSpace): string {
+		const effectiveSpace = this.isColorSpaceExplicit ? this.colorSpace : (space ?? this.colorSpace);
+
+		if (!effectiveSpace || effectiveSpace === 'srgb') {
+			if (this.rgba.a === 1) {
+				return Color.Format.CSS.formatHex(this);
+			}
+			return Color.Format.CSS.formatRGBA(this);
+		}
+
+		const r = +(this.rgba.r / 255).toFixed(3);
+		const g = +(this.rgba.g / 255).toFixed(3);
+		const b = +(this.rgba.b / 255).toFixed(3);
+		const a = this.rgba.a;
+		const alpha = a === 1 ? '' : ` / ${+a.toFixed(3)}`;
+
+		return `color(${effectiveSpace} ${r} ${g} ${b}${alpha})`;
+	}
+
 	private _toNumber32Bit?: number;
 	toNumber32Bit(): number {
 		if (!this._toNumber32Bit) {
@@ -653,8 +687,13 @@ export namespace Color {
 
 			/**
 			 * The default format will use HEX if opaque and RGBA otherwise.
+			 * If the color has a stored color space (other than srgb), it will use the color() function format.
 			 */
 			export function format(color: Color): string {
+				if (color.colorSpace && color.colorSpace !== 'srgb') {
+					return color.toColorSpaceString(null);
+				}
+
 				if (color.isOpaque()) {
 					return Color.Format.CSS.formatHex(color);
 				}
@@ -695,8 +734,44 @@ export namespace Color {
 					const b = parseInt(color.groups?.b ?? '0');
 					return new Color(new RGBA(r, g, b));
 				}
+				if (css.startsWith('color(')) {
+					return parseColorFunction(css);
+				}
 				// TODO: Support more formats as needed
 				return parseNamedKeyword(css);
+			}
+
+			function parseColorFunction(css: string): Color | null {
+				// Parse CSS Color Level 4 color() function
+				// Syntax: color(<color-space> <r> <g> <b> [/ <alpha>])
+				// Example: color(display-p3 0.0 1.0 0.0) or color(display-p3 0.0 1.0 0.0 / 0.5)
+				const regex = /^color\(\s*(srgb|display-p3|a98-rgb|prophoto-rgb|rec2020)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/;
+				const match = css.match(regex);
+
+				if (!match) {
+					return null;
+				}
+
+				const [, colorSpace, rStr, gStr, bStr, aStr] = match;
+
+				// Parse the 0-1 range values
+				const r = parseFloat(rStr);
+				const g = parseFloat(gStr);
+				const b = parseFloat(bStr);
+				const a = aStr ? parseFloat(aStr) : 1;
+
+				// Validate ranges (0-1 for all components)
+				if (r < 0 || r > 1 || g < 0 || g > 1 || b < 0 || b > 1 || a < 0 || a > 1) {
+					return null;
+				}
+
+				// Convert 0-1 range to 0-255 for RGBA storage
+				const r255 = Math.round(r * 255);
+				const g255 = Math.round(g * 255);
+				const b255 = Math.round(b * 255);
+
+				// Create Color with the color space preserved and marked as explicit
+				return new Color(new RGBA(r255, g255, b255, a), colorSpace as RGBColorSpace, true);
 			}
 
 			function parseNamedKeyword(css: string): Color | null {

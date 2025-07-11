@@ -88,6 +88,25 @@ export const Extensions = {
 
 export const DEFAULT_COLOR_CONFIG_VALUE = 'default';
 
+/**
+ * Regular expression pattern that matches valid color values in theme files.
+ * Accepts all CSS color formats that Color.Format.CSS.parse() can parse (excluding named colors):
+ * - Hex: #RGB, #RGBA, #RRGGBB, #RRGGBBAA
+ * - RGB: rgb(r, g, b), rgba(r, g, b, a)
+ * - Color function: color(colorspace r g b / a)
+ */
+export const COLOR_VALUE_PATTERN = '^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\\(\\s*[+-]?\\d+\\s*,\\s*[+-]?\\d+\\s*,\\s*[+-]?\\d+(?:\\s*,\\s*[+-]?[\\d.]+)?\\s*\\)|color\\(\\s*(?:srgb|display-p3|a98-rgb|prophoto-rgb|rec2020)\\s+[\\d.]+\\s+[\\d.]+\\s+[\\d.]+(?:\\s*\\/\\s*[\\d.]+)?\\s*\\))$';
+
+/**
+ * Regular expression pattern that matches color values with transparency (alpha < 1).
+ * Used for colors that must be transparent to avoid obscuring content.
+ * Accepts:
+ * - Hex with alpha: #RGBA (where A is not F), #RRGGBBAA (where AA is not FF)
+ * - RGBA function: rgba(r, g, b, a) with alpha parameter
+ * - Color function with alpha: color(colorspace r g b / a) - alpha is required
+ */
+export const COLOR_VALUE_PATTERN_WITH_TRANSPARENCY = '^(?:#(?:(?:[0-9a-fA-f]{3}[0-9a-eA-E])|(?:[0-9a-fA-F]{6}(?:(?![fF]{2})(?:[0-9a-fA-F]{2}))))|rgba\\(\\s*[+-]?\\d+\\s*,\\s*[+-]?\\d+\\s*,\\s*[+-]?\\d+\\s*,\\s*[+-]?[\\d.]+\\s*\\)|color\\(\\s*(?:srgb|display-p3|a98-rgb|prophoto-rgb|rec2020)\\s+[\\d.]+\\s+[\\d.]+\\s+[\\d.]+\\s*\\/\\s*[\\d.]+\\s*\\))$';
+
 export interface IColorRegistry {
 
 	readonly onDidChangeSchema: Event<void>;
@@ -163,12 +182,12 @@ class ColorRegistry extends Disposable implements IColorRegistry {
 	public registerColor(id: string, defaults: ColorDefaults | ColorValue | null, description: string, needsTransparency = false, deprecationMessage?: string): ColorIdentifier {
 		const colorContribution: ColorContribution = { id, description, defaults, needsTransparency, deprecationMessage };
 		this.colorsById[id] = colorContribution;
-		const propertySchema: IJSONSchemaWithSnippets = { type: 'string', format: 'color-hex', defaultSnippets: [{ body: '${1:#ff0000}' }] };
+		const propertySchema: IJSONSchemaWithSnippets = { type: 'string', pattern: COLOR_VALUE_PATTERN, defaultSnippets: [{ body: '${1:#ff0000}' }] };
 		if (deprecationMessage) {
 			propertySchema.deprecationMessage = deprecationMessage;
 		}
 		if (needsTransparency) {
-			propertySchema.pattern = '^#(?:(?<rgba>[0-9a-fA-f]{3}[0-9a-eA-E])|(?:[0-9a-fA-F]{6}(?:(?![fF]{2})(?:[0-9a-fA-F]{2}))))?$';
+			propertySchema.pattern = COLOR_VALUE_PATTERN_WITH_TRANSPARENCY;
 			propertySchema.patternErrorMessage = nls.localize('transparecyRequired', 'This color must be transparent or it will obscure content');
 		}
 		this.colorSchema.properties[id] = {
@@ -335,6 +354,26 @@ export function lessProminent(colorValue: ColorValue, backgroundColorValue: Colo
 // ----- implementation
 
 /**
+ * Ensures a color has the theme's color space applied if it has an implicit color space.
+ * If the color has an explicit color space (e.g., from color() function), it won't be overridden.
+ * @param color The color to ensure has the correct color space
+ * @param theme The theme containing the color space to apply
+ * @returns The color with the theme's color space applied, or the original color if it has an explicit color space
+ */
+export function ensureColorSpace(color: Color | undefined, theme: IColorTheme): Color | undefined {
+	if (!color || !theme.colorSpace) {
+		return color;
+	}
+	if (color.isColorSpaceExplicit) {
+		return color;
+	}
+	if (color.colorSpace === theme.colorSpace) {
+		return color;
+	}
+	return new Color(color.rgba, theme.colorSpace, false);
+}
+
+/**
  * @param colorValue Resolve a color value in the context of a theme
  */
 export function resolveColorValue(colorValue: ColorValue | null, theme: IColorTheme): Color | undefined {
@@ -342,13 +381,16 @@ export function resolveColorValue(colorValue: ColorValue | null, theme: IColorTh
 		return undefined;
 	} else if (typeof colorValue === 'string') {
 		if (colorValue[0] === '#') {
-			return Color.fromHex(colorValue);
+			const parsed = Color.fromHex(colorValue);
+			return ensureColorSpace(parsed, theme);
+		} else if (colorValue.startsWith('color(') || colorValue.startsWith('rgba(') || colorValue.startsWith('rgb(')) {
+			return ensureColorSpace(Color.Format.CSS.parse(colorValue) ?? undefined, theme);
 		}
-		return theme.getColor(colorValue);
+		return ensureColorSpace(theme.getColor(colorValue), theme);
 	} else if (colorValue instanceof Color) {
-		return colorValue;
+		return ensureColorSpace(colorValue, theme);
 	} else if (typeof colorValue === 'object') {
-		return executeTransform(colorValue, theme);
+		return ensureColorSpace(executeTransform(colorValue, theme), theme);
 	}
 	return undefined;
 }

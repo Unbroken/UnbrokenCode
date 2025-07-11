@@ -16,7 +16,7 @@ import { StandaloneKeybindingService, updateConfigurationService } from './stand
 import { IStandaloneThemeService } from '../common/standaloneTheme.js';
 import { IMenuItem, MenuId, MenuRegistry } from '../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandHandler, ICommandService } from '../../../platform/commands/common/commands.js';
-import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { IConfigurationService, IConfigurationChangeEvent } from '../../../platform/configuration/common/configuration.js';
 import { ContextKeyExpr, ContextKeyValue, IContextKey, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService, ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
@@ -44,6 +44,7 @@ import { IHoverService, WorkbenchHoverDelegate } from '../../../platform/hover/b
 import { setBaseLayerHoverDelegate } from '../../../base/browser/ui/hover/hoverDelegate2.js';
 import { IMarkdownRendererService } from '../../../platform/markdown/browser/markdownRenderer.js';
 import { EditorMarkdownCodeBlockRenderer } from '../../browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
+import { RGBColorSpace } from '../../../base/common/color.js';
 
 /**
  * Description of an action contribution
@@ -447,9 +448,16 @@ export class StandaloneEditor extends StandaloneCodeEditor implements IStandalon
 		delete options.model;
 		super(domElement, options, instantiationService, codeEditorService, commandService, contextKeyService, hoverService, keybindingService, themeService, notificationService, accessibilityService, languageConfigurationService, languageFeaturesService, markdownRendererService);
 
+		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
+
 		this._configurationService = configurationService;
 		this._standaloneThemeService = themeService;
 		this._register(themeDomRegistration);
+		this._register(configurationService.onDidChangeConfiguration((event: IConfigurationChangeEvent) => {
+			if (event.affectsConfiguration('workbench.highlightingColorSpace')) {
+				themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
+			}
+		}));
 
 		let model: ITextModel | null;
 		if (typeof _model === 'undefined') {
@@ -469,6 +477,10 @@ export class StandaloneEditor extends StandaloneCodeEditor implements IStandalon
 			};
 			this._onDidChangeModel.fire(e);
 		}
+	}
+
+	private getHighlightingColorSpace(): RGBColorSpace {
+		return this._configurationService.getValue<RGBColorSpace>('workbench.highlightingColorSpace') ?? 'srgb';
 	}
 
 	public override dispose(): void {
@@ -535,10 +547,21 @@ export class StandaloneDiffEditor2 extends DiffEditorWidget implements IStandalo
 			editorProgressService,
 		);
 
+		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
+
 		this._configurationService = configurationService;
 		this._standaloneThemeService = themeService;
 
 		this._register(themeDomRegistration);
+		this._register(configurationService.onDidChangeConfiguration((event: IConfigurationChangeEvent) => {
+			if (event.affectsConfiguration('workbench.highlightingColorSpace')) {
+				themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
+			}
+		}));
+	}
+
+	private getHighlightingColorSpace(): RGBColorSpace {
+		return this._configurationService.getValue<RGBColorSpace>('workbench.highlightingColorSpace') ?? 'srgb';
 	}
 
 	public override dispose(): void {

@@ -88,7 +88,7 @@ export async function registerFixtureSyntaxHighlighting(
 	const colorMap = toColorMap(darkTheme.tokenColorMap);
 	const styleElement = createStyleSheet(fixtureHost, undefined, disposables);
 	const styles = theme.type === ColorScheme.DARK
-		? `${generateTokensCSSForColorMap(colorMap)}\n${generateTokensCSSForFontMap(darkTheme.tokenFontMap)}`
+		? `${generateTokensCSSForColorMap(colorMap, darkTheme.highlightingColorSpace)}\n${generateTokensCSSForFontMap(darkTheme.tokenFontMap)}`
 		: `${colorMap.slice(1).map((_, index) => `.mtk${index + 1}`).join(', ')} { color: var(--vscode-editor-foreground); font: inherit; text-decoration: none; }`;
 	styleElement.textContent = `@scope {\n${styles}\n}`;
 }

@@ -9,6 +9,7 @@ import { cloneGlobalStylesheets, isGlobalStylesheet } from '../../../../base/bro
 import { CodeWindow, ensureCodeWindow, mainWindow } from '../../../../base/browser/window.js';
 import { coalesce } from '../../../../base/common/arrays.js';
 import { Barrier } from '../../../../base/common/async.js';
+import { Color } from '../../../../base/common/color.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
@@ -118,6 +119,22 @@ export interface IAuxiliaryWindow extends IDisposable {
 }
 
 const DEFAULT_AUX_WINDOW_DIMENSIONS = new Dimension(DEFAULT_AUX_WINDOW_SIZE.width, DEFAULT_AUX_WINDOW_SIZE.height);
+
+/**
+ * The background color of a native window, which only takes hex colors. An opaque color in another form, such as the
+ * `color(display-p3 …)` of a theme in a wide gamut color space, is given as the hex of its channels, as the colors
+ * of native title bars are. A translucent one is left out, as the `rgba(…)` of a translucent sRGB color is.
+ */
+function toNativeBackgroundColor(color: string | undefined): string | undefined {
+	if (!color) {
+		return undefined;
+	}
+	if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) {
+		return color;
+	}
+	const parsed = Color.Format.CSS.parse(color);
+	return parsed?.isOpaque() ? Color.Format.CSS.formatHex(parsed) : undefined;
+}
 
 export class AuxiliaryWindow extends BaseWindow implements IAuxiliaryWindow {
 
@@ -392,6 +409,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			};
 		}
 
+		const nativeBackgroundColor = toNativeBackgroundColor(options?.backgroundColor);
 		const features = coalesce([
 			'popup=yes',
 			`left=${newWindowBounds.x}`,
@@ -413,7 +431,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			options?.noBackgroundThrottling ? 'window-no-background-throttling=yes' : undefined,
 			options?.panel ? 'window-panel=yes' : undefined,
 			typeof options?.opacity === 'number' ? `window-opacity=${options.opacity}` : undefined,
-			options?.backgroundColor && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(options.backgroundColor) ? `window-background-color=${options.backgroundColor}` : undefined,
+			nativeBackgroundColor ? `window-background-color=${nativeBackgroundColor}` : undefined,
 		]);
 
 		const auxiliaryWindow = mainWindow.open(isFirefox ? '' /* FF immediately fires an unload event if using about:blank */ : 'about:blank', undefined, features.join(','));

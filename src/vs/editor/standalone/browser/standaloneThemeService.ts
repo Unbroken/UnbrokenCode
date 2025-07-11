@@ -6,7 +6,7 @@
 import * as dom from '../../../base/browser/dom.js';
 import * as domStylesheetsJs from '../../../base/browser/domStylesheets.js';
 import { addMatchMediaChangeListener } from '../../../base/browser/browser.js';
-import { Color } from '../../../base/common/color.js';
+import { Color, RGBColorSpace } from '../../../base/common/color.js';
 import { Emitter } from '../../../base/common/event.js';
 import { TokenizationRegistry } from '../../common/languages.js';
 import { FontStyle, TokenMetadata } from '../../common/encodedTokenAttributes.js';
@@ -15,7 +15,7 @@ import { BuiltinTheme, IStandaloneTheme, IStandaloneThemeData, IStandaloneThemeS
 import { hc_black, hc_light, vs, vs_dark } from '../common/themes.js';
 import { IEnvironmentService } from '../../../platform/environment/common/environment.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
-import { asCssVariableName, ColorIdentifier, Extensions, IColorRegistry } from '../../../platform/theme/common/colorRegistry.js';
+import { asCssVariableName, ColorIdentifier, Extensions, IColorRegistry, ensureColorSpace } from '../../../platform/theme/common/colorRegistry.js';
 import { Extensions as ThemingExtensions, ICssStyleCollector, IFileIconTheme, IProductIconTheme, IThemingRegistry, ITokenStyle, IFontTokenOptions } from '../../../platform/theme/common/themeService.js';
 import { IDisposable, Disposable } from '../../../base/common/lifecycle.js';
 import { ColorScheme, isDark, isHighContrast } from '../../../platform/theme/common/theme.js';
@@ -34,6 +34,8 @@ class StandaloneTheme implements IStandaloneTheme {
 
 	public readonly id: string;
 	public readonly themeName: string;
+	public highlightingColorSpace: RGBColorSpace;
+	public colorSpace: RGBColorSpace;
 
 	private readonly themeData: IStandaloneThemeData;
 	private colors: Map<string, Color> | null;
@@ -57,6 +59,8 @@ class StandaloneTheme implements IStandaloneTheme {
 		this.colors = null;
 		this.defaultColors = Object.create(null);
 		this._tokenTheme = null;
+		this.highlightingColorSpace = standaloneThemeData.highlightingColorSpace;
+		this.colorSpace = standaloneThemeData.colorSpace;
 	}
 
 	public get label(): string {
@@ -96,10 +100,10 @@ class StandaloneTheme implements IStandaloneTheme {
 	public getColor(colorId: ColorIdentifier, useDefault?: boolean): Color | undefined {
 		const color = this.getColors().get(colorId);
 		if (color) {
-			return color;
+			return ensureColorSpace(color, this);
 		}
 		if (useDefault !== false) {
-			return this.getDefault(colorId);
+			return ensureColorSpace(this.getDefault(colorId), this);
 		}
 		return undefined;
 	}
@@ -236,6 +240,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 	private _styleElements: HTMLStyleElement[];
 	private _colorMapOverride: Color[] | null;
 	private _theme!: IStandaloneTheme;
+	private _highlightingColorSpace: RGBColorSpace = null;
 
 	private _builtInProductIconTheme = new UnthemedProductIconTheme();
 
@@ -379,6 +384,14 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		this._onOSSchemeChanged();
 	}
 
+	public setHighlightingColorSpace(highlightingColorSpace: RGBColorSpace): void {
+		if (this._highlightingColorSpace === highlightingColorSpace) {
+			return;
+		}
+		this._highlightingColorSpace = highlightingColorSpace;
+		this._updateThemeOrColorMap();
+	}
+
 	private _updateThemeOrColorMap(): void {
 		const cssRules: string[] = [];
 		const hasRule: { [rule: string]: boolean } = {};
@@ -402,7 +415,7 @@ export class StandaloneThemeService extends Disposable implements IStandaloneThe
 		ruleCollector.addRule(`.monaco-editor, .monaco-diff-editor, .monaco-component { ${colorVariables.join('\n')} }`);
 
 		const colorMap = this._colorMapOverride || this._theme.tokenTheme.getColorMap();
-		ruleCollector.addRule(generateTokensCSSForColorMap(colorMap));
+		ruleCollector.addRule(generateTokensCSSForColorMap(colorMap, this._highlightingColorSpace || this._theme.highlightingColorSpace));
 
 		// If the OS has forced-colors active, disable forced color adjustment for
 		// Monaco editor elements so that VS Code's built-in high contrast themes

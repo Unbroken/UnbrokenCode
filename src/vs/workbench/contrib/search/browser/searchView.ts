@@ -1126,6 +1126,19 @@ export class SearchView extends ViewPane {
 		return false;
 	}
 
+	/**
+	 * Reveal a match in the tree.
+	 * @param match The match to reveal.
+	 */
+	private revealMatch(match: RenderableMatch): void {
+		const event = getSelectionKeyboardEvent(undefined, false, false);
+		this.tree.setFocus([match], event);
+		this.tree.setSelection([match], event);
+		this.tree.reveal(match);
+		const ariaLabel = this.treeAccessibilityProvider.getAriaLabel(match);
+		if (ariaLabel) { aria.status(ariaLabel); }
+	}
+
 	async selectNextMatch(): Promise<void> {
 		if (!this.hasSearchResults()) {
 			return;
@@ -1162,12 +1175,7 @@ export class SearchView extends ViewPane {
 			if (next === selected) {
 				this.tree.setFocus([]);
 			}
-			const event = getSelectionKeyboardEvent(undefined, false, false);
-			this.tree.setFocus([next], event);
-			this.tree.setSelection([next], event);
-			this.tree.reveal(next);
-			const ariaLabel = this.treeAccessibilityProvider.getAriaLabel(next);
-			if (ariaLabel) { aria.status(ariaLabel); }
+			this.revealMatch(next);
 		}
 	}
 
@@ -1208,12 +1216,7 @@ export class SearchView extends ViewPane {
 			if (prev === selected) {
 				this.tree.setFocus([]);
 			}
-			const event = getSelectionKeyboardEvent(undefined, false, false);
-			this.tree.setFocus([prev], event);
-			this.tree.setSelection([prev], event);
-			this.tree.reveal(prev);
-			const ariaLabel = this.treeAccessibilityProvider.getAriaLabel(prev);
-			if (ariaLabel) { aria.status(ariaLabel); }
+			this.revealMatch(prev);
 		}
 	}
 

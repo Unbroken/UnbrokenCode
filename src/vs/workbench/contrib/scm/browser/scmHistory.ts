@@ -13,7 +13,7 @@ import { svgElem } from '../../../../base/browser/dom.js';
 import { PANEL_BACKGROUND } from '../../../common/theme.js';
 import { findLastIdx } from '../../../../base/common/arraysFind.js';
 
-export const SWIMLANE_HEIGHT = 22;
+export const SWIMLANE_HEIGHT = 16;
 export const SWIMLANE_WIDTH = 11;
 const SWIMLANE_CURVE_RADIUS = 5;
 const CIRCLE_RADIUS = 4;

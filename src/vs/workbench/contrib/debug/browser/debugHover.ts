@@ -443,7 +443,7 @@ class DebugHoverDataSource extends AbstractExpressionDataSource<IExpression, IEx
 
 class DebugHoverDelegate implements IListVirtualDelegate<IExpression> {
 	getHeight(element: IExpression): number {
-		return 18;
+		return 12;
 	}
 
 	getTemplateId(element: IExpression): string {

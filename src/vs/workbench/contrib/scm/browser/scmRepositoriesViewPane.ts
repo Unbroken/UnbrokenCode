@@ -5,15 +5,15 @@
 
 import './media/scm.css';
 import { localize } from '../../../../nls.js';
-import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { ViewPane, IViewPaneOptions, ViewAction } from '../../../browser/parts/views/viewPane.js';
 import { append, $ } from '../../../../base/browser/dom.js';
 import { IListVirtualDelegate, IIdentityProvider } from '../../../../base/browser/ui/list/list.js';
 import { IAsyncDataSource, ITreeEvent, ITreeContextMenuEvent } from '../../../../base/browser/ui/tree/tree.js';
 import { WorkbenchCompressibleAsyncDataTree } from '../../../../platform/list/browser/listService.js';
-import { ISCMRepository, ISCMService, ISCMViewService } from '../common/scm.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ISCMRepository, ISCMService, ISCMViewService, REPOSITORIES_VIEW_PANE_ID } from '../common/scm.js';
+import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService, IContextKey, ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -21,14 +21,17 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RepositoryActionRunner, RepositoryRenderer } from './scmRepositoryRenderer.js';
-import { collectContextMenuActions, getActionViewItemProvider, isSCMRepository } from './util.js';
+import { collectContextMenuActions, getActionViewItemProvider, isSCMRepository, getRepositoryResourceCount } from './util.js';
+import { ContextKeys } from './scmViewPane.js';
 import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { Iterable } from '../../../../base/common/iterator.js';
-import { MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { autorun, IObservable, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { Sequencer } from '../../../../base/common/async.js';
+import { Codicon } from '../../../../base/common/codicons.js';
 
 class ListDelegate implements IListVirtualDelegate<ISCMRepository> {
 
@@ -42,7 +45,10 @@ class ListDelegate implements IListVirtualDelegate<ISCMRepository> {
 }
 
 class RepositoryTreeDataSource extends Disposable implements IAsyncDataSource<ISCMViewService, ISCMRepository> {
-	constructor(@ISCMViewService private readonly scmViewService: ISCMViewService) {
+	constructor(
+		@ISCMViewService private readonly scmViewService: ISCMViewService,
+		private readonly shouldHideUnchanged: () => boolean
+	) {
 		super();
 	}
 
@@ -51,8 +57,13 @@ class RepositoryTreeDataSource extends Disposable implements IAsyncDataSource<IS
 			? inputOrElement.provider.id
 			: undefined;
 
-		const repositories = this.scmViewService.repositories
+		let repositories = this.scmViewService.repositories
 			.filter(r => r.provider.parentId === parentId);
+
+		// Filter out repositories with no changes if the option is enabled
+		if (this.shouldHideUnchanged()) {
+			repositories = repositories.filter(r => getRepositoryResourceCount(r.provider) > 0);
+		}
 
 		return repositories;
 	}
@@ -62,8 +73,13 @@ class RepositoryTreeDataSource extends Disposable implements IAsyncDataSource<IS
 			? inputOrElement.provider.id
 			: undefined;
 
-		const repositories = this.scmViewService.repositories
+		let repositories = this.scmViewService.repositories
 			.filter(r => r.provider.parentId === parentId);
+
+		// Filter out repositories with no changes if the option is enabled
+		if (this.shouldHideUnchanged()) {
+			repositories = repositories.filter(r => getRepositoryResourceCount(r.provider) > 0);
+		}
 
 		return repositories.length > 0;
 	}
@@ -84,6 +100,13 @@ export class SCMRepositoriesViewPane extends ViewPane {
 
 	private readonly visibleCountObs: IObservable<number>;
 	private readonly providerCountBadgeObs: IObservable<'hidden' | 'auto' | 'visible'>;
+	private hideUnchangedRepositoriesContextKey!: IContextKey<boolean>;
+	private _hideUnchangedRepositories = false;
+
+	private getHideUnchangedRepositories(): boolean {
+		const stored = this.storageService.get('scm.repositories.hideUnchangedRepositories', StorageScope.WORKSPACE);
+		return stored === 'true';
+	}
 
 	private readonly visibilityDisposables = new DisposableStore();
 
@@ -99,12 +122,48 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IOpenerService openerService: IOpenerService,
 		@IThemeService themeService: IThemeService,
-		@IHoverService hoverService: IHoverService
+		@IHoverService hoverService: IHoverService,
+		@IStorageService private readonly storageService: IStorageService
 	) {
 		super({ ...options, titleMenuId: MenuId.SCMSourceControlTitle }, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 
 		this.visibleCountObs = observableConfigValue('scm.repositories.visible', 10, this.configurationService);
 		this.providerCountBadgeObs = observableConfigValue<'hidden' | 'auto' | 'visible'>('scm.providerCountBadge', 'hidden', this.configurationService);
+
+		this._hideUnchangedRepositories = this.getHideUnchangedRepositories();
+		this.hideUnchangedRepositoriesContextKey = ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.bindTo(contextKeyService);
+		this.hideUnchangedRepositoriesContextKey.set(this._hideUnchangedRepositories);
+
+		// Listen for storage changes from other views
+		this._register(this.storageService.onDidChangeValue(StorageScope.WORKSPACE, undefined, this._store)(e => {
+			if (e.key === 'scm.repositories.hideUnchangedRepositories') {
+				const newValue = this.getHideUnchangedRepositories();
+				if (this._hideUnchangedRepositories !== newValue) {
+					this._hideUnchangedRepositories = newValue;
+					this.hideUnchangedRepositoriesContextKey.set(newValue);
+					this.refresh();
+				}
+			}
+		}));
+	}
+
+	get hideUnchangedRepositories(): boolean {
+		return this._hideUnchangedRepositories;
+	}
+
+	set hideUnchangedRepositories(value: boolean) {
+		if (this._hideUnchangedRepositories === value) {
+			return;
+		}
+
+		this._hideUnchangedRepositories = value;
+		this.hideUnchangedRepositoriesContextKey.set(value);
+		this.storageService.store('scm.repositories.hideUnchangedRepositories', value, StorageScope.WORKSPACE, StorageTarget.USER);
+		this.refresh();
+	}
+
+	private async refresh(): Promise<void> {
+		await this.treeOperationSequencer.queue(() => this.tree.updateChildren());
 	}
 
 	protected override renderBody(container: HTMLElement): void {
@@ -170,6 +229,23 @@ export class SCMRepositoriesViewPane extends ViewPane {
 					onDidChangeVisibleRepositoriesSignal.read(reader);
 					await this.treeOperationSequencer.queue(() => this.updateTreeSelection());
 				}));
+
+				// Refresh view when resources change (for hide unchanged repositories feature)
+				const refreshOnResourceChanges = () => {
+					if (this.hideUnchangedRepositories) {
+						this.refresh();
+					}
+				};
+
+				// Listen to resource changes on all repositories
+				for (const repository of this.scmViewService.repositories) {
+					this.visibilityDisposables.add(repository.provider.onDidChangeResources(refreshOnResourceChanges));
+				}
+
+				// Listen to new repositories and bind their resource change events
+				this.visibilityDisposables.add(this.scmService.onDidAddRepository(repository => {
+					this.visibilityDisposables.add(repository.provider.onDidChangeResources(refreshOnResourceChanges));
+				}));
 			});
 		}, this, this._store);
 	}
@@ -186,7 +262,7 @@ export class SCMRepositoriesViewPane extends ViewPane {
 
 	private createTree(container: HTMLElement): void {
 		this.treeIdentityProvider = new RepositoryTreeIdentityProvider();
-		this.treeDataSource = this.instantiationService.createInstance(RepositoryTreeDataSource);
+		this.treeDataSource = new RepositoryTreeDataSource(this.scmViewService, () => this.hideUnchangedRepositories);
 		this._register(this.treeDataSource);
 
 		const compressionEnabled = observableConfigValue('scm.compactFolders', true, this.configurationService);
@@ -372,3 +448,84 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		super.dispose();
 	}
 }
+
+class HideUnchangedRepositoriesAction extends ViewAction<SCMRepositoriesViewPane> {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.hideUnchangedRepositories',
+			title: localize('hideUnchangedRepositories', "Hide Unchanged Repositories"),
+			viewId: REPOSITORIES_VIEW_PANE_ID,
+			f1: false,
+			icon: Codicon.eye,
+			toggled: ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.isEqualTo(true),
+			menu: {
+				id: MenuId.SCMSourceControlTitle,
+				group: 'navigation',
+				when: ContextKeyExpr.and(
+					ContextKeyExpr.equals('view', REPOSITORIES_VIEW_PANE_ID),
+					ContextKeys.RepositoryCount.notEqualsTo(0),
+					ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.isEqualTo(false)
+				),
+				order: -999
+			}
+		});
+	}
+
+	async runInView(_: ServicesAccessor, view: SCMRepositoriesViewPane): Promise<void> {
+		view.hideUnchangedRepositories = !view.hideUnchangedRepositories;
+	}
+}
+
+class ShowUnchangedRepositoriesAction extends ViewAction<SCMRepositoriesViewPane> {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.showUnchangedRepositories',
+			title: localize('showUnchangedRepositories', "Show Unchanged Repositories"),
+			viewId: REPOSITORIES_VIEW_PANE_ID,
+			f1: false,
+			icon: Codicon.eyeClosed,
+			toggled: ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.isEqualTo(true),
+			menu: {
+				id: MenuId.SCMSourceControlTitle,
+				group: 'navigation',
+				when: ContextKeyExpr.and(
+					ContextKeyExpr.equals('view', REPOSITORIES_VIEW_PANE_ID),
+					ContextKeys.RepositoryCount.notEqualsTo(0),
+					ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.isEqualTo(true)
+				),
+				order: -999
+			}
+		});
+	}
+
+	async runInView(_: ServicesAccessor, view: SCMRepositoriesViewPane): Promise<void> {
+		view.hideUnchangedRepositories = !view.hideUnchangedRepositories;
+	}
+}
+
+registerAction2(HideUnchangedRepositoriesAction);
+registerAction2(ShowUnchangedRepositoriesAction);
+
+class HideUnchangedRepositoriesRepositoriesMenuAction extends ViewAction<SCMRepositoriesViewPane> {
+	constructor() {
+		super({
+			id: 'workbench.scm.action.hideUnchangedRepositoriesRepositoriesMenu',
+			title: localize('hideUnchangedRepositories', "Hide Unchanged Repositories"),
+			viewId: REPOSITORIES_VIEW_PANE_ID,
+			f1: false,
+			toggled: ContextKeys.SCMRepositoriesViewHideUnchangedRepositories.isEqualTo(true),
+			menu: {
+				id: MenuId.SCMSourceControlTitle,
+				group: '0_repositories',
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('view', REPOSITORIES_VIEW_PANE_ID), ContextKeys.RepositoryCount.notEqualsTo(0)),
+				order: 1
+			}
+		});
+	}
+
+	async runInView(_: ServicesAccessor, view: SCMRepositoriesViewPane): Promise<void> {
+		view.hideUnchangedRepositories = !view.hideUnchangedRepositories;
+	}
+}
+
+registerAction2(HideUnchangedRepositoriesRepositoriesMenuAction);

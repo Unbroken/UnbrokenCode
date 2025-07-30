@@ -135,7 +135,7 @@ export class CallRenderer implements ITreeRenderer<Call, FuzzyScore, CallRenderi
 export class VirtualDelegate implements IListVirtualDelegate<Call> {
 
 	getHeight(_element: Call): number {
-		return 22;
+		return 14;
 	}
 
 	getTemplateId(_element: Call): string {

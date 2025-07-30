@@ -130,7 +130,7 @@ suite('SCM structural diff tree', () => {
 			const viewService = new class extends mock<ISCMViewService>() {
 				override readonly visibleRepositories = [];
 			};
-			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, new TestConfigurationService(), viewService));
+			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, () => false, new TestConfigurationService(), viewService));
 			const top = [...await dataSource.getChildren(group)];
 			const files = mode === ViewMode.Tree ? [...await dataSource.getChildren(top[0])] : top;
 			assert.deepStrictEqual({
@@ -152,7 +152,7 @@ suite('SCM structural diff tree', () => {
 			const viewService = new class extends mock<ISCMViewService>() {
 				override readonly visibleRepositories = [];
 			};
-			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, new TestConfigurationService(), viewService));
+			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, () => false, new TestConfigurationService(), viewService));
 			await dataSource.getChildren(resource);
 			enabled = false;
 			assert.deepStrictEqual({
@@ -183,7 +183,7 @@ suite('SCM structural diff tree', () => {
 			const viewService = new class extends mock<ISCMViewService>() {
 				override readonly visibleRepositories = [];
 			};
-			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, new TestConfigurationService(), viewService));
+			const dataSource = store.add(new SCMTreeDataSource(() => mode, structuralDiff, () => false, new TestConfigurationService(), viewService));
 			type Element = Parameters<SCMTreeDataSource['getParent']>[0];
 			const tree = store.add(new AsyncDataTree<ISCMResourceGroup, Element>('SCM structural expansion', $('.scm-view'), {
 				getHeight: () => 22,
@@ -236,7 +236,7 @@ suite('SCM structural diff tree', () => {
 		const viewService = new class extends mock<ISCMViewService>() {
 			override readonly visibleRepositories = [];
 		};
-		const dataSource = store.add(new SCMTreeDataSource(() => ViewMode.List, structuralDiff, new TestConfigurationService(), viewService));
+		const dataSource = store.add(new SCMTreeDataSource(() => ViewMode.List, structuralDiff, () => false, new TestConfigurationService(), viewService));
 		const names = new Map<unknown, string>([[resource, 'file.ts'], [parent, 'Calculator'], [child, 'run'], [other, 'notes.md']]);
 		const container = $('.scm-view');
 		type Element = Parameters<SCMTreeDataSource['getParent']>[0];

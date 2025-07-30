@@ -307,13 +307,13 @@
 .settings-editor > .settings-body .settings-toc-container .monaco-list-row .settings-toc-entry {
 	overflow: hidden;
 	text-overflow: ellipsis;
-	line-height: 22px;
+	line-height: 14px;
 	flex-shrink: 1;
 }
 
 .settings-editor > .settings-body .settings-toc-container .monaco-list-row .settings-toc-count {
 	display: none;
-	line-height: 22px;
+	line-height: 14px;
 	opacity: 0.8;
 	margin-left: 3px;
 }
@@ -629,8 +629,8 @@
 }
 
 .settings-editor > .settings-body .settings-tree-container .setting-item-bool .setting-value-checkbox {
-	height: 18px;
-	width: 18px;
+	height: 14px;
+	width: 14px;
 	border: 1px solid transparent;
 	border-radius: 3px;
 	margin-right: 9px;

@@ -33,7 +33,7 @@ import { Sequencer } from '../../../../base/common/async.js';
 class ListDelegate implements IListVirtualDelegate<ISCMRepository> {
 
 	getHeight(): number {
-		return 22;
+		return 16;
 	}
 
 	getTemplateId(): string {

@@ -10,7 +10,7 @@
 	user-select: text;
 	-webkit-user-select: text;
 	box-sizing: border-box;
-	line-height: 1.5em;
+	line-height: 14px;
 	white-space: var(--vscode-hover-whiteSpace, normal);
 }
 
@@ -114,7 +114,7 @@
 
 .monaco-hover .hover-row.status-bar {
 	font-size: 12px;
-	line-height: 22px;
+	line-height: 14px;
 }
 
 .monaco-hover .hover-row.status-bar .info {

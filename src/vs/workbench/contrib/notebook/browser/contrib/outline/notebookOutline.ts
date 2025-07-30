@@ -275,7 +275,7 @@ class NotebookNavigationLabelProvider implements IKeyboardNavigationLabelProvide
 class NotebookOutlineVirtualDelegate implements IListVirtualDelegate<OutlineEntry> {
 
 	getHeight(_element: OutlineEntry): number {
-		return 22;
+		return 12;
 	}
 
 	getTemplateId(_element: OutlineEntry): string {

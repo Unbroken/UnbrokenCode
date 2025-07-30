@@ -42,7 +42,7 @@
 }
 
 .monaco-editor .debug-top-stack-frame-column {
-	font: normal normal normal 16px/1 codicon;
+	font: normal normal normal 10px/1 codicon;
 	text-rendering: auto;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
@@ -89,7 +89,7 @@
 
 .monaco-workbench .debug-pane .monaco-list-row .expression,
 .monaco-workbench .debug-hover-widget .monaco-list-row .expression {
-	font-size: 13px;
+	font-size: 10px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	font-family: var(--monaco-monospace-font);
@@ -98,7 +98,7 @@
 
 .monaco-workbench.mac .debug-pane .monaco-list-row .expression,
 .monaco-workbench.mac .debug-hover-widget .monaco-list-row .expression {
-	font-size: 11px;
+	font-size: 10px;
 }
 
 .monaco-workbench .monaco-list-row .expression .value {

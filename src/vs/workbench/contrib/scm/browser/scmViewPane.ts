@@ -724,7 +724,7 @@ class ListDelegate implements IListVirtualDelegate<TreeElement> {
 		} else if (isSCMActionButton(element)) {
 			return ActionButtonRenderer.DEFAULT_HEIGHT + 8;
 		} else {
-			return 22;
+			return 16;
 		}
 	}
 

@@ -6,7 +6,7 @@
 import { Event } from '../../../../base/common/event.js';
 import { IDisposable } from '../../../../base/common/lifecycle.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
-import { IProcessEnvironment, isLinux, OperatingSystem } from '../../../../base/common/platform.js';
+import { IProcessEnvironment, OperatingSystem } from '../../../../base/common/platform.js';
 import Severity from '../../../../base/common/severity.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -33,7 +33,7 @@ export const MINIMUM_LETTER_SPACING = -5;
 // See:
 // - https://github.com/microsoft/vscode/issues/211933
 // - https://github.com/xtermjs/xterm.js/issues/4067
-export const DEFAULT_LINE_HEIGHT = isLinux ? 1.1 : 1;
+export const DEFAULT_LINE_HEIGHT = 1;
 
 export const MINIMUM_FONT_WEIGHT = 1;
 export const MAXIMUM_FONT_WEIGHT = 1000;

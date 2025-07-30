@@ -884,13 +884,13 @@ class CallStackDelegate implements IListVirtualDelegate<CallStackItem> {
 
 	getHeight(element: CallStackItem): number {
 		if (element instanceof StackFrame && element.presentationHint === 'label') {
-			return 16;
+			return 14;
 		}
 		if (element instanceof ThreadAndSessionIds || element instanceof Array) {
-			return 16;
+			return 14;
 		}
 
-		return 22;
+		return 12;
 	}
 
 	getTemplateId(element: CallStackItem): string {

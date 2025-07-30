@@ -39,9 +39,15 @@ export class FontMeasurementsImpl extends Disposable {
 	private readonly _cache = new Map<number, FontMeasurementsCache>();
 
 	private _evictUntrustedReadingsTimeout = -1;
+	private _fontLoadingListenerAdded = false;
 
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	public readonly onDidChange = this._onDidChange.event;
+
+	constructor() {
+		super();
+		this._setupFontLoadingListener();
+	}
 
 	public override dispose(): void {
 		if (this._evictUntrustedReadingsTimeout !== -1) {
@@ -49,6 +55,36 @@ export class FontMeasurementsImpl extends Disposable {
 			this._evictUntrustedReadingsTimeout = -1;
 		}
 		super.dispose();
+	}
+
+	private _setupFontLoadingListener(): void {
+		// Listen for font loading events and clear cache when fonts are loaded
+		// This ensures measurements are updated when embedded fonts become available
+		if (typeof document !== 'undefined' && document.fonts && !this._fontLoadingListenerAdded) {
+			this._fontLoadingListenerAdded = true;
+
+			const handleFontLoad = () => {
+				// Check if any embedded fonts were loaded
+				const hasEmbeddedFonts = Array.from(document.fonts).some(font =>
+					font.family.includes('UnbrokenEmbedded') || font.family.includes('Embedded')
+				);
+
+				if (hasEmbeddedFonts) {
+					// Clear all font measurements to force recalculation with loaded fonts
+					this.clearAllFontInfos();
+				}
+			};
+
+			// Listen for font loading events
+			if (document.fonts.addEventListener) {
+				document.fonts.addEventListener('loadingdone', handleFontLoad);
+				this._register({
+					dispose: () => {
+						document.fonts.removeEventListener('loadingdone', handleFontLoad);
+					}
+				});
+			}
+		}
 	}
 
 	/**
@@ -164,7 +200,66 @@ export class FontMeasurementsImpl extends Disposable {
 		return result;
 	}
 
+	private _ensureFontsLoaded(targetWindow: Window, fontFamily: string): void {
+		// Use the Font Loading API if available to ensure fonts are loaded
+		// This is particularly important for embedded fonts like UnbrokenEmbedded
+		if (targetWindow.document?.fonts) {
+			// Extract individual font families from the font-family string
+			const fontFamilies = fontFamily.split(',').map(f => f.trim().replace(/['"]/g, ''));
+
+			// Check for embedded fonts that need preloading
+			for (const family of fontFamilies) {
+				if (family.includes('UnbrokenEmbedded') || family.includes('Embedded')) {
+					// Check if fonts are already loaded
+					const fontsToCheck = [
+						`400 10px "${family}"`,
+						`700 10px "${family}"`,
+						`italic 400 10px "${family}"`,
+						`italic 700 10px "${family}"`
+					];
+
+					// First check if fonts are already available
+					let allFontsLoaded = true;
+					for (const fontSpec of fontsToCheck) {
+						if (!targetWindow.document.fonts.check(fontSpec)) {
+							allFontsLoaded = false;
+							break;
+						}
+					}
+
+					if (!allFontsLoaded) {
+						// Fonts not loaded, try to load them
+						try {
+							const loadPromises = fontsToCheck.map(spec =>
+								targetWindow.document.fonts.load(spec)
+							);
+
+							// Schedule cache clearing after fonts load
+							Promise.all(loadPromises).then(() => {
+								// Fonts loaded successfully, clear cache to force remeasurement
+								// Use a small delay to ensure fonts are fully rendered
+								setTimeout(() => {
+									this._evictUntrustedReadings(targetWindow);
+									this._onDidChange.fire();
+								}, 50);
+							}).catch(() => {
+								// Font loading failed, measurements might be incorrect
+								// They will be retried when fonts eventually load
+							});
+						} catch (error) {
+							// Font loading not supported or failed, continue with measurement
+						}
+					}
+				}
+			}
+		}
+	}
+
 	private _actualReadFontInfo(targetWindow: Window, bareFontInfo: BareFontInfo): FontInfo {
+		// Ensure embedded fonts are loaded before measuring
+		// This is critical for accurate character width measurements
+		this._ensureFontsLoaded(targetWindow, bareFontInfo.fontFamily);
+
 		const all: CharWidthRequest[] = [];
 		const monospace: CharWidthRequest[] = [];
 

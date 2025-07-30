@@ -99,7 +99,7 @@ const enum TemplateId {
 
 export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 
-	static LINE_HEIGHT: number = 22;
+	static LINE_HEIGHT: number = 12;
 
 	constructor(private readonly markersViewState: MarkersViewModel) { }
 
@@ -107,9 +107,9 @@ export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 		if (element instanceof Marker) {
 			const viewModel = this.markersViewState.getViewModel(element);
 			const noOfLines = !viewModel || viewModel.multiline ? element.lines.length : 1;
-			return noOfLines * VirtualDelegate.LINE_HEIGHT;
+			return noOfLines * VirtualDelegate.LINE_HEIGHT + 4;
 		}
-		return VirtualDelegate.LINE_HEIGHT;
+		return VirtualDelegate.LINE_HEIGHT + 4;
 	}
 
 	getTemplateId(element: MarkerElement): string {

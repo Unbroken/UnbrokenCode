@@ -17,7 +17,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { findLastIdx } from '../../../../base/common/arraysFind.js';
 
-export const SWIMLANE_HEIGHT = 22;
+export const SWIMLANE_HEIGHT = 16;
 export const SWIMLANE_WIDTH = 11;
 const SWIMLANE_CURVE_RADIUS = 5;
 const CIRCLE_RADIUS = 4;

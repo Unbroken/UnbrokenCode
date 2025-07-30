@@ -7,7 +7,6 @@ import { Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
 import { PolicyCategory } from '../../../../base/common/policy.js';
 import { AgentHostAhpJsonlLoggingSettingId, AgentHostClaudeAgentSdkPathSettingId, AgentHostCustomTerminalToolEnabledSettingId, AgentHostEnabledSettingId, AgentHostIpcLoggingSettingId, AgentHostOTelCaptureContentSettingId, AgentHostOTelDbSpanExporterEnabledSettingId, AgentHostOTelEnabledSettingId, AgentHostOTelExporterTypeSettingId, AgentHostOTelOtlpEndpointSettingId, AgentHostOTelOutfileSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { AgentNetworkFilterService, IAgentNetworkFilterService } from '../../../../platform/networkFilter/common/networkFilterService.js';
@@ -224,7 +223,7 @@ configurationRegistry.registerConfiguration({
 		'chat.fontSize': {
 			type: 'number',
 			description: nls.localize('chat.fontSize', "Controls the font size in pixels in chat messages."),
-			default: 13,
+			default: 11,
 			minimum: 6,
 			maximum: 100
 		},
@@ -236,7 +235,7 @@ configurationRegistry.registerConfiguration({
 		'chat.editor.fontSize': {
 			type: 'number',
 			description: nls.localize('interactiveSession.editor.fontSize', "Controls the font size in pixels in chat codeblocks."),
-			default: isMacintosh ? 12 : 14,
+			default: 10,
 		},
 		'chat.editor.fontFamily': {
 			type: 'string',
@@ -257,7 +256,7 @@ configurationRegistry.registerConfiguration({
 		'chat.editor.lineHeight': {
 			type: 'number',
 			description: nls.localize('interactiveSession.editor.lineHeight', "Controls the line height in pixels in chat codeblocks. Use 0 to compute the line height from the font size."),
-			default: 0
+			default: 1
 		},
 		[ChatConfiguration.AgentStatusEnabled]: {
 			type: 'string',

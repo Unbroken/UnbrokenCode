@@ -53,7 +53,7 @@ type TreeElement = ISCMRepository | SCMArtifactGroupTreeElement | SCMArtifactTre
 class ListDelegate implements IListVirtualDelegate<ISCMRepository> {
 
 	getHeight(): number {
-		return 22;
+		return 16;
 	}
 
 	getTemplateId(element: TreeElement): string {

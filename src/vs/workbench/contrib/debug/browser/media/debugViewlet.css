@@ -160,12 +160,23 @@
 }
 
 .debug-pane .monaco-list-row .monaco-action-bar .action-label {
-	padding: 2px;
+	padding: 1px 2px;
+	font-size: 10px;
 }
 
 .debug-pane .session .codicon {
-	line-height: 22px;
+	line-height: 12px;
 	margin-right: 2px;
+}
+
+.debug-pane .monaco-action-bar .action-item .codicon {
+	height: 10px;
+}
+
+.debug-pane input[type=checkbox] {
+	width: 9px;
+	height: 9px;
+	margin: 1px 4px;
 }
 
 .debug-pane .debug-call-stack .stack-frame {
@@ -227,7 +238,7 @@
 
 .debug-pane .scope {
 	font-weight: bold;
-	font-size: 11px;
+	font-size: 10px;
 }
 
 .debug-pane .monaco-list-row .expression .actionbar-spacer {
@@ -235,7 +246,7 @@
 }
 
 .debug-pane .monaco-list-row .expression .value {
-	height: 22px;
+	height: 12px;
 	overflow: hidden;
 	white-space: pre;
 	text-overflow: ellipsis;
@@ -293,7 +304,12 @@
 /* Breakpoints */
 
 .debug-pane .monaco-list-row {
-	line-height: 22px;
+	line-height: 12px;
+	font-size: 10px;
+}
+
+.debug-pane .monaco-list-row .file {
+	font-size: 9px;
 }
 
 .debug-pane .debug-breakpoints .breakpoint {
@@ -334,11 +350,12 @@
 
 .debug-pane .debug-breakpoints .breakpoint > .codicon {
 	width: 19px;
-	height: 19px;
+	height: 12px;
 	min-width: 19px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	font-size: 10px;
 }
 
 .debug-pane .debug-breakpoints .breakpoint > .access-type {

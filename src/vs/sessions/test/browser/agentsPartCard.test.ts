@@ -784,7 +784,7 @@ suite('Sessions - Agents Part Card', () => {
 		});
 
 		const defaultInsets = { left: '4px', right: '4px', width: 792 };
-		const compactInsets = { left: '2px', right: '2px', width: 796 };
+		const compactInsets = { left: '0px', right: '0px', width: 800 };
 		assert.deepStrictEqual(actual, [
 			[defaultInsets, defaultInsets],
 			[compactInsets, compactInsets],

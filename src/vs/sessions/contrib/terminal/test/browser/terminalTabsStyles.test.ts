@@ -53,7 +53,7 @@ suite('Sessions - Terminal Tabs Styles', () => {
 						borderRadius: style.borderRadius,
 					};
 				};
-				const inset = compact ? 2 : 4;
+				const inset = compact ? 0 : 4;
 				assert.deepStrictEqual({
 					agents: getRowStyles(agents.row),
 					editor: getRowStyles(editor.row),

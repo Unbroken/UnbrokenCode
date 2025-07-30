@@ -330,8 +330,8 @@ suite('ModernUIContribution', () => {
 				auxiliaryTabsEnabled: true,
 				auxiliaryNotificationsDialogsEnabled: true,
 				auxiliaryUppercaseViewHeaders: true,
-				paneHeaderSize: 28,
-				paneHeaderLineHeight: '28px',
+				paneHeaderSize: 22,
+				paneHeaderLineHeight: '22px',
 				paneHeaderInlineLineHeight: '',
 				layoutCount: 0,
 				auxiliaryLayoutCount: 0,
@@ -453,8 +453,8 @@ suite('ModernUIContribution', () => {
 				files: { left: '4px', right: '4px' },
 			},
 			compact: {
-				explorer: { left: '2px', right: '2px' },
-				files: { left: '2px', right: '2px' },
+				explorer: { left: '0px', right: '0px' },
+				files: { left: '0px', right: '0px' },
 			},
 		});
 	});

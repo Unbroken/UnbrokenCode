@@ -180,7 +180,7 @@ suite('Sessions - Titlebar Part', () => {
 				});
 
 				const expected = (height: number, offset: number) => actions.map((_, index) => {
-					const gap = (height - (index === 2 ? 24 : 22)) / 2;
+					const gap = (height - (index === 2 ? 24 : 17)) / 2;
 					return { top: gap + offset, bottom: gap - offset };
 				});
 				const defaultDensity = expected(44, 1);

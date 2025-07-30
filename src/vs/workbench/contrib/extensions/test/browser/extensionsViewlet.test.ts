@@ -101,7 +101,7 @@ suite('Extensions viewlet notification layout', () => {
 					standardButtonHeight: true,
 					showGroupedWithAction: true,
 					dismissFits: true,
-					dismissSize: 20,
+					dismissSize: 15,
 					dismissAtTop: true,
 				});
 			});
@@ -140,7 +140,7 @@ suite('Extensions viewlet notification layout', () => {
 			dismissAtTop: true,
 			dismissAtRight: true,
 			notificationFits: true,
-			dismissSize: 20,
+			dismissSize: 15,
 		});
 	});
 });

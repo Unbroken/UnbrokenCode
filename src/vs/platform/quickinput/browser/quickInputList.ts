@@ -278,7 +278,7 @@ class QuickInputItemDelegate implements IListVirtualDelegate<IQuickPickElement> 
 		if (element instanceof QuickPickSeparatorElement) {
 			return 30;
 		}
-		return element.saneDetail ? 44 : 22;
+		return element.saneDetail ? 44 : 16;
 	}
 
 	getTemplateId(element: IQuickPickElement): string {
@@ -444,7 +444,7 @@ class QuickPickItemElementRenderer extends BaseQuickInputListRenderer<QuickPickI
 
 		let checkbox = data.checkbox.value;
 		if (!checkbox) {
-			checkbox = new Checkbox(element.saneLabel, element.checked, { ...defaultCheckboxStyles, size: 15 });
+			checkbox = new Checkbox(element.saneLabel, element.checked, { ...defaultCheckboxStyles, size: 12 });
 			data.checkbox.value = checkbox;
 			data.outerLabel.prepend(checkbox.domNode);
 			// Remove checkbox from tab order since tree items are navigable with arrow keys

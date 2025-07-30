@@ -238,7 +238,7 @@ export class WatchExpressionsView extends ViewPane implements IDebugViewWithVari
 class WatchExpressionsDelegate implements IListVirtualDelegate<IExpression> {
 
 	getHeight(_element: IExpression): number {
-		return 22;
+		return 12;
 	}
 
 	getTemplateId(element: IExpression): string {

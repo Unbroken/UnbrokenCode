@@ -38,7 +38,7 @@ terminalTitle += terminalDescriptors;
 let terminalDescription = localize('terminalDescription', "Controls the terminal description, which appears to the right of the title. Variables are substituted based on the context:");
 terminalDescription += terminalDescriptors;
 
-export const defaultTerminalFontSize = isMacintosh ? 12 : 14;
+export const defaultTerminalFontSize = 10;
 
 const terminalConfiguration: IConfigurationNode = {
 	id: 'terminal',

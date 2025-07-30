@@ -214,7 +214,7 @@
 .search-view .filematch {
 	display: flex;
 	position: relative;
-	line-height: 22px;
+	line-height: 16px;
 	padding: 0;
 	height: 100%;
 }
@@ -222,7 +222,7 @@
 .search-view .textsearchresult {
 	display: flex;
 	position: relative;
-	line-height: 22px;
+	line-height: 16px;
 	padding: 0;
 	height: 100%;
 	font-weight: 500;
@@ -259,7 +259,7 @@
 
 .search-view .linematch {
 	position: relative;
-	line-height: 22px;
+	line-height: 14px;
 	display: flex;
 	overflow: hidden;
 }

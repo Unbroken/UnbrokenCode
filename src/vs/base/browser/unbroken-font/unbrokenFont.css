@@ -1,0 +1,108 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Unbroken Font for Unbroken Code */
+
+/* Standard DPI (less than 2x) - Unbroken font */
+@font-face {
+	font-family: "UnbrokenEmbedded";
+	font-display: swap;
+	src: url("./Unbroken-Regular.ttf") format("truetype");
+	font-weight: 400;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "UnbrokenEmbedded";
+	font-display: swap;
+	src: url("./Unbroken-Bold.ttf") format("truetype");
+	font-weight: 700;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "UnbrokenEmbedded";
+	font-display: swap;
+	src: url("./Unbroken-Italic.ttf") format("truetype");
+	font-weight: 400;
+	font-style: italic;
+}
+
+@font-face {
+	font-family: "UnbrokenEmbedded";
+	font-display: swap;
+	src: url("./Unbroken-BoldItalic.ttf") format("truetype");
+	font-weight: 700;
+	font-style: italic;
+}
+
+/* High DPI (Retina, exactly 2x and above) - Unbroken-Retina font */
+@media screen and (-webkit-min-device-pixel-ratio: 2),
+screen and (min-resolution: 2dppx) {
+	@font-face {
+		font-family: "UnbrokenEmbedded";
+		font-display: swap;
+		src: url("./Unbroken-Retina-Regular.ttf") format("truetype");
+		font-weight: 400;
+		font-style: normal;
+	}
+
+	@font-face {
+		font-family: "UnbrokenEmbedded";
+		font-display: swap;
+		src: url("./Unbroken-Retina-Bold.ttf") format("truetype");
+		font-weight: 700;
+		font-style: normal;
+	}
+
+	@font-face {
+		font-family: "UnbrokenEmbedded";
+		font-display: swap;
+		src: url("./Unbroken-Retina-Italic.ttf") format("truetype");
+		font-weight: 400;
+		font-style: italic;
+	}
+
+	@font-face {
+		font-family: "UnbrokenEmbedded";
+		font-display: swap;
+		src: url("./Unbroken-Retina-BoldItalic.ttf") format("truetype");
+		font-weight: 700;
+		font-style: italic;
+	}
+}
+
+/* Unbroken12 fonts (for future use) */
+@font-face {
+	font-family: "Unbroken12Embedded";
+	font-display: swap;
+	src: url("./Unbroken12-Retina-Regular.ttf") format("truetype");
+	font-weight: 400;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "Unbroken12Embedded";
+	font-display: swap;
+	src: url("./Unbroken12-Retina-Bold.ttf") format("truetype");
+	font-weight: 700;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: "Unbroken12Embedded";
+	font-display: swap;
+	src: url("./Unbroken12-Retina-Italic.ttf") format("truetype");
+	font-weight: 400;
+	font-style: italic;
+}
+
+@font-face {
+	font-family: "Unbroken12Embedded";
+	font-display: swap;
+	src: url("./Unbroken12-Retina-BoldItalic.ttf") format("truetype");
+	font-weight: 700;
+	font-style: italic;
+}

@@ -167,6 +167,22 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		return dom.isAncestorOfActiveElement(this.raw.element);
 	}
 
+	private _ensureFontLoaded(fontFamily: string): void {
+		// Use the Font Loading API if available to ensure fonts are loaded
+		if ('fonts' in document) {
+			// Try to load both regular and bold weights
+			Promise.all([
+				document.fonts.load(`400 10px "${fontFamily}"`),
+				document.fonts.load(`700 10px "${fontFamily}"`),
+				document.fonts.load(`italic 400 10px "${fontFamily}"`),
+				document.fonts.load(`italic 700 10px "${fontFamily}"`)
+			]).catch((error) => {
+				// Font loading failed, but continue anyway
+				this._logService.warn(`Failed to preload font: ${fontFamily}: ${error.message}`);
+			});
+		}
+	}
+
 	/**
 	 * @param xtermCtor The xterm.js constructor, this is passed in so it can be fetched lazily
 	 * outside of this class such that {@link raw} is not nullable.
@@ -196,6 +212,12 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		const font = this._terminalConfigurationService.getFont(dom.getActiveWindow(), undefined, true);
 		const config = this._terminalConfigurationService.config;
 		const editorOptions = this._configurationService.getValue<IEditorOptions>('editor');
+
+		// Ensure embedded fonts are loaded before initializing xterm
+		// This is important for canvas rendering to work correctly with embedded fonts
+		if (font.fontFamily.includes('UnbrokenEmbedded')) {
+			this._ensureFontLoaded('UnbrokenEmbedded');
+		}
 
 		this.raw = this._register(new xtermCtor({
 			allowProposedApi: true,

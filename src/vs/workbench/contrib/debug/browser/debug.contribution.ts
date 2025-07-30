@@ -570,7 +570,7 @@ configurationRegistry.registerConfiguration({
 		'debug.console.fontSize': {
 			type: 'number',
 			description: nls.localize('debug.console.fontSize', "Controls the font size in pixels in the Debug Console."),
-			default: isMacintosh ? 12 : 14,
+			default: 10,
 		},
 		'debug.console.fontFamily': {
 			type: 'string',
@@ -580,7 +580,7 @@ configurationRegistry.registerConfiguration({
 		'debug.console.lineHeight': {
 			type: 'number',
 			description: nls.localize('debug.console.lineHeight', "Controls the line height in pixels in the Debug Console. Use 0 to compute the line height from the font size."),
-			default: 0
+			default: 1
 		},
 		'debug.console.wordWrap': {
 			type: 'boolean',

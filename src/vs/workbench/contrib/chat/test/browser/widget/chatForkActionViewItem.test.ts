@@ -170,7 +170,7 @@ suite('ChatForkActionViewItem', () => {
 			glyphAlignment: 'center',
 			centeredHorizontally: true,
 			centeredVertically: true,
-			buttonWidth: 30,
+			buttonWidth: 29,
 			buttonHeight: 22,
 		};
 		const idleLayout = getLayout();

@@ -222,7 +222,7 @@ suite('StatusbarPart', () => {
 		assert.deepStrictEqual({ defaultConstraints, modernUIConstraints, compactModernUIConstraints }, {
 			defaultConstraints: { minimumHeight: 22, maximumHeight: 22 },
 			modernUIConstraints: { minimumHeight: 28, maximumHeight: 28 },
-			compactModernUIConstraints: { minimumHeight: 26, maximumHeight: 26 },
+			compactModernUIConstraints: { minimumHeight: 22, maximumHeight: 22 },
 		});
 	});
 

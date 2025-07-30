@@ -271,7 +271,7 @@ suite('RemotesWidget', () => {
 		assert.deepStrictEqual({
 			offset: visibility.getBoundingClientRect().left - group.getBoundingClientRect().left,
 			width: parent.querySelector('.monaco-table-th')!.getBoundingClientRect().width,
-		}, { offset: 26, width: 64 });
+		}, { offset: 27, width: 64 });
 	});
 
 	test('shows disconnected error details in a warning hover, row label and accessible view', async () => {

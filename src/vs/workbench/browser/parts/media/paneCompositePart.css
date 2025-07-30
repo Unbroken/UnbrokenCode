@@ -236,13 +236,13 @@
 .monaco-workbench .pane-composite-part > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.icon .badge.compact .badge-content,
 .monaco-workbench .pane-composite-part > .header-or-footer > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.icon .badge.compact .badge-content {
 	position: absolute;
-	top: 17px;
+	top: 20px;
 	right: 0px;
-	font-size: 9px;
+	font-size: 8px;
 	font-weight: 600;
-	min-width: 13px;
-	height: 13px;
-	line-height: 13px;
+	min-width: 11px;
+	height: 11px;
+	line-height: 11px;
 	padding: 0 2px;
 	border-radius: 16px;
 	text-align: center;
@@ -258,6 +258,7 @@
 .monaco-workbench .pane-composite-part > .header-or-footer > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.icon .badge.compact.icon-badge .badge-content,
 .monaco-workbench .activitybar.compact > .content :not(.monaco-menu) > .monaco-action-bar .badge.icon-badge .badge-content {
 	width: 13px;
+	height: 13px;
 	padding: 0;
 	font-size: var(--vscode-codiconFontSize-compact);
 	display: flex;
@@ -267,8 +268,8 @@
 
 .monaco-workbench .pane-composite-part > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.icon .badge.compact.progress-badge .badge-content::before,
 .monaco-workbench .pane-composite-part > .header-or-footer > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item.icon .badge.compact.progress-badge .badge-content::before {
-	mask-size: 13px;
-	-webkit-mask-size: 13px;
+	mask-size: 11px;
+	-webkit-mask-size: 11px;
 }
 
 .monaco-workbench .pane-composite-part > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item:not(.icon) .badge.progress-badge .badge-content,

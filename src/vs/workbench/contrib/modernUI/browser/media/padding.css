@@ -68,10 +68,16 @@
 	padding-left: var(--vscode-spacing-size40);
 }
 
+/* Compact density keeps headers and rows against the pane edges, as without Modern UI. */
+.modern-ui.modern-ui-compact .monaco-pane-view .pane:not(.chat-viewpane-container) > .pane-header {
+	padding-left: 0;
+	margin: 0;
+}
+
 .modern-ui.modern-ui-compact .monaco-pane-view .pane-body:not(.chat-viewpane) .monaco-list-row,
 .modern-ui.modern-ui-compact .multi-diff-editor-with-file-list-files .monaco-list-row {
-	left: var(--vscode-spacing-size20);
-	right: var(--vscode-spacing-size20);
+	left: 0;
+	right: 0;
 }
 
 /*
@@ -331,10 +337,12 @@
 	margin-right: var(--vscode-spacing-size60);
 }
 
+/* Count badges fit the tighter rows of trees, the shortest of which, such as those of the Call Stack view, are 12px. */
 .modern-ui.monaco-workbench .monaco-count-badge {
-	padding: var(--vscode-spacing-size40) var(--vscode-spacing-size60);
-	min-width: 19px;
-	min-height: 19px;
+	padding: 0 var(--vscode-spacing-size40);
+	min-width: 12px;
+	min-height: 12px;
+	line-height: 12px;
 }
 
 .modern-ui.monaco-workbench .interactive-session .interactive-input-part {
@@ -362,8 +370,9 @@
 }
 
 .modern-ui.monaco-workbench .monaco-count-badge.long {
-	padding: var(--vscode-spacing-size20) var(--vscode-spacing-size40);
-	min-height: 18px;
+	padding: 0 var(--vscode-spacing-size40);
+	min-height: auto;
+	line-height: 12px;
 }
 
 .modern-ui.monaco-workbench .debug-pane .debug-call-stack .session > .state.label {

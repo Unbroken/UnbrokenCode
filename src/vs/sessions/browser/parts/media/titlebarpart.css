@@ -137,7 +137,7 @@
 }
 
 .monaco-workbench .part.titlebar > .sessions-titlebar-container > .titlebar-right > .titlebar-screen-reader-container .monaco-button {
-	height: 22px;
+	height: 17px; /* as tall as the title bar's actions, which are compact */
 	padding: 0 var(--vscode-spacing-size80);
 }
 

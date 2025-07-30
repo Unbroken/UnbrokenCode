@@ -21,7 +21,7 @@ import { LayoutDensityMenu } from '../../../browser/actions/layoutDensityActions
 /** Reduced scrollbar size (px) applied when Modern UI is on. */
 const MODERN_UI_SCROLLBAR_SIZE = 8;
 
-/** Increased pane header size (px) applied when Modern UI is on. */
+/** Increased pane header size (px) applied when Modern UI is on, except in compact density. */
 const MODERN_UI_PANE_HEADER_SIZE = 28;
 
 // Bundle the CSS for every Modern UI module. Styles remain inert until their
@@ -180,7 +180,7 @@ export class ModernUIContribution extends Disposable implements IWorkbenchContri
 		const enabled = this.isEnabled();
 		const compact = enabled && this.isCompact();
 		const useUppercaseViewHeaders = enabled && this.useUppercaseViewHeaders();
-		this.applyPaneHeaderSize(enabled);
+		this.applyPaneHeaderSize(enabled && !compact);
 		for (const container of this.layoutService.containers) {
 			this.applyTo(container, enabled, compact, useUppercaseViewHeaders);
 		}
@@ -205,9 +205,9 @@ export class ModernUIContribution extends Disposable implements IWorkbenchContri
 		setNotificationRowHeight(enabled ? COMPACT_NOTIFICATION_ROW_HEIGHT : DEFAULT_NOTIFICATION_ROW_HEIGHT);
 	}
 
-	private applyPaneHeaderSize(enabled: boolean): void {
+	private applyPaneHeaderSize(increased: boolean): void {
 		let paneHeaderSize = DEFAULT_PANE_HEADER_SIZE;
-		if (enabled) {
+		if (increased) {
 			paneHeaderSize = MODERN_UI_PANE_HEADER_SIZE;
 		}
 		setGlobalPaneHeaderSize(paneHeaderSize);

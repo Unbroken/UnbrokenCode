@@ -58,7 +58,7 @@ import { ILocalizedString } from '../../../../platform/action/common/action.js';
 import { IHoverService, WorkbenchHoverDelegate } from '../../../../platform/hover/browser/hover.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 
-const ItemHeight = 22;
+const ItemHeight = 14;
 
 type TreeElement = TimelineItem | LoadMoreCommand;
 

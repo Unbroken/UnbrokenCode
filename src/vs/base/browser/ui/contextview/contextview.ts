@@ -403,7 +403,7 @@ const SHADOW_ROOT_CSS = /* css */ `
 	}
 
 	.codicon[class*='codicon-'] {
-		font: normal normal normal 16px/1 codicon;
+		font: normal normal normal 11px/1 codicon;
 		display: inline-block;
 		text-decoration: none;
 		text-rendering: auto;

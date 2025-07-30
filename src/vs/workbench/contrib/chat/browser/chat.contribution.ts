@@ -8,7 +8,6 @@ import { Event } from '../../../../base/common/event.js';
 import { MarkdownString, isMarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
 import { PolicyCategory } from '../../../../base/common/policy.js';
 import { registerEditorFeature } from '../../../../editor/common/editorFeatures.js';
 import * as nls from '../../../../nls.js';
@@ -162,7 +161,7 @@ configurationRegistry.registerConfiguration({
 		'chat.fontSize': {
 			type: 'number',
 			description: nls.localize('chat.fontSize', "Controls the font size in pixels in chat messages."),
-			default: 13,
+			default: 11,
 			minimum: 6,
 			maximum: 100
 		},
@@ -174,7 +173,7 @@ configurationRegistry.registerConfiguration({
 		'chat.editor.fontSize': {
 			type: 'number',
 			description: nls.localize('interactiveSession.editor.fontSize', "Controls the font size in pixels in chat codeblocks."),
-			default: isMacintosh ? 12 : 14,
+			default: 10,
 		},
 		'chat.editor.fontFamily': {
 			type: 'string',
@@ -195,7 +194,7 @@ configurationRegistry.registerConfiguration({
 		'chat.editor.lineHeight': {
 			type: 'number',
 			description: nls.localize('interactiveSession.editor.lineHeight', "Controls the line height in pixels in chat codeblocks. Use 0 to compute the line height from the font size."),
-			default: 0
+			default: 1
 		},
 		[ChatConfiguration.AgentsControlClickBehavior]: {
 			type: 'string',

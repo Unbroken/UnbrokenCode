@@ -22,11 +22,11 @@
 .monaco-editor .debug-hover-widget .complex-value .tip {
 	padding-left: 15px;
 	padding-right: 2px;
-	font-size: 11px;
-	line-height: 18px;
+	font-size: 10px;
+	line-height: 12px;
 	word-break: normal;
 	text-overflow: ellipsis;
-	height: 18px;
+	height: 12px;
 	overflow: hidden;
 	white-space: pre;
 }
@@ -41,7 +41,7 @@
 }
 
 .monaco-editor .debug-hover-widget .debug-hover-tree {
-	line-height: 18px;
+	line-height: 12px;
 	cursor: pointer;
 }
 

@@ -176,7 +176,13 @@
 }
 
 .quick-input-list {
-	line-height: 22px;
+	line-height: 16px;
+	font-size: 11px;
+}
+
+.quick-input-list .monaco-action-bar .action-item .codicon {
+	width: 15px;
+	height: 10px;
 }
 
 .quick-input-widget.hidden-input .quick-input-list {
@@ -228,7 +234,7 @@
 
 .quick-input-widget .quick-input-list .monaco-checkbox,
 .quick-input-widget .quick-input-tree .monaco-checkbox {
-	margin-top: 4px;
+	margin-top: 2px;
 }
 
 .quick-input-list .quick-input-list-icon {

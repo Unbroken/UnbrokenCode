@@ -318,7 +318,7 @@ suite('Sessions - Titlebar Part', () => {
 				});
 
 				const expected = (height: number, offset: number) => actions.map((_, index) => {
-					const gap = (height - (index === 2 || index >= 4 ? 24 : 22)) / 2;
+					const gap = (height - (index === 2 || index >= 4 ? 24 : 17)) / 2;
 					return { top: gap + offset, bottom: gap - offset };
 				});
 				const defaultDensity = expected(44, 1);
@@ -445,8 +445,9 @@ suite('Sessions - Titlebar Part', () => {
 				splitCorners: ['4px 0px 0px 4px', '0px 4px 4px 0px'],
 				splitIconAlignment: 'center',
 			})),
-			shared: { height: 22, radius: '6px' },
-			sharedRemoteHeight: 16,
+			// Workbench action labels are compact, as tall as the title bar's actions outside the Agents window
+			shared: { height: 17, radius: '6px' },
+			sharedRemoteHeight: 15,
 		});
 	});
 

@@ -44,6 +44,11 @@
 	pointer-events: none;
 }
 
+.modern-ui.modern-ui-compact .monaco-pane-view .pane > .pane-header::before {
+	left: 0;
+	right: 0;
+}
+
 .modern-ui :is(.part.sidebar, .part.auxiliarybar) .monaco-pane-view .pane > .pane-header::before {
 	background-color: var(--vscode-sideBarSectionHeader-border, var(--vscode-surface-border));
 }
@@ -88,10 +93,11 @@
 }
 
 /*
- * Add vertical breathing room to the headers. Keep this value in sync with
- * MODERN_UI_PANE_HEADER_SIZE so CSS presentation and split-view layout agree.
+ * Add vertical breathing room to the headers, except in compact density. Keep this
+ * value in sync with MODERN_UI_PANE_HEADER_SIZE so CSS presentation and split-view
+ * layout agree.
  */
-.modern-ui .monaco-pane-view {
+.modern-ui:not(.modern-ui-compact) .monaco-pane-view {
 	--pane-header-size: var(--vscode-spacing-size280, 28px);
 }
 

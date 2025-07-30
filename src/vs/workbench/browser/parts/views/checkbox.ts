@@ -53,7 +53,7 @@ export class TreeItemCheckbox extends Disposable {
 
 	private createCheckbox(node: ITreeItem) {
 		if (node.checkbox) {
-			this.toggle = new Checkbox('', node.checkbox.isChecked, { ...defaultCheckboxStyles, size: 15 });
+			this.toggle = new Checkbox('', node.checkbox.isChecked, { ...defaultCheckboxStyles, size: 12 }); // fits the compact rows
 			this.setHover(node.checkbox);
 			this.setAccessibilityInformation(node.checkbox);
 			this.toggle.domNode.classList.add(TreeItemCheckbox.checkboxClass);

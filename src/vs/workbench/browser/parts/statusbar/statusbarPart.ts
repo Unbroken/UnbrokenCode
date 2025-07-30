@@ -129,7 +129,7 @@ class StatusbarPart extends Part implements IStatusbarEntryContainer {
 	 * the matching padding is applied in `floatingPanels.css`.
 	 */
 	static readonly FLOATING_BOTTOM_PADDING = 6;
-	static readonly COMPACT_DENSITY_FLOATING_BOTTOM_PADDING = 4;
+	static readonly COMPACT_DENSITY_FLOATING_BOTTOM_PADDING = 0;
 
 	//#region IView
 

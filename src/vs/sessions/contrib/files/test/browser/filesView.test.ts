@@ -88,7 +88,8 @@ suite('SessionsExplorerView folder reveal', () => {
 			const floating = { contentHeight: view.getOptimalHeight(), paddingBottom };
 			view.setSizeToContent(false);
 			assert.deepStrictEqual({ floating, dockedPadding: paddingBottom }, {
-				floating: { contentHeight: horizontalScrolling ? 54 : 44, paddingBottom: 0 }, dockedPadding: 22,
+				// Docked, the padding is a row of the Explorer, whose rows are compact
+				floating: { contentHeight: horizontalScrolling ? 54 : 44, paddingBottom: 0 }, dockedPadding: 14,
 			});
 		});
 	}

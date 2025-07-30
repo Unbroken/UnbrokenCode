@@ -158,7 +158,7 @@ class DocumentSymbolTemplate {
 export class DocumentSymbolVirtualDelegate implements IListVirtualDelegate<DocumentSymbolItem> {
 
 	getHeight(_element: DocumentSymbolItem): number {
-		return 22;
+		return 14;
 	}
 
 	getTemplateId(element: DocumentSymbolItem): string {

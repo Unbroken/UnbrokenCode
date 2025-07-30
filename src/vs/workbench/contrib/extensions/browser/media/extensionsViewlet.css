@@ -70,6 +70,9 @@
 }
 
 .extensions-viewlet > .header .notification-container .message-container .codicon {
+	/* Takes up the space the actions below are indented by, also when the icon is smaller */
+	width: var(--vscode-codiconFontSize);
+	text-align: center;
 	flex-shrink: 0;
 	padding-top: 2px;
 }

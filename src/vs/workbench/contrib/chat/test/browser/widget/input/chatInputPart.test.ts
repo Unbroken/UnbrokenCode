@@ -147,7 +147,8 @@ suite('ChatInputPart', () => {
 				dropdownFocused: true, primaryFocused: true,
 				labels: busy ? ['Stop and Send', 'Add to Queue', 'Steer with Message', 'Send Later...'] : ['Send Later...'],
 				sendLaterIcon: { id: Codicon.clock.id, hidden: false },
-				primaryIcon: { fontSize: busy ? '16px' : '12px', fontWeight: '400' },
+				// Busy, the icon has the size of icons in action bars, which are compact
+				primaryIcon: { fontSize: busy ? '15px' : '12px', fontWeight: '400' },
 				calls: [{ id: busy ? ChatQueueMessageAction.ID : 'test.send', args: busy ? [] : [context] }, { id: 'test.sendLater', args: [context] }],
 			});
 			if (busy) {

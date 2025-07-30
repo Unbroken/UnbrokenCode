@@ -83,7 +83,8 @@ suite('TreeView', function () {
 		lateTreeView.setVisibility(true);
 		await lateTreeView.refresh();
 
-		assert.strictEqual(container.querySelectorAll('.monaco-list-row').length, 10);
+		// The rows that fit in its height of 220px, at the 14px of our compact rows
+		assert.strictEqual(container.querySelectorAll('.monaco-list-row').length, 16);
 	});
 
 	test('issue #347994 - a refresh served from the cache keeps the children of every expanded node', async () => {

@@ -12,7 +12,7 @@ import { QuickInputTreeRenderer } from './quickInputTreeRenderer.js';
  */
 export class QuickInputTreeDelegate<T extends IQuickTreeItem> implements IListVirtualDelegate<T> {
 	getHeight(_element: T): number {
-		return 22;
+		return 16;
 	}
 
 	getTemplateId(_element: T): string {

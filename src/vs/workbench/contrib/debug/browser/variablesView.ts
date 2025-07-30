@@ -346,7 +346,7 @@ interface IScopeTemplateData {
 class VariablesDelegate implements IListVirtualDelegate<IExpression | IScope> {
 
 	getHeight(element: IExpression | IScope): number {
-		return 22;
+		return 12;
 	}
 
 	getTemplateId(element: IExpression | IScope): string {

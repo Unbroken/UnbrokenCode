@@ -391,7 +391,7 @@ class BreakpointsDelegate implements IListVirtualDelegate<BreakpointItem> {
 	}
 
 	getHeight(_element: BreakpointItem): number {
-		return 22;
+		return 14;
 	}
 
 	getTemplateId(element: BreakpointItem): string {

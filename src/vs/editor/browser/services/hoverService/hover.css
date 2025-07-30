@@ -5,8 +5,8 @@
 
 .monaco-workbench .workbench-hover {
 	position: relative;
-	font-size: 13px;
-	line-height: 19px;
+	font-size: 10px;
+	line-height: 12px;
 	/* Must be higher than sash's z-index and terminal canvases */
 	z-index: 40;
 	overflow: hidden;

@@ -578,7 +578,7 @@ class OpenEditorActionRunner extends ActionRunner {
 
 class OpenEditorsDelegate implements IListVirtualDelegate<OpenEditor | IEditorGroup> {
 
-	public static readonly ITEM_HEIGHT = 22;
+	public static readonly ITEM_HEIGHT = 14;
 
 	getHeight(_element: OpenEditor | IEditorGroup): number {
 		return OpenEditorsDelegate.ITEM_HEIGHT;

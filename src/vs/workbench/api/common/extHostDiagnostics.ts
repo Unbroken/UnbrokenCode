@@ -127,7 +127,10 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 		}
 		const entries: [URI, IMarkerData[]][] = [];
 		let totalMarkerCount = 0;
+		let resourceSequence = 0;
+		let markerSequence = 0;
 		for (const uri of toSync) {
+			++resourceSequence;
 			let marker: IMarkerData[] = [];
 			const diagnostics = this.#data.get(uri);
 			if (diagnostics) {
@@ -147,6 +150,7 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 						}
 					}
 
+					++markerSequence;
 					// add 'signal' marker for showing omitted errors/warnings
 					marker.push({
 						severity: MarkerSeverity.Info,
@@ -154,7 +158,10 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 						startLineNumber: marker[marker.length - 1].startLineNumber,
 						startColumn: marker[marker.length - 1].startColumn,
 						endLineNumber: marker[marker.length - 1].endLineNumber,
-						endColumn: marker[marker.length - 1].endColumn
+						endColumn: marker[marker.length - 1].endColumn,
+						resourceSequenceNumber: resourceSequence,
+						sequenceNumber: markerSequence
+
 					});
 				} else {
 					marker = diagnostics.map(diag => ({ ...converter.Diagnostic.from(diag), modelVersionId: this._modelVersionIdProvider(uri) }));

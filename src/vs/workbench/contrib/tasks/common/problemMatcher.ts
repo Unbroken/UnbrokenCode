@@ -20,7 +20,7 @@ import { IStringDictionary } from '../../../../base/common/collections.js';
 import { asArray } from '../../../../base/common/arrays.js';
 import { Schemas as NetworkSchemas } from '../../../../base/common/network.js';
 
-import { IMarkerData, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
+import { IMarkerData, MarkerSeverity, IResourceMarker } from '../../../../platform/markers/common/markers.js';
 import { ExtensionsRegistry, ExtensionMessageCollector } from '../../../services/extensions/common/extensionsRegistry.js';
 import { Event, Emitter } from '../../../../base/common/event.js';
 import { FileType, IFileService, IFileStatWithPartialMetadata, IFileSystemProvider } from '../../../../platform/files/common/files.js';
@@ -94,6 +94,23 @@ export interface IProblemPattern {
 	loop?: boolean;
 }
 
+export interface IAdvancedProblemPattern extends IProblemPattern {
+	// Category management
+	subProblemCategory?: number;           // Dynamic category from regex capture
+	staticSubProblemCategory?: string;     // Static category string
+
+	// Sub-problem control
+	introduceSubProblem?: boolean;         // Mark as sub-problem
+
+	// Nested patterns
+	pattern?: IAdvancedProblemPattern[];   // Nested pattern array
+
+	// Control flow
+	ignore?: boolean;                      // Skip lines matching this pattern
+	optional?: boolean;
+	multiLineMessage?: boolean;
+}
+
 export interface INamedProblemPattern extends IProblemPattern {
 	name: string;
 }
@@ -139,6 +156,7 @@ export interface ProblemMatcher {
 	fileLocation: FileLocationKind;
 	filePrefix?: string | Config.SearchFileLocationArgs;
 	pattern: IProblemPattern | IProblemPattern[];
+	advancedPattern?: IAdvancedProblemPattern[];  // New property - takes precedence over 'pattern' if both exist
 	severity?: Severity;
 	watching?: IWatchingMatcher;
 	uriProvider?: (path: string) => URI;
@@ -189,14 +207,40 @@ export interface IProblemMatch {
 	description: ProblemMatcher;
 }
 
+export interface IProblemMatchSync {
+	resource: URI;
+	marker: IMarkerData;
+	description: ProblemMatcher;
+}
+
+interface IPatternProcessingState {
+	lines: string[];
+	start: number;
+	currentLineIndex: number;
+	totalConsumedLines: number;
+	currentCategory: string;
+	subProblems: Array<{ category: string; problems: IResourceMarker[] }>;
+	data: IProblemData;
+
+	// Functor to commit current data - changes behavior when sub-problems are introduced
+	commitCurrentData: () => void;
+}
+
 export interface IHandleResult {
 	match: IProblemMatch | null;
 	continue: boolean;
+	consumedLines?: number;
+	needMoreLines?: boolean;
 }
 
 
 export interface GetResourceResult {
 	uri: Promise<URI>;
+	resourceSequenceNumber: number;
+}
+
+export interface GetResourceResultSync {
+	uri: URI;
 	resourceSequenceNumber: number;
 }
 
@@ -283,8 +327,39 @@ async function getResourceUri(filename: string, matcher: ProblemMatcher, fileSer
 	}
 }
 
+function getResourceUriSync(filename: string, matcher: ProblemMatcher, fileService?: IFileService): URI {
+	const kind = matcher.fileLocation;
+	let fullPath: string | undefined;
+	if (kind === FileLocationKind.Absolute) {
+		fullPath = filename;
+	} else if ((kind === FileLocationKind.Relative) && matcher.filePrefix && Types.isString(matcher.filePrefix)) {
+		fullPath = join(matcher.filePrefix, filename);
+	} else if (kind === FileLocationKind.AutoDetect) {
+		throw new Error('FileLocationKind.AutoDetect kind is not supported for getResourceUriSync.');
+	} else if (kind === FileLocationKind.Search && fileService) {
+		throw new Error('FileLocationKind.Search kind is not supported for getResourceUriSync.');
+	}
+	if (fullPath === undefined) {
+		throw new Error('FileLocationKind is not actionable. Does the matcher have a filePrefix? This should never happen.');
+	}
+	fullPath = normalize(fullPath);
+	fullPath = fullPath.replace(/\\/g, '/');
+	if (fullPath[0] !== '/') {
+		fullPath = '/' + fullPath;
+	}
+	if (matcher.uriProvider !== undefined) {
+		return matcher.uriProvider(fullPath);
+	} else {
+		return URI.file(fullPath);
+	}
+}
+
 export function getResource(filename: string, matcher: ProblemMatcher, fileService?: IFileService): GetResourceResult {
 	return { uri: getResourceUri(filename, matcher, fileService), resourceSequenceNumber: getResourceSequenceNumber(matcher, filename) };
+}
+
+export function getResourceSync(filename: string, matcher: ProblemMatcher, fileService?: IFileService): GetResourceResultSync {
+	return { uri: getResourceUriSync(filename, matcher, fileService), resourceSequenceNumber: getResourceSequenceNumber(matcher, filename) };
 }
 
 async function searchForFileLocation(filename: string, fsProvider: IFileSystemProvider, args: Config.SearchFileLocationArgs): Promise<URI | undefined> {
@@ -344,6 +419,10 @@ export interface ILineMatcher {
 }
 
 export function createLineMatcher(matcher: ProblemMatcher, fileService?: IFileService): ILineMatcher {
+	// Use advancedPattern if available, otherwise fall back to regular pattern
+	if (matcher.advancedPattern) {
+		return new AdvancedLineMatcher(matcher, fileService);
+	}
 	const pattern = matcher.pattern;
 	if (Array.isArray(pattern)) {
 		return new MultiLineMatcher(matcher, fileService);
@@ -364,7 +443,7 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 	}
 
 	public handle(lines: string[], start: number = 0): IHandleResult {
-		return { match: null, continue: false };
+		return { match: null, continue: false, consumedLines: 0 };
 	}
 
 	public next(line: string): IProblemMatch | null {
@@ -390,7 +469,7 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 		}
 	}
 
-	private appendProperty(data: IProblemData, property: keyof IProblemData, pattern: IProblemPattern, matches: RegExpExecArray, trim: boolean = false): void {
+	protected appendProperty(data: IProblemData, property: keyof IProblemData, pattern: IProblemPattern, matches: RegExpExecArray, trim: boolean = false): void {
 		const patternProperty = pattern[property];
 		if (Types.isUndefined(data[property])) {
 			this.fillProperty(data, property, pattern, matches, trim);
@@ -404,7 +483,7 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 		}
 	}
 
-	private fillProperty(data: IProblemData, property: keyof IProblemData, pattern: IProblemPattern, matches: RegExpExecArray, trim: boolean = false): void {
+	protected fillProperty(data: IProblemData, property: keyof IProblemData, pattern: IProblemPattern, matches: RegExpExecArray, trim: boolean = false): void {
 		const patternAtProperty = pattern[property];
 		if (Types.isUndefined(data[property]) && !Types.isUndefined(patternAtProperty) && patternAtProperty < matches.length) {
 			let value = matches[patternAtProperty];
@@ -451,8 +530,46 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 		return undefined;
 	}
 
+	protected getMarkerMatchSync(data: IProblemData): IProblemMatchSync | undefined {
+		try {
+			const location = this.getLocation(data);
+			if (data.file && location && data.message) {
+				const resourceResult = this.getResourceSync(data.file);
+
+				const marker: IMarkerData = {
+					severity: this.getSeverity(data),
+					startLineNumber: location.startLineNumber,
+					startColumn: location.startCharacter,
+					endLineNumber: location.endLineNumber,
+					endColumn: location.endCharacter,
+					message: data.message,
+					resourceSequenceNumber: resourceResult.resourceSequenceNumber,
+					sequenceNumber: ++this.matcher.matcherSequenceNumber
+				};
+				if (data.code !== undefined) {
+					marker.code = data.code;
+				}
+				if (this.matcher.source !== undefined) {
+					marker.source = this.matcher.source;
+				}
+				return {
+					description: this.matcher,
+					resource: resourceResult.uri,
+					marker: marker
+				};
+			}
+		} catch (err) {
+			console.error(`Failed to convert problem data into match: ${JSON.stringify(data)}`);
+		}
+		return undefined;
+	}
+
 	protected getResource(filename: string): GetResourceResult {
 		return getResource(filename, this.matcher, this.fileService);
+	}
+
+	protected getResourceSync(filename: string): GetResourceResultSync {
+		return getResourceSync(filename, this.matcher, this.fileService);
 	}
 
 	private getLocation(data: IProblemData): ILocation | null {
@@ -538,7 +655,7 @@ class SingleLineMatcher extends AbstractLineMatcher {
 	}
 
 	public override handle(lines: string[], start: number = 0): IHandleResult {
-		Assert.ok(lines.length - start === 1);
+		Assert.ok(lines.length - start >= 1);
 		const data: IProblemData = Object.create(null);
 		if (this.pattern.kind !== undefined) {
 			data.kind = this.pattern.kind;
@@ -548,10 +665,10 @@ class SingleLineMatcher extends AbstractLineMatcher {
 			this.fillProblemData(data, this.pattern, matches);
 			const match = this.getMarkerMatch(data);
 			if (match) {
-				return { match: match, continue: false };
+				return { match: match, continue: false, consumedLines: 1 };
 			}
 		}
-		return { match: null, continue: false };
+		return { match: null, continue: false, consumedLines: 0 };
 	}
 
 	public override next(line: string): IProblemMatch | null {
@@ -574,7 +691,10 @@ class MultiLineMatcher extends AbstractLineMatcher {
 	}
 
 	public override handle(lines: string[], start: number = 0): IHandleResult {
-		Assert.ok(lines.length - start === this.patterns.length);
+		const availableLines = lines.length - start;
+
+		// Original logic for non-multiLineMessage patterns
+		Assert.ok(availableLines >= this.patterns.length);
 		this.data = Object.create(null);
 		let data = this.data!;
 		data.kind = this.patterns[0].kind;
@@ -582,7 +702,7 @@ class MultiLineMatcher extends AbstractLineMatcher {
 			const pattern = this.patterns[i];
 			const matches = pattern.regexp.exec(lines[i + start]);
 			if (!matches) {
-				return { match: null, continue: false };
+				return { match: null, continue: false, consumedLines: 0 };
 			} else {
 				// Only the last pattern can loop
 				if (pattern.loop && i === this.patterns.length - 1) {
@@ -596,7 +716,7 @@ class MultiLineMatcher extends AbstractLineMatcher {
 			this.data = undefined;
 		}
 		const markerMatch = data ? this.getMarkerMatch(data) : null;
-		return { match: markerMatch ? markerMatch : null, continue: loop };
+		return { match: markerMatch ? markerMatch : null, continue: loop, consumedLines: this.patterns.length };
 	}
 
 	public override next(line: string): IProblemMatch | null {
@@ -613,6 +733,321 @@ class MultiLineMatcher extends AbstractLineMatcher {
 			problemMatch = this.getMarkerMatch(data);
 		}
 		return problemMatch ? problemMatch : null;
+	}
+}
+
+class AdvancedLineMatcher extends AbstractLineMatcher {
+	private patterns: IAdvancedProblemPattern[];
+
+	constructor(matcher: ProblemMatcher, fileService?: IFileService) {
+		super(matcher, fileService);
+		this.patterns = matcher.advancedPattern || [];
+	}
+
+	public get matchLength(): number {
+		// For advanced patterns, we need to be more flexible
+		return 1;
+	}
+
+	public override handle(lines: string[], start: number = 0): IHandleResult {
+		// Process the lines array directly (it contains all previous + new lines)
+		const state: IPatternProcessingState = {
+			lines,
+			start,
+			currentLineIndex: 0,
+			totalConsumedLines: 0,
+			currentCategory: 'Other',
+			subProblems: [],
+			data: Object.create(null),
+			commitCurrentData: () => { /* Will be set below */ }
+		};
+		let mainMatch: IProblemMatch | null = null;
+
+		// Initialize commitCurrentData to commit the main match
+		state.commitCurrentData = () => {
+			const match = this.getMarkerMatch(state.data);
+			if (match) {
+				mainMatch = match;
+			}
+		};
+
+		const result = this.processPatterns(this.patterns, state);
+
+		if (result.needMoreLines) {
+			return { match: null, continue: false, consumedLines: 0, needMoreLines: true };
+		}
+
+		if (result.failed) {
+			return { match: null, continue: false, consumedLines: 0 };
+		}
+
+		// Always commit final data if we have any
+		if (Object.keys(state.data).length > 1) {
+			state.commitCurrentData();
+		}
+
+		if (!mainMatch) {
+			return { match: null, continue: false, consumedLines: 0 };
+		}
+
+		// Add sub-problems to main match
+		if (state.subProblems.length > 0) {
+			const subProblemsArray: Array<{ category: string; problems: IResourceMarker[] }> = [];
+			for (const subProblem of state.subProblems) {
+				subProblemsArray.push(subProblem);
+			}
+			(mainMatch as IProblemMatch).marker.subProblems = subProblemsArray;
+		}
+
+		return {
+			match: mainMatch,
+			continue: false,
+			consumedLines: state.totalConsumedLines
+		};
+	}
+
+	public override next(line: string): IProblemMatch | null {
+		// Since we never return continue: true, this should not be called
+		// But if it is, we'll just return null
+		return null;
+	}
+
+
+	private processPatterns(
+		patterns: IAdvancedProblemPattern[],
+		state: IPatternProcessingState,
+	): { needMoreLines: boolean; failed: boolean } {
+		// Initialize data with first pattern's kind if not inherited
+		if (patterns.length > 0 && state.data.kind === undefined) {
+			state.data.kind = patterns[0].kind;
+		}
+
+		for (let patternIndex = 0; patternIndex < patterns.length; patternIndex++) {
+			const pattern = patterns[patternIndex];
+
+			// Handle loop patterns
+			if (pattern.loop) {
+				const loopResult = this.handleLoopPattern(pattern, state);
+
+				if (loopResult.needMoreLines) {
+					return { needMoreLines: true, failed: false };
+				}
+
+				if (!loopResult.success && !pattern.optional) {
+					return { needMoreLines: false, failed: true };
+				}
+
+				continue;
+			}
+
+			// Handle non-loop patterns
+			const result = this.processSinglePattern(pattern, state);
+
+			if (result.needMoreLines) {
+				return { needMoreLines: true, failed: false };
+			}
+
+			if (!result.success && !pattern.optional) {
+				return { needMoreLines: false, failed: true };
+			}
+		}
+
+		return { needMoreLines: false, failed: false };
+	}
+
+	private handleMultiLineMessagePattern(pattern: IProblemPattern, lines: string[], start: number, data: IProblemData): { consumedLines: number; needMoreLines: boolean } {
+		const availableLines = lines.length - start;
+		const messages: string[] = [];
+		let matchedLines = 0;
+		let unmatchedLine = false;
+
+		for (let i = 0; i < availableLines; i++) {
+			const matches = pattern.regexp.exec(lines[start + i]);
+			if (matches) {
+				matchedLines++;
+				if (pattern.message !== undefined && pattern.message < matches.length && matches[pattern.message] !== undefined) {
+					messages.push(matches[pattern.message]);
+				}
+			} else {
+				unmatchedLine = true;
+				break;
+			}
+		}
+
+		if (matchedLines > 0) {
+			// Combine messages with newlines
+			if (messages.length > 0) {
+				if (data.message) {
+					data.message += '\n' + messages.join('\n');
+				} else {
+					data.message = messages.join('\n');
+				}
+			}
+		}
+
+		return {
+			consumedLines: matchedLines,
+			needMoreLines: !unmatchedLine
+		};
+	}
+
+	private processSinglePattern(
+		pattern: IAdvancedProblemPattern,
+		state: IPatternProcessingState,
+	): { success: boolean; needMoreLines: boolean } {
+		const availableLines = state.lines.length - state.start;
+
+		// Check if we have enough lines
+		if (state.currentLineIndex >= availableLines) {
+			return { success: false, needMoreLines: true };
+		}
+
+		const matches = pattern.regexp.exec(state.lines[state.start + state.currentLineIndex]);
+
+		if (!matches) {
+			if (!pattern.optional) {
+				// Required pattern failed to match
+				return { success: false, needMoreLines: false };
+			}
+			// Optional pattern didn't match
+			return { success: true, needMoreLines: false };
+		}
+
+		// Pattern matched - extract category information
+		if (pattern.subProblemCategory && pattern.subProblemCategory < matches.length) {
+			state.currentCategory = matches[pattern.subProblemCategory] || 'Other';
+		} else if (pattern.staticSubProblemCategory) {
+			state.currentCategory = pattern.staticSubProblemCategory;
+		}
+
+		// Handle sub-problem introduction
+		if (pattern.introduceSubProblem) {
+			// Commit current data as sub-problem
+			state.commitCurrentData();
+
+			// Switch to sub-problem mode and create new data object
+			state.data = Object.create(null);
+			state.data.kind = pattern.kind;
+
+			const currentCategory = state.currentCategory;
+
+			// Reassign commitCurrentData to handle sub-problems
+			state.commitCurrentData = () => {
+				const match = this.getMarkerMatchSync(state.data);
+				if (match) {
+					const resourceMarker: IResourceMarker = {
+						resource: match.resource,
+						marker: match.marker
+					};
+
+					let categoryContainer: { category: string; problems: IResourceMarker[] };
+
+					if (state.subProblems.length === 0 || state.subProblems[state.subProblems.length - 1].category !== currentCategory) {
+						categoryContainer = {
+							category: currentCategory,
+							problems: []
+						};
+						state.subProblems.push(categoryContainer);
+					} else {
+						categoryContainer = state.subProblems[state.subProblems.length - 1];
+					}
+
+					categoryContainer.problems.push(resourceMarker);
+				}
+			};
+		}
+
+		state.currentLineIndex += 1;
+		state.totalConsumedLines += 1;
+
+		// Handle multi-line messages
+		if (pattern.multiLineMessage) {
+			if (pattern.message !== undefined && pattern.message < matches.length && matches[pattern.message] !== undefined) {
+				this.appendProperty(state.data, 'message', pattern, matches, false);
+			}
+
+			const result = this.handleMultiLineMessagePattern(pattern, state.lines, state.start + state.currentLineIndex, state.data);
+
+			state.currentLineIndex += result.consumedLines;
+			state.totalConsumedLines += result.consumedLines;
+
+			if (result.needMoreLines) {
+				return { success: false, needMoreLines: true };
+			}
+		}
+		else {
+			// Fill problem data from matched pattern (unless this is an ignore pattern)
+			if (!pattern.ignore) {
+				this.fillProblemData(state.data, pattern, matches);
+			}
+		}
+
+		// Handle nested patterns (sub-patterns) last - after all current pattern processing is complete
+		if (pattern.pattern && pattern.pattern.length > 0) {
+			const nestedResult = this.processPatterns(pattern.pattern, state);
+
+			if (nestedResult.failed) {
+				return { success: false, needMoreLines: false };
+			} else if (nestedResult.needMoreLines) {
+				return { success: false, needMoreLines: true };
+			}
+		}
+
+		return { success: true, needMoreLines: false };
+	}
+
+	private handleLoopPattern(
+		pattern: IAdvancedProblemPattern,
+		state: IPatternProcessingState,
+	): { success: boolean; needMoreLines: boolean } {
+		let totalConsumed = 0;
+		let needMoreLines = false;
+
+		// Keep processing the pattern and its sub-patterns until no more matches
+		while (true) {
+			// Save current state before attempting the pattern
+			const savedLineIndex = state.currentLineIndex;
+			const savedTotalConsumed = state.totalConsumedLines;
+
+			const result = this.processSinglePattern(pattern, state);
+
+			if (result.needMoreLines) {
+				needMoreLines = true;
+				break;
+			}
+
+			if (!result.success) {
+				// Pattern didn't match, restore state and stop looping
+				state.currentLineIndex = savedLineIndex;
+				state.totalConsumedLines = savedTotalConsumed;
+				break;
+			}
+
+			const consumed = state.currentLineIndex - savedLineIndex;
+			if (consumed === 0) {
+				// No lines consumed, avoid infinite loop
+				break;
+			}
+
+			totalConsumed += consumed;
+
+			// Check if we have more lines to process
+			if (state.currentLineIndex >= state.lines.length - state.start) {
+				needMoreLines = true;
+				break;
+			}
+
+			// Test if the next iteration would match
+			const nextMatches = pattern.regexp.exec(state.lines[state.start + state.currentLineIndex]);
+			if (!nextMatches) {
+				break;
+			}
+		}
+
+		return {
+			success: totalConsumed > 0,
+			needMoreLines
+		};
 	}
 }
 
@@ -702,6 +1137,45 @@ export namespace Config {
 		* last problem pattern in a multi line problem matcher.
 		*/
 		loop?: boolean;
+	}
+
+	export interface IAdvancedProblemPattern extends IProblemPattern {
+		/**
+		* When used with loop, accumulates all matching lines into a single
+		* multi-line message instead of creating separate problems for each match.
+		*/
+		multiLineMessage?: boolean;
+
+		/**
+		* Whether this pattern is optional. If true, the pattern can be skipped
+		* if it doesn't match and the matcher will continue to the next pattern.
+		*/
+		optional?: boolean;
+
+		/**
+		 * The match group index of the sub-problem category from regex capture.
+		 */
+		subProblemCategory?: number;
+
+		/**
+		 * Static category string for sub-problems.
+		 */
+		staticSubProblemCategory?: string;
+
+		/**
+		 * Mark this pattern as introducing a sub-problem.
+		 */
+		introduceSubProblem?: boolean;
+
+		/**
+		 * Nested pattern array for hierarchical matching.
+		 */
+		pattern?: IAdvancedProblemPattern[];
+
+		/**
+		 * Skip lines matching this pattern without creating problems.
+		 */
+		ignore?: boolean;
 	}
 
 	export interface ICheckedProblemPattern extends IProblemPattern {
@@ -924,6 +1398,12 @@ export namespace Config {
 		* problems spread over multiple lines.
 		*/
 		pattern?: string | IProblemPattern | IProblemPattern[];
+
+		/**
+		* Advanced pattern array for hierarchical problem matching.
+		* Takes precedence over 'pattern' if both are specified.
+		*/
+		advancedPattern?: IAdvancedProblemPattern[];
 
 		/**
 		* A regular expression signaling that a watched tasks begins executing
@@ -1222,6 +1702,62 @@ export namespace Schemas {
 		}
 	};
 
+	export const AdvancedProblemPattern: IJSONSchema = Objects.deepClone(ProblemPattern);
+	AdvancedProblemPattern.properties = Objects.deepClone(AdvancedProblemPattern.properties) || {};
+	AdvancedProblemPattern.properties['subProblemCategory'] = {
+		type: 'integer',
+		description: localize('AdvancedProblemPatternSchema.subProblemCategory', 'The match group index of the sub-problem category from regex capture.')
+	};
+	AdvancedProblemPattern.properties['staticSubProblemCategory'] = {
+		type: 'string',
+		description: localize('AdvancedProblemPatternSchema.staticSubProblemCategory', 'Static category string for sub-problems.')
+	};
+	AdvancedProblemPattern.properties['introduceSubProblem'] = {
+		type: 'boolean',
+		description: localize('AdvancedProblemPatternSchema.introduceSubProblem', 'Mark this pattern as introducing a sub-problem.')
+	};
+	AdvancedProblemPattern.properties['ignore'] = {
+		type: 'boolean',
+		description: localize('AdvancedProblemPatternSchema.ignore', 'Skip lines matching this pattern without creating problems.')
+	};
+	AdvancedProblemPattern.properties['optional'] = {
+		type: 'boolean',
+		description: localize('ProblemPatternSchema.optional', 'Whether this pattern is optional. If true, the pattern can be skipped if it doesn\'t match and the matcher will continue to the next pattern.')
+	};
+	AdvancedProblemPattern.properties['multiLineMessage'] = {
+		type: 'boolean',
+		description: localize('ProblemPatternSchema.multiLineMessage', 'When used with loop, accumulates all matching lines into a single multi-line message instead of creating separate problems for each match.')
+	};
+
+	AdvancedProblemPattern.properties['pattern'] = {
+		type: 'array',
+		description: localize('AdvancedProblemPatternSchema.pattern', 'Nested pattern array for hierarchical matching.'),
+		items: {
+			type: 'object',
+			properties: {
+				regexp: { type: 'string' },
+				kind: { type: 'string' },
+				file: { type: 'integer' },
+				location: { type: 'integer' },
+				line: { type: 'integer' },
+				column: { type: 'integer' },
+				endLine: { type: 'integer' },
+				endColumn: { type: 'integer' },
+				severity: { type: 'integer' },
+				code: { type: 'integer' },
+				message: { type: 'integer' },
+				loop: { type: 'boolean' },
+				multiLineMessage: { type: 'boolean' },
+				optional: { type: 'boolean' },
+				subProblemCategory: { type: 'integer' },
+				staticSubProblemCategory: { type: 'string' },
+				introduceSubProblem: { type: 'boolean' },
+				ignore: { type: 'boolean' }
+			},
+			required: ['regexp']
+		}
+	};
+
 	export const NamedProblemPattern: IJSONSchema = Objects.deepClone(ProblemPattern);
 	NamedProblemPattern.properties = Objects.deepClone(NamedProblemPattern.properties) || {};
 	NamedProblemPattern.properties['name'] = {
@@ -1304,6 +1840,11 @@ export namespace Schemas {
 				description: localize('ProblemMatcherSchema.applyTo', 'Controls if a problem reported on a text document is applied only to open, closed or all documents.')
 			},
 			pattern: PatternType,
+			advancedPattern: {
+				type: 'array',
+				description: localize('ProblemMatcherSchema.advancedPattern', 'Advanced pattern array for hierarchical problem matching. Takes precedence over \'pattern\' if both are specified.'),
+				items: Schemas.AdvancedProblemPattern
+			},
 			fileLocation: {
 				oneOf: [
 					{
@@ -1680,7 +2221,7 @@ export class ProblemMatcherParser extends Parser {
 			this.error(localize('ProblemMatcherParser.noProblemMatcher', 'Error: the description can\'t be converted into a problem matcher:\n{0}\n', JSON.stringify(externalProblemMatcher, null, 4)));
 			return false;
 		}
-		if (!problemMatcher.pattern) {
+		if (!problemMatcher.pattern && !problemMatcher.advancedPattern) {
 			this.error(localize('ProblemMatcherParser.noProblemPattern', 'Error: the description doesn\'t define a valid problem pattern:\n{0}\n', JSON.stringify(externalProblemMatcher, null, 4)));
 			return false;
 		}
@@ -1741,6 +2282,7 @@ export class ProblemMatcherParser extends Parser {
 		}
 
 		const pattern = description.pattern ? this.createProblemPattern(description.pattern) : undefined;
+		const advancedPattern = description.advancedPattern ? this.createAdvancedProblemPattern(description.advancedPattern) : undefined;
 
 		let severity = description.severity ? Severity.fromValue(description.severity) : undefined;
 		if (severity === Severity.Ignore) {
@@ -1767,6 +2309,9 @@ export class ProblemMatcherParser extends Parser {
 					if (description.pattern !== undefined && pattern !== undefined && pattern !== null) {
 						result.pattern = pattern;
 					}
+					if (description.advancedPattern !== undefined && advancedPattern !== undefined && advancedPattern !== null) {
+						result.advancedPattern = advancedPattern;
+					}
 					if (description.severity !== undefined && severity !== undefined) {
 						result.severity = severity;
 					}
@@ -1775,16 +2320,19 @@ export class ProblemMatcherParser extends Parser {
 					}
 				}
 			}
-		} else if (fileLocation && pattern) {
+		} else if (fileLocation && (pattern || advancedPattern)) {
 			result = {
 				owner: owner,
 				applyTo: applyTo,
 				fileLocation: fileLocation,
-				pattern: pattern,
+				pattern: pattern!,
 				resourceSequenceNumber: 0,
 				resourceSequenceNumberMap: new Map(),
 				matcherSequenceNumber: 0
 			};
+			if (advancedPattern) {
+				result.advancedPattern = advancedPattern;
+			}
 			if (source) {
 				result.source = source;
 			}
@@ -1827,6 +2375,78 @@ export class ProblemMatcherParser extends Parser {
 			}
 		}
 		return null;
+	}
+
+	private createAdvancedProblemPattern(patterns: Config.IAdvancedProblemPattern[]): IAdvancedProblemPattern[] | null {
+		const result: IAdvancedProblemPattern[] = [];
+		for (const pattern of patterns) {
+			const parsed = this.createSingleAdvancedProblemPattern(pattern);
+			if (!parsed) {
+				return null;
+			}
+			result.push(parsed);
+		}
+		return result.length > 0 ? result : null;
+	}
+
+	private createSingleAdvancedProblemPattern(value: Config.IAdvancedProblemPattern): IAdvancedProblemPattern | null {
+		if (!value.regexp) {
+			this.error(localize('AdvancedProblemPatternParser.missingRegExp', 'The advanced problem pattern is missing a regular expression.'));
+			return null;
+		}
+
+		const regexp = this.createRegularExpression(value.regexp);
+		if (regexp === null || regexp === undefined) {
+			return null;
+		}
+
+		const result: IAdvancedProblemPattern = { regexp };
+
+		// Copy basic pattern properties
+		if (value.kind) {
+			result.kind = ProblemLocationKind.fromString(value.kind);
+		}
+
+		function copyProperty(result: IAdvancedProblemPattern, source: Config.IAdvancedProblemPattern, resultKey: keyof IAdvancedProblemPattern, sourceKey: keyof Config.IAdvancedProblemPattern) {
+			const value = source[sourceKey];
+			if (typeof value === 'number') {
+				(result as any)[resultKey] = value;
+			} else if (typeof value === 'boolean') {
+				(result as any)[resultKey] = value;
+			} else if (typeof value === 'string') {
+				(result as any)[resultKey] = value;
+			}
+		}
+
+		// Copy standard properties
+		copyProperty(result, value, 'file', 'file');
+		copyProperty(result, value, 'location', 'location');
+		copyProperty(result, value, 'line', 'line');
+		copyProperty(result, value, 'character', 'column');
+		copyProperty(result, value, 'endLine', 'endLine');
+		copyProperty(result, value, 'endCharacter', 'endColumn');
+		copyProperty(result, value, 'severity', 'severity');
+		copyProperty(result, value, 'code', 'code');
+		copyProperty(result, value, 'message', 'message');
+		copyProperty(result, value, 'loop', 'loop');
+		copyProperty(result, value, 'multiLineMessage', 'multiLineMessage');
+		copyProperty(result, value, 'optional', 'optional');
+
+		// Copy advanced pattern properties
+		copyProperty(result, value, 'subProblemCategory', 'subProblemCategory');
+		copyProperty(result, value, 'staticSubProblemCategory', 'staticSubProblemCategory');
+		copyProperty(result, value, 'introduceSubProblem', 'introduceSubProblem');
+		copyProperty(result, value, 'ignore', 'ignore');
+
+		// Handle nested patterns
+		if (value.pattern) {
+			const nestedPatterns = this.createAdvancedProblemPattern(value.pattern);
+			if (nestedPatterns) {
+				result.pattern = nestedPatterns;
+			}
+		}
+
+		return result;
 	}
 
 	private addWatchingMatcher(external: Config.ProblemMatcher, internal: ProblemMatcher): void {

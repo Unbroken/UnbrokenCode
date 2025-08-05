@@ -117,7 +117,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		const disposables: DisposableStore = new DisposableStore();
 		const hoverElement = $('div.hover-row');
 		const markerElement = dom.append(hoverElement, $('div.marker.hover-contents'));
-		const { source, message, code, relatedInformation } = markerHover.marker;
+		const { source, message, code, relatedInformation, subProblems } = markerHover.marker;
 
 		this._editor.applyFontInfo(markerElement);
 		const messageElement = dom.append(markerElement, $('span'));
@@ -179,6 +179,43 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			}
 		}
 
+		// Display subProblems grouped by category
+		if (subProblems && subProblems.length > 0) {
+			for (const categoryGroup of subProblems) {
+				// Add category header
+				const categoryContainer = dom.append(markerElement, $('div'));
+				categoryContainer.style.marginTop = '8px';
+				categoryContainer.style.fontWeight = 'bold';
+				categoryContainer.innerText = `${categoryGroup.category}:`;
+				this._editor.applyFontInfo(categoryContainer);
+
+				// Add sub-problems under this category
+				for (const resourceMarker of categoryGroup.problems) {
+					const subProblemContainer = dom.append(markerElement, $('div'));
+					subProblemContainer.style.marginTop = '4px';
+					subProblemContainer.style.marginLeft = '16px'; // Indent sub-problems
+
+					const a = dom.append(subProblemContainer, $('a'));
+					a.innerText = `${basename(resourceMarker.resource)}(${resourceMarker.marker.startLineNumber}, ${resourceMarker.marker.startColumn}): `;
+					a.style.cursor = 'pointer';
+					disposables.add(dom.addDisposableListener(a, 'click', (e) => {
+						e.stopPropagation();
+						e.preventDefault();
+						if (this._openerService) {
+							const editorOptions: ITextEditorOptions = { selection: { startLineNumber: resourceMarker.marker.startLineNumber, startColumn: resourceMarker.marker.startColumn } };
+							this._openerService.open(resourceMarker.resource, {
+								fromUserGesture: true,
+								editorOptions
+							});
+						}
+					}));
+					const messageElement = dom.append<HTMLAnchorElement>(subProblemContainer, $('span'));
+					messageElement.innerText = resourceMarker.marker.message;
+					this._editor.applyFontInfo(messageElement);
+				}
+			}
+		}
+
 		const renderedHoverPart: IRenderedHoverPart<MarkerHover> = {
 			hoverPart: markerHover,
 			hoverElement,
@@ -207,7 +244,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		if (!this._editor.getOption(EditorOption.readOnly)) {
 			const quickfixPlaceholderElement = context.statusBar.append($('div'));
 			if (this.recentMarkerCodeActionsInfo) {
-				if (IMarkerData.makeKey(this.recentMarkerCodeActionsInfo.marker) === IMarkerData.makeKey(markerHover.marker)) {
+				if (IMarkerData.makeKey(this.recentMarkerCodeActionsInfo.marker as IMarkerData) === IMarkerData.makeKey(markerHover.marker as IMarkerData)) {
 					if (!this.recentMarkerCodeActionsInfo.hasCodeActions) {
 						quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");
 					}

@@ -7094,6 +7094,22 @@ declare module 'vscode' {
 		tags?: DiagnosticTag[];
 
 		/**
+		 * Sub-problems grouped by category for hierarchical problem display.
+		 * Each category contains an array of diagnostics with their associated resources.
+		 */
+		subProblems?: Array<{
+			/** The category name for this group of sub-problems */
+			category: string;
+			/** The list of problems in this category */
+			problems: Array<{
+				/** The resource URI where the problem occurs */
+				resource: Uri;
+				/** The diagnostic information for the problem */
+				diagnostic: Diagnostic;
+			}>;
+		}>;
+
+		/**
 		 * Creates a new diagnostic object.
 		 *
 		 * @param range The range to which this diagnostic applies.

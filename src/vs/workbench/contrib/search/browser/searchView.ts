@@ -86,9 +86,10 @@ import { searchMatchComparer } from './searchCompare.js';
 import { AIFolderMatchWorkspaceRootImpl } from './AISearch/aiSearchModel.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { forcedExpandRecursively } from './searchActionsTopBar.js';
-import { IModelContentChangedEvent, IModelContentChange } from '../../../../editor/common/textModelEvents.js';
+import { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { MatchImpl } from './searchTreeModel/match.js';
+import { IModelContentChange } from '../../../../editor/common/model/mirrorTextModel.js';
 
 const $ = dom.$;
 

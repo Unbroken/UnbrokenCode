@@ -254,6 +254,8 @@ export namespace Diagnostic {
 			severity: DiagnosticSeverity.from(value.severity),
 			relatedInformation: value.relatedInformation && value.relatedInformation.map(DiagnosticRelatedInformation.from),
 			tags: Array.isArray(value.tags) ? coalesce(value.tags.map(DiagnosticTag.from)) : undefined,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 

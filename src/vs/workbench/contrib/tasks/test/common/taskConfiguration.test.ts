@@ -265,7 +265,10 @@ class ProblemMatcherBuilder {
 			severity: undefined,
 			fileLocation: FileLocationKind.Relative,
 			filePrefix: '${workspaceFolder}',
-			pattern: undefined!
+			pattern: undefined!,
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		};
 	}
 
@@ -1823,13 +1826,13 @@ suite('Task configuration conversions', () => {
 		test('returns config for a known problem matcher', () => {
 			const result = (ProblemMatcherConverter.from('$real', parseContext));
 			assert.strictEqual(result.errors?.length, 0);
-			assert.deepEqual(result.value, [{ "label": "real label" }]);
+			assert.deepEqual(result.value, [{ "label": "real label", "resourceSequenceNumberMap": new Map() }]);
 		});
 		test('returns config for a known problem matcher including applyTo', () => {
 			namedProblemMatcher.applyTo = ApplyToKind.closedDocuments;
 			const result = (ProblemMatcherConverter.from('$real', parseContext));
 			assert.strictEqual(result.errors?.length, 0);
-			assert.deepEqual(result.value, [{ "label": "real label", "applyTo": ApplyToKind.closedDocuments }]);
+			assert.deepEqual(result.value, [{ "label": "real label", "applyTo": ApplyToKind.closedDocuments, "resourceSequenceNumberMap": new Map() }]);
 		});
 	});
 	suite('TaskParser.from', () => {

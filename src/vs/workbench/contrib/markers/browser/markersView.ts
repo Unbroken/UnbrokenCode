@@ -52,14 +52,15 @@ import { ACTIVE_GROUP, IEditorService, SIDE_GROUP } from '../../../services/edit
 import { Markers, MarkersContextKeys, MarkersViewMode } from '../common/markers.js';
 import { IMarkersView } from './markers.js';
 import { FilterOptions } from './markersFilterOptions.js';
-import { compareMarkersByUri, Marker, MarkerChangesEvent, MarkerElement, MarkersModel, MarkerTableItem, RelatedInformation, ResourceMarkers } from './markersModel.js';
+import { compareMarkersByUri, Marker, MarkerChangesEvent, MarkerElement, MarkersModel, MarkerSortOrder, MarkerTableItem, RelatedInformation, ResourceMarkers } from './markersModel.js';
 import { MarkersTable } from './markersTable.js';
 import { Filter, FilterData, MarkerRenderer, MarkersViewModel, MarkersWidgetAccessibilityProvider, RelatedInformationRenderer, ResourceMarkersRenderer, VirtualDelegate } from './markersTreeViewer.js';
 import { IMarkersFiltersChangeEvent, MarkersFilters } from './markersViewActions.js';
 import Messages from './messages.js';
 
-function createResourceMarkersIterator(resourceMarkers: ResourceMarkers): Iterable<ITreeElement<MarkerElement>> {
-	return Iterable.map(resourceMarkers.markers, m => {
+function createResourceMarkersIterator(resourceMarkers: ResourceMarkers, sortOrder?: MarkerSortOrder): Iterable<ITreeElement<MarkerElement>> {
+	const markers = sortOrder ? resourceMarkers.getMarkersSorted(sortOrder) : resourceMarkers.markers;
+	return Iterable.map(markers, m => {
 		const relatedInformationIt = Iterable.from(m.relatedInformation);
 		const children = Iterable.map(relatedInformationIt, r => ({ element: r }));
 
@@ -85,12 +86,13 @@ export interface IProblemsWidget {
 	getSelection(): (MarkerElement | MarkerTableItem | null)[];
 	getVisibleItemCount(): number;
 	layout(height: number, width: number): void;
-	reset(resourceMarkers: ResourceMarkers[]): void;
+	reset(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void;
 	revealMarkers(activeResource: ResourceMarkers | null, focus: boolean, lastSelectedRelativeTop: number): void;
 	setAriaLabel(label: string): void;
 	setMarkerSelection(selection?: Marker[], focus?: Marker[]): void;
+	setSortOrder(sortOrder: MarkerSortOrder): void;
 	toggleVisibility(hide: boolean): void;
-	update(resourceMarkers: ResourceMarkers[]): void;
+	update(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void;
 	updateMarker(marker: Marker): void;
 }
 
@@ -115,6 +117,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 
 	private currentHeight = 0;
 	private currentWidth = 0;
+	private sortOrderContextKey: IContextKey<string>;
 	private readonly memento: Memento;
 	private readonly panelState: MementoObject;
 
@@ -157,7 +160,15 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.memento = memento;
 		this.panelState = panelState;
 
+		this.sortOrderContextKey = MarkersContextKeys.MarkersSortOrderContextKey.bindTo(contextKeyService);
+
 		this.markersModel = this._register(instantiationService.createInstance(MarkersModel));
+		// Initialize sort order from saved state
+		const savedSortOrder = this.panelState['sortOrder'] as MarkerSortOrder | undefined;
+		if (savedSortOrder) {
+			this.markersModel.sortOrder = savedSortOrder;
+		}
+		this.sortOrderContextKey.set(this.markersModel.sortOrder);
 		this.markersViewModel = this._register(instantiationService.createInstance(MarkersViewModel, this.panelState['multiline'], this.panelState['viewMode'] ?? this.getDefaultViewMode()));
 		this._register(this.onDidChangeVisibility(visible => this.onDidChangeMarkersViewVisibility(visible)));
 		this._register(this.markersViewModel.onDidChangeViewMode(_ => this.onDidChangeViewMode()));
@@ -326,7 +337,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 						this.resetWidget();
 					} else {
 						// Update resource
-						this.widget.update([...markerOrChange.updated]);
+						this.widget.update([...markerOrChange.updated], this.markersModel.sortOrder);
 					}
 				}
 			} else {
@@ -353,7 +364,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 	}
 
 	private resetWidget(): void {
-		this.widget.reset(this.getResourceMarkers());
+		this.widget.reset(this.getResourceMarkers(), this.markersModel.sortOrder);
 	}
 
 	private updateFilter() {
@@ -518,6 +529,17 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 
 	setViewMode(viewMode: MarkersViewMode): void {
 		this.markersViewModel.viewMode = viewMode;
+	}
+
+	getSortOrder(): MarkerSortOrder {
+		return this.markersModel.sortOrder;
+	}
+
+	setSortOrder(sortOrder: MarkerSortOrder): void {
+		this.markersModel.sortOrder = sortOrder;
+		this.sortOrderContextKey.set(sortOrder);
+		this.widget.setSortOrder(sortOrder);
+		this.saveState();
 	}
 
 	private onDidChangeMarkersViewVisibility(visible: boolean): void {
@@ -893,6 +915,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.panelState['activeFile'] = this.filters.activeFile;
 		this.panelState['multiline'] = this.markersViewModel.multiline;
 		this.panelState['viewMode'] = this.markersViewModel.viewMode;
+		this.panelState['sortOrder'] = this.markersModel.sortOrder;
 
 		this.memento.saveMemento();
 		super.saveState();
@@ -907,6 +930,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 class MarkersTree extends WorkbenchObjectTree<MarkerElement, FilterData> implements IProblemsWidget {
 
 	private readonly visibilityContextKey: IContextKey<boolean>;
+	private _sortOrder: MarkerSortOrder = MarkerSortOrder.PositionAndSeverity;
 
 	constructor(
 		user: string,
@@ -960,8 +984,15 @@ class MarkersTree extends WorkbenchObjectTree<MarkerElement, FilterData> impleme
 		this.container.classList.toggle('hidden', hide);
 	}
 
-	reset(resourceMarkers: ResourceMarkers[]): void {
-		this.setChildren(null, Iterable.map(resourceMarkers, m => ({ element: m, children: createResourceMarkersIterator(m) })));
+	reset(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void {
+		if (sortOrder !== undefined) {
+			this._sortOrder = sortOrder;
+		}
+		this.setChildren(null, Iterable.map(resourceMarkers, m => ({ element: m, children: createResourceMarkersIterator(m, this._sortOrder) })));
+	}
+
+	setSortOrder(sortOrder: MarkerSortOrder): void {
+		this._sortOrder = sortOrder;
 	}
 
 	revealMarkers(activeResource: ResourceMarkers | null, focus: boolean, lastSelectedRelativeTop: number): void {
@@ -1020,10 +1051,13 @@ class MarkersTree extends WorkbenchObjectTree<MarkerElement, FilterData> impleme
 		}
 	}
 
-	update(resourceMarkers: ResourceMarkers[]): void {
+	update(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void {
+		if (sortOrder !== undefined) {
+			this._sortOrder = sortOrder;
+		}
 		for (const resourceMarker of resourceMarkers) {
 			if (this.hasElement(resourceMarker)) {
-				this.setChildren(resourceMarker, createResourceMarkersIterator(resourceMarker));
+				this.setChildren(resourceMarker, createResourceMarkersIterator(resourceMarker, this._sortOrder));
 				this.rerender(resourceMarker);
 			}
 		}

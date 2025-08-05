@@ -108,12 +108,16 @@ class PromptHeaderDiagnosticsProvider extends ProviderInstanceBase {
 				message: localize('promptHeaderDiagnosticsProvider.modelNotFound', "Unknown model '{0}'", modelNode.value),
 				severity: MarkerSeverity.Warning,
 				...modelNode.range,
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
 			});
 		} else if (modeKind === ChatModeKind.Agent && !ILanguageModelChatMetadata.suitableForAgentMode(modelMetadata)) {
 			markers.push({
 				message: localize('promptHeaderDiagnosticsProvider.modelNotSuited', "Model '{0}' is not suited for agent mode", modelNode.value),
 				severity: MarkerSeverity.Warning,
 				...modelNode.range,
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
 			});
 		}
 
@@ -150,6 +154,8 @@ class PromptHeaderDiagnosticsProvider extends ProviderInstanceBase {
 					message: localize('promptHeaderDiagnosticsProvider.toolNotFound', "Unknown tool '{0}'", toolName),
 					severity: MarkerSeverity.Warning,
 					...range,
+					resourceSequenceNumber: 0,
+					sequenceNumber: 0
 				});
 			}
 		}
@@ -172,6 +178,8 @@ function toMarker(diagnostic: TDiagnostic): IMarkerData {
 			message: diagnostic.message,
 			severity: MarkerSeverity.Warning,
 			...diagnostic.range,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -180,6 +188,8 @@ function toMarker(diagnostic: TDiagnostic): IMarkerData {
 			message: diagnostic.message,
 			severity: MarkerSeverity.Error,
 			...diagnostic.range,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 

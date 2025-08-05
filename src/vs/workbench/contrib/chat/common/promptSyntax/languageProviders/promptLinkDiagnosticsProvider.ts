@@ -84,6 +84,8 @@ function toMarker(link: IPromptFileReference, message: string): IMarkerData {
 		message: message,
 		severity: MarkerSeverity.Warning,
 		...linkRange,
+		resourceSequenceNumber: 0,
+		sequenceNumber: 0
 	};
 }
 

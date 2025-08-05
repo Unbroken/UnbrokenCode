@@ -23,7 +23,7 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { IMarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IWorkspaceContextService, IWorkspaceFolder, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 import { Markers } from '../../markers/common/markers.js';
-import { ProblemMatcher, ProblemMatcherRegistry /*, ProblemPattern, getResource */ } from '../common/problemMatcher.js';
+import { ProblemMatcher, ProblemMatcherRegistry, cloneProblemMatcher /*, ProblemPattern, getResource */ } from '../common/problemMatcher.js';
 
 import { Codicon } from '../../../../base/common/codicons.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -1800,7 +1800,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 			if (!hasFilePrefix && !hasUriProvider) {
 				result.push(matcher);
 			} else {
-				const copy = Objects.deepClone(matcher);
+				const copy = cloneProblemMatcher(matcher);
 				if (hasUriProvider && (taskSystemInfo !== undefined)) {
 					copy.uriProvider = taskSystemInfo.uriProvider;
 				}

@@ -15,7 +15,7 @@ import * as UUID from '../../../../base/common/uuid.js';
 import { ValidationStatus, IProblemReporter as IProblemReporterBase } from '../../../../base/common/parsers.js';
 import {
 	INamedProblemMatcher, ProblemMatcherParser, Config as ProblemMatcherConfig,
-	isNamedProblemMatcher, ProblemMatcherRegistry, ProblemMatcher
+	isNamedProblemMatcher, ProblemMatcherRegistry, ProblemMatcher, cloneProblemMatcher, cloneProblemMatchers
 } from './problemMatcher.js';
 
 import { IWorkspaceFolder, IWorkspace } from '../../../../platform/workspace/common/workspace.js';
@@ -1252,11 +1252,11 @@ export namespace ProblemMatcherConverter {
 				variableName = variableName.substring(1);
 				const global = ProblemMatcherRegistry.get(variableName);
 				if (global) {
-					return { value: Objects.deepClone(global) };
+					return { value: cloneProblemMatcher(global) };
 				}
 				let localProblemMatcher: ProblemMatcher & Partial<INamedProblemMatcher> = context.namedProblemMatchers[variableName];
 				if (localProblemMatcher) {
-					localProblemMatcher = Objects.deepClone(localProblemMatcher);
+					localProblemMatcher = cloneProblemMatcher(localProblemMatcher);
 					// remove the name
 					delete localProblemMatcher.name;
 					return { value: localProblemMatcher };
@@ -1626,7 +1626,7 @@ namespace CustomTask {
 			task.command = CommandConfiguration.fillGlobals(task.command, globals.command, task.configurationProperties.name);
 		}
 		if (task.configurationProperties.problemMatchers === undefined && globals.problemMatcher !== undefined) {
-			task.configurationProperties.problemMatchers = Objects.deepClone(globals.problemMatcher);
+			task.configurationProperties.problemMatchers = cloneProblemMatchers(globals.problemMatcher);
 			task.hasDefinedMatchers = true;
 		}
 		// promptOnClose is inferred from isBackground if available

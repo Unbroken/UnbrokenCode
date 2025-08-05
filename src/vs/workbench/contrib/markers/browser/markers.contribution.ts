@@ -10,7 +10,7 @@ import { Categories } from '../../../../platform/action/common/actionCommonCateg
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Marker, RelatedInformation, ResourceMarkers } from './markersModel.js';
+import { Marker, RelatedInformation, ResourceMarkers, MarkerSortOrder } from './markersModel.js';
 import { MarkersView } from './markersView.js';
 import { MenuId, registerAction2, Action2 } from '../../../../platform/actions/common/actions.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -562,6 +562,56 @@ registerAction2(class extends Action2 {
 		} else {
 			viewsService.openView(Markers.MARKERS_VIEW_ID, true);
 		}
+	}
+});
+
+registerAction2(class extends ViewAction<IMarkersView> {
+	constructor() {
+		super({
+			id: `workbench.actions.${Markers.MARKERS_VIEW_ID}.sortByPositionAndSeverity`,
+			title: localize('sortByPositionAndSeverity', "Sort by Position and Severity"),
+			metadata: {
+				description: localize2('sortByPositionAndSeverityDescription', "Sort problems by position and severity.")
+			},
+			category: localize('problems', "Problems"),
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('view', Markers.MARKERS_VIEW_ID), MarkersContextKeys.MarkersSortOrderContextKey.isEqualTo(MarkerSortOrder.OutputOrder)),
+				group: 'navigation',
+				order: 1
+			},
+			icon: Codicon.sortPrecedence,
+			viewId: Markers.MARKERS_VIEW_ID
+		});
+	}
+
+	async runInView(serviceAccessor: ServicesAccessor, view: IMarkersView): Promise<void> {
+		view.setSortOrder(MarkerSortOrder.PositionAndSeverity);
+	}
+});
+
+registerAction2(class extends ViewAction<IMarkersView> {
+	constructor() {
+		super({
+			id: `workbench.actions.${Markers.MARKERS_VIEW_ID}.sortByOutputOrder`,
+			title: localize('sortByOutputOrder', "Sort by Output Order"),
+			metadata: {
+				description: localize2('sortByOutputOrderDescription', "Sort problems in the order they appeared in the output.")
+			},
+			category: localize('problems', "Problems"),
+			menu: {
+				id: MenuId.ViewTitle,
+				when: ContextKeyExpr.and(ContextKeyExpr.equals('view', Markers.MARKERS_VIEW_ID), MarkersContextKeys.MarkersSortOrderContextKey.isEqualTo(MarkerSortOrder.PositionAndSeverity)),
+				group: 'navigation',
+				order: 1
+			},
+			icon: Codicon.listOrdered,
+			viewId: Markers.MARKERS_VIEW_ID
+		});
+	}
+
+	async runInView(serviceAccessor: ServicesAccessor, view: IMarkersView): Promise<void> {
+		view.setSortOrder(MarkerSortOrder.OutputOrder);
 	}
 });
 

@@ -150,7 +150,7 @@ suite('racePollingOrPrompt', () => {
 			const fakeMarkerService = {
 				changeOne: () => { },
 				remove: () => { },
-				read: ({ owner }: { owner: string }) => owner === 'terminal-output' ? [{ message: 'problem', code: 'E123', severity: 1, startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 10, owner: 'terminal-output', resource: URI.file('test.txt') }] : []
+				read: ({ owner }: { owner: string }) => owner === 'terminal-output' ? [{ message: 'problem', code: 'E123', severity: 1, startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 10, owner: 'terminal-output', resource: URI.file('test.txt'), sequenceNumber: 0, resourceSequenceNumber: 0 }] : []
 			};
 			const fakeLanguageModelsService: Pick<ILanguageModelsService, 'selectLanguageModels' | 'sendChatRequest'> = {
 				selectLanguageModels: async () => [],
@@ -170,7 +170,7 @@ suite('racePollingOrPrompt', () => {
 				token,
 				fakeLanguageModelsService,
 				fakeMarkerService,
-				[{ owner: 'terminal-output', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Absolute, pattern: { regexp: RegExp('.*') } }]
+				[{ owner: 'terminal-output', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Absolute, pattern: { regexp: RegExp('.*') }, resourceSequenceNumberMap: new Map(), resourceSequenceNumber: 0, matcherSequenceNumber: 0 }]
 			);
 			assert.ok(result.output.includes('problem'));
 		});

@@ -239,3 +239,41 @@
 	margin-left: 6px;
 	opacity: 0.7;
 }
+
+/* Category styles */
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .category-label-container {
+	display: flex;
+	align-items: center;
+	flex: 1;
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .category-label-container .icon.codicon.codicon-folder {
+	margin-right: 4px;
+	color: var(--vscode-icon-foreground);
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .category-label-container .category-label {
+	flex: 1;
+	font-weight: 500;
+}
+
+.markers-panel:not(.wide) .markers-panel-container .tree-container .monaco-tl-contents .category-label-container {
+	flex: 1;
+}
+
+/* SubProblem styles */
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .resource {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-description {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

@@ -52,19 +52,34 @@ import { ACTIVE_GROUP, IEditorService, SIDE_GROUP } from '../../../services/edit
 import { Markers, MarkersContextKeys, MarkersViewMode } from '../common/markers.js';
 import { IMarkersView } from './markers.js';
 import { FilterOptions } from './markersFilterOptions.js';
-import { compareMarkersByUri, Marker, MarkerChangesEvent, MarkerElement, MarkersModel, MarkerSortOrder, MarkerTableItem, RelatedInformation, ResourceMarkers } from './markersModel.js';
+import { compareMarkersByUri, Marker, MarkerChangesEvent, MarkerElement, MarkersModel, MarkerSortOrder, MarkerTableItem, RelatedInformation, ResourceMarkers, Category, SubProblem } from './markersModel.js';
 import { MarkersTable } from './markersTable.js';
-import { Filter, FilterData, MarkerRenderer, MarkersViewModel, MarkersWidgetAccessibilityProvider, RelatedInformationRenderer, ResourceMarkersRenderer, VirtualDelegate } from './markersTreeViewer.js';
+import { Filter, FilterData, MarkerRenderer, MarkersViewModel, MarkersWidgetAccessibilityProvider, RelatedInformationRenderer, ResourceMarkersRenderer, SubProblemRenderer, CategoryRenderer, VirtualDelegate } from './markersTreeViewer.js';
 import { IMarkersFiltersChangeEvent, MarkersFilters } from './markersViewActions.js';
 import Messages from './messages.js';
 
 function createResourceMarkersIterator(resourceMarkers: ResourceMarkers, sortOrder?: MarkerSortOrder): Iterable<ITreeElement<MarkerElement>> {
 	const markers = sortOrder ? resourceMarkers.getMarkersSorted(sortOrder) : resourceMarkers.markers;
 	return Iterable.map(markers, m => {
-		const relatedInformationIt = Iterable.from(m.relatedInformation);
-		const children = Iterable.map(relatedInformationIt, r => ({ element: r }));
+		const allChildren: { element: MarkerElement; children?: { element: MarkerElement }[] }[] = [];
 
-		return { element: m, children };
+		// Add related information as children
+		const relatedInformationIt = Iterable.from(m.relatedInformation);
+		const relatedInfoChildren = Iterable.map(relatedInformationIt, r => ({ element: r }));
+		allChildren.push(...relatedInfoChildren);
+
+		// Add categories as children, with their SubProblems as grandchildren
+		if (m.categories && m.categories.length > 0) {
+			for (const category of m.categories) {
+				const subProblemChildren = Iterable.map(Iterable.from(category.problems), sp => ({ element: sp }));
+				allChildren.push({
+					element: category,
+					children: Array.from(subProblemChildren)
+				});
+			}
+		}
+
+		return { element: m, children: allChildren };
 	});
 }
 
@@ -186,6 +201,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 			showErrors: this.panelState['showErrors'] !== false,
 			showWarnings: this.panelState['showWarnings'] !== false,
 			showInfos: this.panelState['showInfos'] !== false,
+			showProblemDetails: this.panelState['showProblemDetails'] !== false,
 			excludedFiles: !!this.panelState['useFilesExclude'],
 			activeFile: !!this.panelState['activeFile'],
 		}, this.contextKeyService));
@@ -299,8 +315,9 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 	public openFileAtElement(element: any, preserveFocus: boolean, sideByside: boolean, pinned: boolean): boolean {
 		const { resource, selection } = element instanceof Marker ? { resource: element.resource, selection: element.range } :
 			element instanceof RelatedInformation ? { resource: element.raw.resource, selection: element.raw } :
-				'marker' in element ? { resource: element.marker.resource, selection: element.marker.range } :
-					{ resource: null, selection: null };
+				element instanceof SubProblem ? { resource: element.resource, selection: element.range } :
+					'marker' in element ? { resource: element.marker.resource, selection: element.marker.range } :
+						{ resource: null, selection: null };
 		if (resource && selection) {
 			this.editorService.openEditor({
 				resource,
@@ -368,7 +385,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 	}
 
 	private updateFilter() {
-		this.filter.options = new FilterOptions(this.filterWidget.getFilterText(), this.getFilesExcludeExpressions(), this.filters.showWarnings, this.filters.showErrors, this.filters.showInfos, this.uriIdentityService);
+		this.filter.options = new FilterOptions(this.filterWidget.getFilterText(), this.getFilesExcludeExpressions(), this.filters.showWarnings, this.filters.showErrors, this.filters.showInfos, this.filters.showProblemDetails, this.uriIdentityService);
 		this.widget.filterMarkers(this.getResourceMarkers(), this.filter.options);
 
 		this.cachedFilterStats = undefined;
@@ -494,7 +511,9 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		const renderers = [
 			this.instantiationService.createInstance(ResourceMarkersRenderer, treeLabels, onDidChangeRenderNodeCount.event),
 			this.instantiationService.createInstance(MarkerRenderer, this.markersViewModel),
-			this.instantiationService.createInstance(RelatedInformationRenderer)
+			this.instantiationService.createInstance(RelatedInformationRenderer),
+			this.instantiationService.createInstance(SubProblemRenderer),
+			this.instantiationService.createInstance(CategoryRenderer)
 		];
 
 		const tree = this.instantiationService.createInstance(MarkersTree,
@@ -507,7 +526,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 				accessibilityProvider: this.widgetAccessibilityProvider,
 				identityProvider: this.widgetIdentityProvider,
 				dnd: this.instantiationService.createInstance(MarkersListDnDHandler),
-				expandOnlyOnTwistieClick: (e: MarkerElement) => e instanceof Marker && e.relatedInformation.length > 0,
+				expandOnlyOnTwistieClick: (e: MarkerElement) => (e instanceof Marker && (e.relatedInformation.length > 0 || e.categories.length > 0)) || e instanceof Category,
 				overrideStyles: this.getLocationBasedColors().listOverrideStyles,
 				selectionNavigation: true,
 				multipleSelectionSupport: true,
@@ -583,7 +602,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		disposables.push(this.filters.onDidChange((event: IMarkersFiltersChangeEvent) => {
 			if (event.activeFile) {
 				this.refreshPanel();
-			} else if (event.excludedFiles || event.showWarnings || event.showErrors || event.showInfos) {
+			} else if (event.excludedFiles || event.showWarnings || event.showErrors || event.showInfos || event.showProblemDetails) {
 				this.updateFilter();
 			}
 		}));
@@ -775,6 +794,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.filters.showErrors = true;
 		this.filters.showWarnings = true;
 		this.filters.showInfos = true;
+		this.filters.showProblemDetails = true;
 	}
 
 	private autoReveal(focus: boolean = false): void {
@@ -911,6 +931,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.panelState['showErrors'] = this.filters.showErrors;
 		this.panelState['showWarnings'] = this.filters.showWarnings;
 		this.panelState['showInfos'] = this.filters.showInfos;
+		this.panelState['showProblemDetails'] = this.filters.showProblemDetails;
 		this.panelState['useFilesExclude'] = this.filters.excludedFiles;
 		this.panelState['activeFile'] = this.filters.activeFile;
 		this.panelState['multiline'] = this.markersViewModel.multiline;

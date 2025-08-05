@@ -142,6 +142,9 @@ export interface ProblemMatcher {
 	severity?: Severity;
 	watching?: IWatchingMatcher;
 	uriProvider?: (path: string) => URI;
+	resourceSequenceNumberMap: Map<string, number>;
+	resourceSequenceNumber: number;
+	matcherSequenceNumber: number;
 }
 
 export interface INamedProblemMatcher extends ProblemMatcher {
@@ -192,7 +195,42 @@ export interface IHandleResult {
 }
 
 
-export async function getResource(filename: string, matcher: ProblemMatcher, fileService?: IFileService): Promise<URI> {
+export interface GetResourceResult {
+	uri: Promise<URI>;
+	resourceSequenceNumber: number;
+}
+
+export function getResourceSequenceNumber(matcher: ProblemMatcher, fileName: string): number {
+	const cached = matcher.resourceSequenceNumberMap.get(fileName);
+	if (cached) {
+		return cached;
+	}
+
+	const returnNumber = ++matcher.resourceSequenceNumber;
+
+	matcher.resourceSequenceNumberMap.set(fileName, returnNumber);
+
+	return returnNumber;
+}
+
+/**
+ * Custom clone function for ProblemMatcher objects that properly handles the Map fields
+ */
+export function cloneProblemMatcher(matcher: ProblemMatcher): ProblemMatcher {
+	const cloned = Objects.deepClone(matcher) as ProblemMatcher;
+	// Properly clone the Map object
+	cloned.resourceSequenceNumberMap = new Map(matcher.resourceSequenceNumberMap);
+	return cloned;
+}
+
+/**
+ * Custom clone function for arrays of ProblemMatcher objects
+ */
+export function cloneProblemMatchers(matchers: ProblemMatcher[]): ProblemMatcher[] {
+	return matchers.map(matcher => cloneProblemMatcher(matcher));
+}
+
+async function getResourceUri(filename: string, matcher: ProblemMatcher, fileService?: IFileService): Promise<URI> {
 	const kind = matcher.fileLocation;
 	let fullPath: string | undefined;
 	if (kind === FileLocationKind.Absolute) {
@@ -200,10 +238,10 @@ export async function getResource(filename: string, matcher: ProblemMatcher, fil
 	} else if ((kind === FileLocationKind.Relative) && matcher.filePrefix && Types.isString(matcher.filePrefix)) {
 		fullPath = join(matcher.filePrefix, filename);
 	} else if (kind === FileLocationKind.AutoDetect) {
-		const matcherClone = Objects.deepClone(matcher);
+		const matcherClone = cloneProblemMatcher(matcher);
 		matcherClone.fileLocation = FileLocationKind.Relative;
 		if (fileService) {
-			const relative = await getResource(filename, matcherClone);
+			const relative = await getResourceUri(filename, matcherClone);
 			let stat: IFileStatWithPartialMetadata | undefined = undefined;
 			try {
 				stat = await fileService.stat(relative);
@@ -216,7 +254,7 @@ export async function getResource(filename: string, matcher: ProblemMatcher, fil
 		}
 
 		matcherClone.fileLocation = FileLocationKind.Absolute;
-		return getResource(filename, matcherClone);
+		return getResourceUri(filename, matcherClone);
 	} else if (kind === FileLocationKind.Search && fileService) {
 		const fsProvider = fileService.getProvider(NetworkSchemas.file);
 		if (fsProvider) {
@@ -225,9 +263,9 @@ export async function getResource(filename: string, matcher: ProblemMatcher, fil
 		}
 
 		if (!fullPath) {
-			const absoluteMatcher = Objects.deepClone(matcher);
+			const absoluteMatcher = cloneProblemMatcher(matcher);
 			absoluteMatcher.fileLocation = FileLocationKind.Absolute;
-			return getResource(filename, absoluteMatcher);
+			return getResourceUri(filename, absoluteMatcher);
 		}
 	}
 	if (fullPath === undefined) {
@@ -243,6 +281,10 @@ export async function getResource(filename: string, matcher: ProblemMatcher, fil
 	} else {
 		return URI.file(fullPath);
 	}
+}
+
+export function getResource(filename: string, matcher: ProblemMatcher, fileService?: IFileService): GetResourceResult {
+	return { uri: getResourceUri(filename, matcher, fileService), resourceSequenceNumber: getResourceSequenceNumber(matcher, filename) };
 }
 
 async function searchForFileLocation(filename: string, fsProvider: IFileSystemProvider, args: Config.SearchFileLocationArgs): Promise<URI | undefined> {
@@ -379,13 +421,17 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 		try {
 			const location = this.getLocation(data);
 			if (data.file && location && data.message) {
+				const resourceResult = this.getResource(data.file);
+
 				const marker: IMarkerData = {
 					severity: this.getSeverity(data),
 					startLineNumber: location.startLineNumber,
 					startColumn: location.startCharacter,
 					endLineNumber: location.endLineNumber,
 					endColumn: location.endCharacter,
-					message: data.message
+					message: data.message,
+					resourceSequenceNumber: resourceResult.resourceSequenceNumber,
+					sequenceNumber: ++this.matcher.matcherSequenceNumber
 				};
 				if (data.code !== undefined) {
 					marker.code = data.code;
@@ -395,7 +441,7 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 				}
 				return {
 					description: this.matcher,
-					resource: this.getResource(data.file),
+					resource: resourceResult.uri,
 					marker: marker
 				};
 			}
@@ -405,7 +451,7 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 		return undefined;
 	}
 
-	protected getResource(filename: string): Promise<URI> {
+	protected getResource(filename: string): GetResourceResult {
 		return getResource(filename, this.matcher, this.fileService);
 	}
 
@@ -1735,6 +1781,9 @@ export class ProblemMatcherParser extends Parser {
 				applyTo: applyTo,
 				fileLocation: fileLocation,
 				pattern: pattern,
+				resourceSequenceNumber: 0,
+				resourceSequenceNumberMap: new Map(),
+				matcherSequenceNumber: 0
 			};
 			if (source) {
 				result.source = source;
@@ -1932,7 +1981,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			source: 'cpp',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
-			pattern: ProblemPatternRegistry.get('msCompile')
+			pattern: ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1944,7 +1996,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
 			pattern: ProblemPatternRegistry.get('lessCompile'),
-			severity: Severity.Error
+			severity: Severity.Error,
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1955,7 +2010,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			applyTo: ApplyToKind.closedDocuments,
 			fileLocation: FileLocationKind.Relative,
 			filePrefix: '${workspaceFolder}',
-			pattern: ProblemPatternRegistry.get('gulp-tsc')
+			pattern: ProblemPatternRegistry.get('gulp-tsc'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1965,7 +2023,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			source: 'jshint',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
-			pattern: ProblemPatternRegistry.get('jshint')
+			pattern: ProblemPatternRegistry.get('jshint'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1975,7 +2036,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			source: 'jshint',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
-			pattern: ProblemPatternRegistry.get('jshint-stylish')
+			pattern: ProblemPatternRegistry.get('jshint-stylish'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1986,7 +2050,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
 			filePrefix: '${workspaceFolder}',
-			pattern: ProblemPatternRegistry.get('eslint-compact')
+			pattern: ProblemPatternRegistry.get('eslint-compact'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -1996,7 +2063,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			source: 'eslint',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
-			pattern: ProblemPatternRegistry.get('eslint-stylish')
+			pattern: ProblemPatternRegistry.get('eslint-stylish'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 
 		this.add({
@@ -2007,7 +2077,10 @@ class ProblemMatcherRegistryImpl implements IProblemMatcherRegistry {
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Relative,
 			filePrefix: '${workspaceFolder}',
-			pattern: ProblemPatternRegistry.get('go')
+			pattern: ProblemPatternRegistry.get('go'),
+			resourceSequenceNumber: 0,
+			resourceSequenceNumberMap: new Map(),
+			matcherSequenceNumber: 0
 		});
 	}
 }

@@ -40,4 +40,5 @@ export namespace MarkersContextKeys {
 	export const ShowInfoFilterContextKey = new RawContextKey<boolean>('problems.filter.info', true);
 	export const ShowActiveFileFilterContextKey = new RawContextKey<boolean>('problems.filter.activeFile', false);
 	export const ShowExcludedFilesFilterContextKey = new RawContextKey<boolean>('problems.filter.excludedFiles', true);
+	export const MarkersSortOrderContextKey = new RawContextKey<string>('problemsSortOrder', 'positionAndSeverity');
 }

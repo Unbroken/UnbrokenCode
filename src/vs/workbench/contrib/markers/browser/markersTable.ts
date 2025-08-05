@@ -11,7 +11,7 @@ import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.j
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenEvent, IWorkbenchTableOptions, WorkbenchTable } from '../../../../platform/list/browser/listService.js';
 import { HighlightedLabel } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
-import { compareMarkersByUri, Marker, MarkerTableItem, ResourceMarkers } from './markersModel.js';
+import { compareMarkersByUri, Marker, MarkerSortOrder, MarkerTableItem, ResourceMarkers } from './markersModel.js';
 import { MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { SeverityIcon } from '../../../../base/browser/ui/severityIcon/severityIcon.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -266,6 +266,7 @@ export class MarkersTable extends Disposable implements IProblemsWidget {
 
 	private _itemCount: number = 0;
 	private readonly table: WorkbenchTable<MarkerTableItem>;
+	private _sortOrder: MarkerSortOrder = MarkerSortOrder.PositionAndSeverity;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -418,12 +419,21 @@ export class MarkersTable extends Disposable implements IProblemsWidget {
 		this.table.layout(height, width);
 	}
 
-	reset(resourceMarkers: ResourceMarkers[]): void {
+	reset(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void {
 		this.resourceMarkers = resourceMarkers;
+		if (sortOrder !== undefined) {
+			this._sortOrder = sortOrder;
+		}
+
+		// Sort resources by the sort order before processing markers
+		const sortedResourceMarkers = this._sortOrder === MarkerSortOrder.OutputOrder
+			? [...this.resourceMarkers].sort(this.compareResourceMarkersByOutputOrder)
+			: this.resourceMarkers;
 
 		const items: MarkerTableItem[] = [];
-		for (const resourceMarker of this.resourceMarkers) {
-			for (const marker of resourceMarker.markers) {
+		for (const resourceMarker of sortedResourceMarkers) {
+			const markers = resourceMarker.getMarkersSorted(this._sortOrder);
+			for (const marker of markers) {
 				if (unsupportedSchemas.has(marker.resource.scheme)) {
 					continue;
 				}
@@ -467,19 +477,25 @@ export class MarkersTable extends Disposable implements IProblemsWidget {
 			}
 		}
 		this._itemCount = items.length;
-		this.table.splice(0, Number.POSITIVE_INFINITY, items.sort((a, b) => {
-			let result = MarkerSeverity.compare(a.marker.severity, b.marker.severity);
 
-			if (result === 0) {
-				result = compareMarkersByUri(a.marker, b.marker);
-			}
+		// Apply final sorting based on sort order
+		const finalSortedItems = this._sortOrder === MarkerSortOrder.OutputOrder
+			? items // Items are already sorted by sequence due to resource sorting and marker sorting above
+			: items.sort((a, b) => {
+				let result = MarkerSeverity.compare(a.marker.severity, b.marker.severity);
 
-			if (result === 0) {
-				result = Range.compareRangesUsingStarts(a.marker, b.marker);
-			}
+				if (result === 0) {
+					result = compareMarkersByUri(a.marker, b.marker);
+				}
 
-			return result;
-		}));
+				if (result === 0) {
+					result = Range.compareRangesUsingStarts(a.marker, b.marker);
+				}
+
+				return result;
+			});
+
+		this.table.splice(0, Number.POSITIVE_INFINITY, finalSortedItems);
 	}
 
 	revealMarkers(activeResource: ResourceMarkers | null, focus: boolean, lastSelectedRelativeTop: number): void {
@@ -537,12 +553,35 @@ export class MarkersTable extends Disposable implements IProblemsWidget {
 		this.container.classList.toggle('hidden', hide);
 	}
 
-	update(resourceMarkers: ResourceMarkers[]): void {
+	update(resourceMarkers: ResourceMarkers[], sortOrder?: MarkerSortOrder): void {
+		if (sortOrder !== undefined) {
+			this._sortOrder = sortOrder;
+		}
 		for (const resourceMarker of resourceMarkers) {
 			const index = this.resourceMarkers.indexOf(resourceMarker);
 			this.resourceMarkers.splice(index, 1, resourceMarker);
 		}
-		this.reset(this.resourceMarkers);
+		this.reset(this.resourceMarkers, this._sortOrder);
+	}
+
+	setSortOrder(sortOrder: MarkerSortOrder): void {
+		this._sortOrder = sortOrder;
+		this.reset(this.resourceMarkers, sortOrder);
+	}
+
+	private compareResourceMarkersByOutputOrder(a: ResourceMarkers, b: ResourceMarkers): number {
+		const [firstMarkerOfA] = a.markers;
+		const [firstMarkerOfB] = b.markers;
+		if (firstMarkerOfA && firstMarkerOfB) {
+			// Compare by resource sequence number first
+			const rseqA = firstMarkerOfA.marker.resourceSequenceNumber ?? Number.MAX_SAFE_INTEGER;
+			const rseqB = firstMarkerOfB.marker.resourceSequenceNumber ?? Number.MAX_SAFE_INTEGER;
+			if (rseqA !== rseqB) {
+				return rseqA - rseqB;
+			}
+		}
+		// Fallback to path comparison
+		return a.path.localeCompare(b.path) || a.name.localeCompare(b.name);
 	}
 
 	updateMarker(marker: Marker): void {

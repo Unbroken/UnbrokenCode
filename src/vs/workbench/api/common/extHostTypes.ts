@@ -1175,6 +1175,17 @@ export class Diagnostic {
 	code?: string | number;
 	relatedInformation?: DiagnosticRelatedInformation[];
 	tags?: DiagnosticTag[];
+	subProblems?: Array<{
+		/** The category name for this group of sub-problems */
+		category: string;
+		/** The list of problems in this category */
+		problems: Array<{
+			/** The resource URI where the problem occurs */
+			resource: vscode.Uri;
+			/** The diagnostic information for the problem */
+			diagnostic: Diagnostic;
+		}>;
+	}>;
 
 	constructor(range: Range, message: string, severity: DiagnosticSeverity = DiagnosticSeverity.Error) {
 		if (!Range.isRange(range)) {
@@ -1198,6 +1209,42 @@ export class Diagnostic {
 		};
 	}
 
+	static isEqualSubProblems(
+		a: Diagnostic['subProblems'] | undefined,
+		b: Diagnostic['subProblems'] | undefined
+	): boolean {
+		if (a === b) {
+			return true;
+		}
+		if (!a || !b) {
+			return !a && !b;
+		}
+		if (a.length !== b.length) {
+			return false;
+		}
+		for (let i = 0; i < a.length; i++) {
+			const aCat = a[i];
+			const bCat = b[i];
+			if (aCat.category !== bCat.category) {
+				return false;
+			}
+			if (aCat.problems.length !== bCat.problems.length) {
+				return false;
+			}
+			for (let j = 0; j < aCat.problems.length; j++) {
+				const aProb = aCat.problems[j];
+				const bProb = bCat.problems[j];
+				if (aProb.resource.toString() !== bProb.resource.toString()) {
+					return false;
+				}
+				if (!Diagnostic.isEqual(aProb.diagnostic, bProb.diagnostic)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
 	static isEqual(a: Diagnostic | undefined, b: Diagnostic | undefined): boolean {
 		if (a === b) {
 			return true;
@@ -1212,7 +1259,8 @@ export class Diagnostic {
 			&& a.source === b.source
 			&& a.range.isEqual(b.range)
 			&& equals(a.tags, b.tags)
-			&& equals(a.relatedInformation, b.relatedInformation, DiagnosticRelatedInformation.isEqual);
+			&& equals(a.relatedInformation, b.relatedInformation, DiagnosticRelatedInformation.isEqual)
+			&& Diagnostic.isEqualSubProblems(a.subProblems, b.subProblems);
 	}
 }
 

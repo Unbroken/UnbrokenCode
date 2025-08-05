@@ -34,7 +34,7 @@ import * as languages from '../../../editor/common/languages.js';
 import { EndOfLineSequence, TrackedRangeStickiness } from '../../../editor/common/model.js';
 import { ITextEditorOptions } from '../../../platform/editor/common/editor.js';
 import { IExtensionDescription, IRelaxedExtensionDescription } from '../../../platform/extensions/common/extensions.js';
-import { IMarkerData, IRelatedInformation, MarkerSeverity, MarkerTag } from '../../../platform/markers/common/markers.js';
+import { IMarkerData, IRelatedInformation, IResourceMarker, MarkerSeverity, MarkerTag } from '../../../platform/markers/common/markers.js';
 import { ProgressLocation as MainProgressLocation } from '../../../platform/progress/common/progress.js';
 import { DEFAULT_EDITOR_ASSOCIATION, SaveReason } from '../../common/editor.js';
 import { IViewBadge } from '../../common/views.js';
@@ -246,6 +246,17 @@ export namespace Diagnostic {
 			}
 		}
 
+		let subProblems: Array<{ category: string; problems: IResourceMarker[] }> | undefined;
+		if (value.subProblems && value.subProblems.length > 0) {
+			subProblems = value.subProblems.map(categoryGroup => ({
+				category: categoryGroup.category,
+				problems: categoryGroup.problems.map((item: { resource: vscode.Uri; diagnostic: vscode.Diagnostic }) => ({
+					resource: URI.from(item.resource),
+					marker: Diagnostic.from(item.diagnostic)
+				}))
+			}));
+		}
+
 		return {
 			...Range.from(value.range),
 			message: value.message,
@@ -254,6 +265,7 @@ export namespace Diagnostic {
 			severity: DiagnosticSeverity.from(value.severity),
 			relatedInformation: value.relatedInformation && value.relatedInformation.map(DiagnosticRelatedInformation.from),
 			tags: Array.isArray(value.tags) ? coalesce(value.tags.map(DiagnosticTag.from)) : undefined,
+			subProblems,
 			resourceSequenceNumber: 0,
 			sequenceNumber: 0
 		};
@@ -265,6 +277,17 @@ export namespace Diagnostic {
 		res.code = isString(value.code) ? value.code : value.code?.value;
 		res.relatedInformation = value.relatedInformation && value.relatedInformation.map(DiagnosticRelatedInformation.to);
 		res.tags = value.tags && coalesce(value.tags.map(DiagnosticTag.to));
+
+		if (value.subProblems && value.subProblems.length > 0) {
+			res.subProblems = value.subProblems.map(categoryGroup => ({
+				category: categoryGroup.category,
+				problems: categoryGroup.problems.map(rm => ({
+					resource: URI.revive(rm.resource),
+					diagnostic: Diagnostic.to(rm.marker) as types.Diagnostic
+				}))
+			}));
+		}
+
 		return res;
 	}
 }

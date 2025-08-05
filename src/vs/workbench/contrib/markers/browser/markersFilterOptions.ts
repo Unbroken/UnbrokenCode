@@ -48,11 +48,12 @@ export class FilterOptions {
 	readonly showWarnings: boolean = false;
 	readonly showErrors: boolean = false;
 	readonly showInfos: boolean = false;
+	readonly showProblemDetails: boolean = false;
 	readonly textFilter: { readonly text: string; readonly negate: boolean };
 	readonly excludesMatcher: ResourceGlobMatcher;
 	readonly includesMatcher: ResourceGlobMatcher;
 
-	static EMPTY(uriIdentityService: IUriIdentityService) { return new FilterOptions('', [], false, false, false, uriIdentityService); }
+	static EMPTY(uriIdentityService: IUriIdentityService) { return new FilterOptions('', [], false, false, false, true, uriIdentityService); }
 
 	constructor(
 		readonly filter: string,
@@ -60,12 +61,14 @@ export class FilterOptions {
 		showWarnings: boolean,
 		showErrors: boolean,
 		showInfos: boolean,
+		showProblemDetails: boolean,
 		uriIdentityService: IUriIdentityService
 	) {
 		filter = filter.trim();
 		this.showWarnings = showWarnings;
 		this.showErrors = showErrors;
 		this.showInfos = showInfos;
+		this.showProblemDetails = showProblemDetails;
 
 		const filesExcludeByRoot = Array.isArray(filesExclude) ? filesExclude : [];
 		const excludesExpression: IExpression = Array.isArray(filesExclude) ? getEmptyExpression() : filesExclude;

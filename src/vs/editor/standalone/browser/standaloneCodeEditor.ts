@@ -448,11 +448,11 @@ export class StandaloneEditor extends StandaloneCodeEditor implements IStandalon
 		delete options.model;
 		super(domElement, options, instantiationService, codeEditorService, commandService, contextKeyService, hoverService, keybindingService, themeService, notificationService, accessibilityService, languageConfigurationService, languageFeaturesService, markdownRendererService);
 
-		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
-
 		this._configurationService = configurationService;
 		this._standaloneThemeService = themeService;
 		this._register(themeDomRegistration);
+
+		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
 		this._register(configurationService.onDidChangeConfiguration((event: IConfigurationChangeEvent) => {
 			if (event.affectsConfiguration('workbench.highlightingColorSpace')) {
 				themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
@@ -552,12 +552,12 @@ export class StandaloneDiffEditor2 extends DiffEditorWidget implements IStandalo
 			editorProgressService,
 		);
 
-		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
-
 		this._configurationService = configurationService;
 		this._standaloneThemeService = themeService;
 
 		this._register(themeDomRegistration);
+
+		themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());
 		this._register(configurationService.onDidChangeConfiguration((event: IConfigurationChangeEvent) => {
 			if (event.affectsConfiguration('workbench.highlightingColorSpace')) {
 				themeService.setHighlightingColorSpace(this.getHighlightingColorSpace());

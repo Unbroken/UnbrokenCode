@@ -199,6 +199,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private _lineDataEventAddon: LineDataEventAddon | undefined;
 	private readonly _scopedContextKeyService: IContextKeyService;
 	private _resizeDebouncer?: TerminalResizeDebouncer;
+	private _loadedLineDataEventAddon = false;
 
 	readonly capabilities = this._register(new TerminalCapabilityStoreMultiplexer());
 	readonly statusList: ITerminalStatusList;
@@ -357,7 +358,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 
 	private readonly _onLineData = this._register(new Emitter<string>({
-		onDidAddFirstListener: async () => (this.xterm ?? await this._xtermReadyPromise)?.raw.loadAddon(this._lineDataEventAddon!)
+		onDidAddFirstListener: async () => {
+			if (this._loadedLineDataEventAddon) {
+				return;
+			}
+			this._loadedLineDataEventAddon = true;
+			(this.xterm ?? await this._xtermReadyPromise)?.raw.loadAddon(this._lineDataEventAddon!);
+		}
 	}));
 	readonly onLineData = this._onLineData.event;
 

@@ -201,6 +201,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private readonly _scopedContextKeyService: IContextKeyService;
 	private _resizeDebouncer?: TerminalResizeDebouncer;
 	private _pauseInputEventBarrier: Barrier | undefined;
+	private _loadedLineDataEventAddon = false;
 	pauseInputEvents(barrier: Barrier): void {
 		this._pauseInputEventBarrier = barrier;
 	}
@@ -359,7 +360,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 
 	private readonly _onLineData = this._register(new Emitter<string>({
-		onDidAddFirstListener: async () => (this.xterm ?? await this._xtermReadyPromise)?.raw.loadAddon(this._lineDataEventAddon!)
+		onDidAddFirstListener: async () => {
+			if (this._loadedLineDataEventAddon) {
+				return;
+			}
+			this._loadedLineDataEventAddon = true;
+			(this.xterm ?? await this._xtermReadyPromise)?.raw.loadAddon(this._lineDataEventAddon!);
+		}
 	}));
 	readonly onLineData = this._onLineData.event;
 

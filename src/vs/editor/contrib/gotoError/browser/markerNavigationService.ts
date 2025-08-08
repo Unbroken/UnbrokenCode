@@ -125,13 +125,18 @@ export class MarkerList {
 		if (idx < 0) {
 			// ignore model, position because this will be a different file
 			idx = binarySearch2(this._markers.length, idx => compare(this._markers[idx].resource.toString(), model.uri.toString()));
-			if (idx < 0) {
-				idx = ~idx;
-			}
 			if (fwd) {
-				this._nextIdx = idx;
+				if (idx < 0) {
+					this._nextIdx = 0;
+				} else {
+					this._nextIdx = idx;
+				}
 			} else {
-				this._nextIdx = (this._markers.length + idx - 1) % this._markers.length;
+				if (idx < 0) {
+					this._nextIdx = this._markers.length - 1;
+				} else {
+					this._nextIdx = (this._markers.length + idx - 1) % this._markers.length;
+				}
 			}
 		} else {
 			// find marker for file

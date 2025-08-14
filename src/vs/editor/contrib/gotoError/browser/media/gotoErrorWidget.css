@@ -65,7 +65,6 @@
 	text-decoration: underline;
 	/** Hack to force underline to show **/
 	border-bottom: 1px solid transparent;
-	text-underline-position: under;
 	color: var(--vscode-textLink-activeForeground);
 }
 

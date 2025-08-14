@@ -466,7 +466,7 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 
 	private async getShellCommandLink(): Promise<{ readonly source: string; readonly target: string }> {
 		const target = resolve(this.environmentMainService.appRoot, 'bin', 'code');
-		const source = `/usr/local/bin/${this.productService.applicationName}`;
+		const source = `/usr/local/bin/code`;
 
 		// Ensure source exists
 		const sourceExists = await Promises.exists(target);

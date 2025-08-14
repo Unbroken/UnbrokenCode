@@ -83,6 +83,11 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 				'markdownDescription': localize('alwaysShowEditorActions', "Controls whether to always show the editor actions, even when the editor group is not active."),
 				'default': false
 			},
+			'workbench.editor.keepLayoutActionsVisible': {
+				'type': 'boolean',
+				'markdownDescription': localize('keepLayoutActionsVisible', "Controls whether to keep the layout actions (like Customize Layout) visible in the title bar when editor actions are moved to the title bar. When disabled, layout actions move to the overflow menu. This setting only has an effect when `#workbench.editor.editorActionsLocation#` is set to `titleBar`."),
+				'default': true
+			},
 			'workbench.editor.wrapTabs': {
 				'type': 'boolean',
 				'markdownDescription': localize({ comment: ['{0}, {1} will be a setting name rendered as a link'], key: 'wrapTabs' }, "Controls whether tabs should be wrapped over multiple lines when exceeding available space or whether a scrollbar should appear instead. This value is ignored when {0} is not set to '{1}'.", '`#workbench.editor.showTabs#`', '`multiple`'),

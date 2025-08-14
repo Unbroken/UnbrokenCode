@@ -3302,7 +3302,7 @@
         },
         "git.timeline.showUncommitted": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "%config.timeline.showUncommitted%",
           "scope": "window"
         },

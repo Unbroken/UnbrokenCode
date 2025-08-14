@@ -1263,6 +1263,7 @@ interface IEditorPartConfiguration {
 	centeredLayoutFixedWidth?: boolean;
 	doubleClickTabToToggleEditorGroupSizes?: 'maximize' | 'expand' | 'off';
 	editorActionsLocation?: 'default' | 'titleBar' | 'hidden';
+	keepLayoutActionsVisible?: boolean;
 	limit?: IEditorPartLimitConfiguration;
 	decorations?: IEditorPartDecorationsConfiguration;
 }

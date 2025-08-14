@@ -110,7 +110,7 @@ function fromLocalWebpack(extensionPath: string, webpackConfigFileName: string, 
 	// A static analysis showed there are no webpack externals that are dependencies of the current
 	// local extensions so we can use the vsce.PackageManager.None config to ignore dependencies list
 	// as a temporary workaround.
-	vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
+	vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
 		const files = fileNames
 			.map(fileName => path.join(extensionPath, fileName))
 			.map(filePath => new File({
@@ -207,7 +207,7 @@ function fromLocalNormal(extensionPath: string): Stream {
 	const vsce = require('@vscode/vsce') as typeof import('@vscode/vsce');
 	const result = es.through();
 
-	vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm })
+	vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.Npm })
 		.then(fileNames => {
 			const files = fileNames
 				.map(fileName => path.join(extensionPath, fileName))

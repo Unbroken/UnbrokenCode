@@ -436,7 +436,7 @@ suite('AgentHostProtocolClient', () => {
 		return { management, request, requests, grants };
 	}
 
-	function createClientForIdentity(identity: AgentHostResourceIdentity, transport = disposables.add(new TestProtocolTransport()), permissionService = createPermissionService(), loadEstimator?: { hasHighLoad(): boolean }, logService: ILogService = new NullLogService(), configurationService = new TestConfigurationService(), clientId?: string, clientInfo?: Implementation, telemetryService: ITelemetryService = NullTelemetryService, reconnectPolicy?: IRemoteAgentHostReconnectPolicy, workspaceTrust = createWorkspaceTrustServices()): { client: AgentHostProtocolClient; transport: TestProtocolTransport; configurationService: TestConfigurationService } {
+	function createClientForIdentity(identity: AgentHostResourceIdentity, transport = disposables.add(new TestProtocolTransport()), permissionService = createPermissionService(), loadEstimator?: { hasHighLoad(): boolean }, logService: ILogService = new NullLogService(), configurationService = new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' }), clientId?: string, clientInfo?: Implementation, telemetryService: ITelemetryService = NullTelemetryService, reconnectPolicy?: IRemoteAgentHostReconnectPolicy, workspaceTrust = createWorkspaceTrustServices()): { client: AgentHostProtocolClient; transport: TestProtocolTransport; configurationService: TestConfigurationService } {
 		const options = loadEstimator !== undefined || clientId !== undefined || clientInfo !== undefined || reconnectPolicy !== undefined
 			? { loadEstimator, clientId, clientInfo, reconnectPolicy }
 			: undefined;
@@ -444,7 +444,7 @@ suite('AgentHostProtocolClient', () => {
 		return { client, transport, configurationService };
 	}
 
-	function createClient(transport = disposables.add(new TestProtocolTransport()), permissionService = createPermissionService(), loadEstimator?: { hasHighLoad(): boolean }, logService: ILogService = new NullLogService(), configurationService = new TestConfigurationService(), clientId?: string, clientInfo?: Implementation): { client: AgentHostProtocolClient; transport: TestProtocolTransport; configurationService: TestConfigurationService } {
+	function createClient(transport = disposables.add(new TestProtocolTransport()), permissionService = createPermissionService(), loadEstimator?: { hasHighLoad(): boolean }, logService: ILogService = new NullLogService(), configurationService = new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' }), clientId?: string, clientInfo?: Implementation): { client: AgentHostProtocolClient; transport: TestProtocolTransport; configurationService: TestConfigurationService } {
 		return createClientForIdentity('test.example:1234', transport, permissionService, loadEstimator, logService, configurationService, clientId, clientInfo);
 	}
 
@@ -1154,7 +1154,7 @@ suite('AgentHostProtocolClient', () => {
 
 	test('initialize sends the local client telemetry identity only for usage telemetry', async () => {
 		const transport = disposables.add(new TestProtocolTransport(AgentHostClientConnectionKind.RemoteExtensionHost));
-		const { client } = createClientForIdentity('test.example:1234', transport, createPermissionService(), undefined, new NullLogService(), new TestConfigurationService(), undefined, agentsWindowAgentHostClientInfo, new TestClientIdentityTelemetryService());
+		const { client } = createClientForIdentity('test.example:1234', transport, createPermissionService(), undefined, new NullLogService(), new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' }), undefined, agentsWindowAgentHostClientInfo, new TestClientIdentityTelemetryService());
 		const connectPromise = client.connect();
 		const initialize = transport.sentMessages[0] as JsonRpcRequest;
 
@@ -2881,7 +2881,7 @@ suite('AgentHostProtocolClient', () => {
 	test('initialize handshake includes protocol version and client info', async () => {
 		const transport = disposables.add(new TestClientProtocolTransport(AgentHostClientConnectionKind.DevTunnel));
 		const clientInfo = agentsWindowAgentHostClientInfo;
-		const { client } = createClientForIdentity('test.example:1234', transport, createPermissionService(), undefined, new NullLogService(), new TestConfigurationService(), 'renderer-client-id', clientInfo, new TestClientIdentityTelemetryService());
+		const { client } = createClientForIdentity('test.example:1234', transport, createPermissionService(), undefined, new NullLogService(), new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' }), 'renderer-client-id', clientInfo, new TestClientIdentityTelemetryService());
 		const connectPromise = client.connect();
 
 		transport.connectDeferred.complete();
@@ -4962,7 +4962,7 @@ suite('AgentHostProtocolClient', () => {
 				return t;
 			};
 			const workspaceTrust = createWorkspaceTrustServices();
-			const configurationService = new TestConfigurationService();
+			const configurationService = new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' });
 			const client = disposables.add(new AgentHostProtocolClient(
 				'test.example:1234', factory, clientInfo !== undefined || reconnectPolicy !== undefined || loadEstimator !== undefined || prepareReconnect !== undefined || authentication !== undefined || power !== undefined ? { clientInfo, reconnectPolicy, loadEstimator, prepareReconnect, ...authentication, ...power } : undefined, new NullLogService(), permissionService, configurationService, telemetryService, workspaceTrustEnablementService, workspaceTrust.management, workspaceTrust.request,
 			));

@@ -106,7 +106,7 @@ export class TelemetryService implements ITelemetryService {
 		this.firstSessionDate = this._commonProperties['common.firstSessionDate'] as string;
 
 		this._piiPaths = config.piiPaths || [];
-		this._telemetryLevel = TelemetryLevel.USAGE;
+		this._telemetryLevel = TelemetryLevel.NONE;
 		this._sendErrorTelemetry = !!config.sendErrorTelemetry;
 		this._meteredConnectionService = config.meteredConnectionService;
 
@@ -344,7 +344,7 @@ configurationRegistry.registerConfiguration({
 				localize('telemetry.telemetryLevel.off', "Disables all product telemetry.")
 			],
 			'markdownDescription': getTelemetryLevelSettingDescription(),
-			'default': TelemetryConfiguration.ON,
+			'default': TelemetryConfiguration.OFF,
 			'restricted': true,
 			'scope': ConfigurationScope.APPLICATION,
 			'tags': ['usesOnlineServices', 'telemetry'],

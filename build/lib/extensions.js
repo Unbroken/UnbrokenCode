@@ -144,7 +144,7 @@ function fromLocalWebpack(extensionPath, webpackConfigFileName, disableMangle) {
     // A static analysis showed there are no webpack externals that are dependencies of the current
     // local extensions so we can use the vsce.PackageManager.None config to ignore dependencies list
     // as a temporary workaround.
-    vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
+    vsce.listFiles({ cwd: fs_1.default.realpathSync(extensionPath), packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
         const files = fileNames
             .map(fileName => path_1.default.join(extensionPath, fileName))
             .map(filePath => new vinyl_1.default({
@@ -227,7 +227,7 @@ function fromLocalWebpack(extensionPath, webpackConfigFileName, disableMangle) {
 function fromLocalNormal(extensionPath) {
     const vsce = require('@vscode/vsce');
     const result = event_stream_1.default.through();
-    vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm })
+    vsce.listFiles({ cwd: fs_1.default.realpathSync(extensionPath), packageManager: vsce.PackageManager.Npm })
         .then(fileNames => {
         const files = fileNames
             .map(fileName => path_1.default.join(extensionPath, fileName))

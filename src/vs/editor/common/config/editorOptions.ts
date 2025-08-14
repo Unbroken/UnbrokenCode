@@ -3118,7 +3118,7 @@ export type EditorStickyScrollOptions = Readonly<Required<IEditorStickyScrollOpt
 class EditorStickyScroll extends BaseEditorOption<EditorOption.stickyScroll, IEditorStickyScrollOptions, EditorStickyScrollOptions> {
 
 	constructor() {
-		const defaults: EditorStickyScrollOptions = { enabled: true, maxLineCount: 5, defaultModel: 'outlineModel', scrollWithEditor: true };
+		const defaults: EditorStickyScrollOptions = { enabled: false, maxLineCount: 5, defaultModel: 'outlineModel', scrollWithEditor: true };
 		super(
 			EditorOption.stickyScroll, 'stickyScroll', defaults,
 			{
@@ -3406,7 +3406,7 @@ class EditorMinimap extends BaseEditorOption<EditorOption.minimap, IEditorMinima
 
 	constructor() {
 		const defaults: EditorMinimapOptions = {
-			enabled: true,
+			enabled: false,
 			size: 'proportional',
 			side: 'right',
 			showSlider: 'mouseover',
@@ -4785,11 +4785,11 @@ class GuideOptions extends BaseEditorOption<EditorOption.guides, IGuidesOptions,
 	constructor() {
 		const defaults: InternalGuidesOptions = {
 			bracketPairs: false,
-			bracketPairsHorizontal: 'active',
+			bracketPairsHorizontal: false,
 			highlightActiveBracketPair: true,
 
-			indentation: true,
-			highlightActiveIndentation: true
+			indentation: false,
+			highlightActiveIndentation: false
 		};
 
 		super(
@@ -6190,7 +6190,7 @@ export const EditorOptions = {
 		EditorOption.domReadOnly, 'domReadOnly', false,
 	)),
 	dragAndDrop: register(new EditorBooleanOption(
-		EditorOption.dragAndDrop, 'dragAndDrop', true,
+		EditorOption.dragAndDrop, 'dragAndDrop', false,
 		{ description: nls.localize('dragAndDrop', "Controls whether the editor should allow moving selections via drag and drop.") }
 	)),
 	emptySelectionClipboard: register(new EditorEmptySelectionClipboard()),
@@ -6248,7 +6248,7 @@ export const EditorOptions = {
 		EditorOption.fixedOverflowWidgets, 'fixedOverflowWidgets', false,
 	)),
 	folding: register(new EditorBooleanOption(
-		EditorOption.folding, 'folding', true,
+		EditorOption.folding, 'folding', false,
 		{ description: nls.localize('folding', "Controls whether the editor has code folding enabled.") }
 	)),
 	foldingStrategy: register(new EditorStringEnumOption(
@@ -6490,7 +6490,7 @@ export const EditorOptions = {
 	)),
 	renderLineHighlight: register(new EditorStringEnumOption(
 		EditorOption.renderLineHighlight, 'renderLineHighlight',
-		'line' as 'none' | 'gutter' | 'line' | 'all',
+		'all' as 'none' | 'gutter' | 'line' | 'all',
 		['none', 'gutter', 'line', 'all'] as const,
 		{
 			enumDescriptions: [
@@ -6531,7 +6531,7 @@ export const EditorOptions = {
 		15, 0, 1000,
 	)),
 	roundedSelection: register(new EditorBooleanOption(
-		EditorOption.roundedSelection, 'roundedSelection', true,
+		EditorOption.roundedSelection, 'roundedSelection', false,
 		{ description: nls.localize('roundedSelection', "Controls whether selections should have rounded corners.") }
 	)),
 	rulers: register(new EditorRulers()),

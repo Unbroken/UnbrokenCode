@@ -381,7 +381,7 @@ configurationRegistry.registerConfiguration({
 		'search.quickAccess.preserveInput': {
 			type: 'boolean',
 			description: nls.localize('search.quickAccess.preserveInput', "Controls whether the last typed input to Quick Search should be restored when opening it the next time."),
-			default: false
+			default: true
 		},
 		'search.experimental.closedNotebookRichContentResults': {
 			type: 'boolean',

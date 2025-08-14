@@ -16,7 +16,6 @@
 	display: inline-block;
 	cursor: pointer;
 	text-decoration: underline;
-	text-underline-position: under;
 }
 
 .monaco-editor .ghost-text-hidden {
@@ -41,7 +40,6 @@
 
 .monaco-editor .inline-completion-text-to-replace {
 	text-decoration: underline;
-	text-underline-position: under;
 }
 
 .monaco-editor .ghost-text-decoration,

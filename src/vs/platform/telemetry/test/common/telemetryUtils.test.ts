@@ -27,7 +27,7 @@ suite('TelemetryUtils', () => {
 				}
 			}()),
 		], [
-			TelemetryLevel.USAGE,
+			TelemetryLevel.NONE,
 			TelemetryLevel.USAGE,
 			TelemetryLevel.ERROR,
 			TelemetryLevel.CRASH,

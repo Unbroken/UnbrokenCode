@@ -20,7 +20,7 @@ suite('ServerTelemetryService', () => {
 		const service = disposables.add(new ServerTelemetryService(
 			{ appenders: [NullAppender] },
 			TelemetryLevel.ERROR,
-			new TestConfigurationService(),
+			new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' }),
 			productService,
 		));
 

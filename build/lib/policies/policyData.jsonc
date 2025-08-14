@@ -265,7 +265,7 @@
                 ]
             },
             "type": "string",
-            "default": "all",
+            "default": "off",
             "enum": [
                 "all",
                 "error",

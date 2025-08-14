@@ -675,7 +675,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 				fillInActionBarActions(
 					this.layoutToolbarMenu.getActions(),
 					actions,
-					() => !this.editorActionsEnabled || this.isCompact // layout actions move to "..." if editor actions are enabled unless compact
+					() => !this.editorActionsEnabled || this.editorGroupsContainer.partOptions.keepLayoutActionsVisible || this.isCompact // layout actions move to "..." if editor actions are enabled unless compact
 				);
 			}
 

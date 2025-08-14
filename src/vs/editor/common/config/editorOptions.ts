@@ -3350,7 +3350,7 @@ class EditorMinimap extends BaseEditorOption<EditorOption.minimap, IEditorMinima
 
 	constructor() {
 		const defaults: EditorMinimapOptions = {
-			enabled: true,
+			enabled: false,
 			size: 'proportional',
 			side: 'right',
 			showSlider: 'mouseover',
@@ -4680,11 +4680,11 @@ class GuideOptions extends BaseEditorOption<EditorOption.guides, IGuidesOptions,
 	constructor() {
 		const defaults: InternalGuidesOptions = {
 			bracketPairs: false,
-			bracketPairsHorizontal: 'active',
+			bracketPairsHorizontal: false,
 			highlightActiveBracketPair: true,
 
-			indentation: true,
-			highlightActiveIndentation: true
+			indentation: false,
+			highlightActiveIndentation: false
 		};
 
 		super(
@@ -6155,7 +6155,7 @@ export const EditorOptions = {
 		EditorOption.fixedOverflowWidgets, 'fixedOverflowWidgets', false,
 	)),
 	folding: register(new EditorBooleanOption(
-		EditorOption.folding, 'folding', true,
+		EditorOption.folding, 'folding', false,
 		{ description: nls.localize('folding', "Controls whether the editor has code folding enabled.") }
 	)),
 	foldingStrategy: register(new EditorStringEnumOption(
@@ -6397,7 +6397,7 @@ export const EditorOptions = {
 	)),
 	renderLineHighlight: register(new EditorStringEnumOption(
 		EditorOption.renderLineHighlight, 'renderLineHighlight',
-		'line' as 'none' | 'gutter' | 'line' | 'all',
+		'all' as 'none' | 'gutter' | 'line' | 'all',
 		['none', 'gutter', 'line', 'all'] as const,
 		{
 			enumDescriptions: [
@@ -6438,7 +6438,7 @@ export const EditorOptions = {
 		15, 0, 1000,
 	)),
 	roundedSelection: register(new EditorBooleanOption(
-		EditorOption.roundedSelection, 'roundedSelection', true,
+		EditorOption.roundedSelection, 'roundedSelection', false,
 		{ description: nls.localize('roundedSelection', "Controls whether selections should have rounded corners.") }
 	)),
 	rulers: register(new EditorRulers()),

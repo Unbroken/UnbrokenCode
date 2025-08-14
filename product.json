@@ -42,6 +42,13 @@
 	"linkProtectionTrustedDomains": [
 		"https://open-vsx.org"
 	],
+	"languageExtensionTips": [
+		"llvm-vs-code-extensions.vscode-clangd",
+		"vadimcn.vscode-lldb",
+		"golang.go",
+		"ms-python.python",
+		"rust-lang.rust-analyzer"
+	],
 	"builtInExtensions": [
 		{
 			"name": "ms-vscode.js-debug-companion",

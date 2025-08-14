@@ -33,7 +33,7 @@ export const CONNECTED_EDITOR_TABS_CLASS = 'modern-ui-connected-editor-tabs';
 export const CONNECTED_EDITOR_TABS_SELECTOR = `.${CONNECTED_EDITOR_TABS_CLASS}`;
 
 export const DEFAULT_EDITOR_PART_OPTIONS: IEditorPartOptions = {
-	showTabs: 'multiple',
+	showTabs: 'none',
 	highlightModifiedTabs: false,
 	tabActionLocation: 'right',
 	tabActionReserveSpace: true,
@@ -46,7 +46,7 @@ export const DEFAULT_EDITOR_PART_OPTIONS: IEditorPartOptions = {
 	tabSizingFixedMaxWidth: 160,
 	pinnedTabSizing: 'normal',
 	pinnedTabsOnSeparateRow: false,
-	tabHeight: 'default',
+	tabHeight: 'compact',
 	preventPinnedEditorClose: 'keyboardAndMouse',
 	titleScrollbarSizing: 'default',
 	titleScrollbarVisibility: 'auto',

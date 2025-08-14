@@ -114,7 +114,7 @@ class TestSessionsService extends mock<ISessionsService>() {
 class TestEditorGroupsService extends mock<IEditorGroupsService>() {
 	private readonly _onDidChangeEditorPartOptions = new Emitter<IEditorPartOptionsChangeEvent>();
 	override readonly onDidChangeEditorPartOptions = this._onDidChangeEditorPartOptions.event;
-	private _partOptions: IEditorPartOptions = { ...DEFAULT_EDITOR_PART_OPTIONS };
+	private _partOptions: IEditorPartOptions = { ...DEFAULT_EDITOR_PART_OPTIONS, showTabs: 'multiple', tabHeight: 'default' };
 
 	override get partOptions(): IEditorPartOptions {
 		return this._partOptions;

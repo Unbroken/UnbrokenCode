@@ -6,6 +6,7 @@
 import gulp from 'gulp';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import es from 'event-stream';
 import vfs from 'vinyl-fs';
 import rename from 'gulp-rename';
@@ -25,7 +26,7 @@ import product from '../product.json' with { type: 'json' };
 import * as crypto from 'crypto';
 import * as i18n from './lib/i18n.ts';
 import { getProductionDependencies } from './lib/dependencies.ts';
-import { config } from './lib/electron.ts';
+import { config, stripDarwinCFBundleIconFileExtension } from './lib/electron.ts';
 import { createAsar } from './lib/asar.ts';
 import minimist from 'minimist';
 import { compileBuildWithoutManglingTask, compileBuildWithManglingTask } from './gulpfile.compile.ts';
@@ -41,6 +42,7 @@ import * as cp from 'child_process';
 
 const glob = promisify(globCallback);
 const rcedit = promisify(rceditCallback);
+const execFileAsync = promisify(cp.execFile);
 const root = path.dirname(import.meta.dirname);
 const commit = getVersion(root);
 
@@ -318,13 +320,93 @@ function computeChecksum(filename: string): string {
 	return hash;
 }
 
+const DARWIN_DEFAULT_APP_ICON_NAME = 'Unbroken Code';
+
+interface CompileDarwinAssetCatologOptions {
+	appIconName: string;
+	inputAssetPaths: string[];
+}
+
+async function compileDarwinAssetCatalog(resourcesDir: string, options: CompileDarwinAssetCatologOptions) {
+	const { appIconName, inputAssetPaths } = options;
+
+	if (process.platform !== 'darwin') {
+		console.warn('Skipping asset catalog compilation: requires macOS.');
+		return;
+	}
+
+	if (!inputAssetPaths.length) {
+		return;
+	}
+
+	const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'unbrokencode-actool-'));
+	const partialInfoPlist = path.join(tmpDir, 'asset-partial-info.plist');
+
+	try {
+		try {
+			await fs.promises.unlink(path.join(resourcesDir, 'Assets.car'));
+		} catch (error) {
+			if (error && error.code !== 'ENOENT') {
+				throw error;
+			}
+		}
+
+		const args = [
+			'actool',
+			'--compile', resourcesDir,
+			'--platform', 'macosx',
+			'--minimum-deployment-target', '10.13',
+			'--output-partial-info-plist', partialInfoPlist,
+			'--warnings',
+			'--notices',
+			'--compress-pngs',
+		];
+
+		if (appIconName) {
+			args.push('--app-icon', appIconName);
+		}
+
+		args.push(...inputAssetPaths);
+
+		const { stdout, stderr } = await execFileAsync('xcrun', args, { cwd: root });
+		if (stdout && stdout.trim()) {
+			console.log(stdout.trim());
+		}
+		if (stderr && stderr.trim()) {
+			console.log(stderr.trim());
+		}
+	} finally {
+		try {
+			await fs.promises.rm(tmpDir, { recursive: true, force: true });
+		} catch (error) {
+		}
+	}
+
+	if (!fs.existsSync(path.join(resourcesDir, 'Assets.car'))) {
+		throw new Error(`Failed to generate Assets.car in ${resourcesDir}`);
+	}
+}
+
 function packageTask(platform: string, arch: string, sourceFolderName: string, destinationFolderName: string, _opts?: { stats?: boolean }) {
 	const destination = path.join(path.dirname(root), destinationFolderName);
 	platform = platform || process.platform;
 
-	const task = () => {
+	const task = async () => {
 		const out = sourceFolderName;
 		const versionedResourcesFolder = util.getVersionedResourcesFolder(platform, commit!);
+		const assetCatalogPath = path.join(root, 'resources', 'darwin', 'Assets.xcassets');
+		const codeIconPath = path.join(root, 'resources', 'darwin', 'Unbroken Code.icon');
+		const hasAssetCatalog = fs.existsSync(assetCatalogPath);
+		const hasCodeIcon = fs.existsSync(codeIconPath);
+		const codeIconName = hasCodeIcon ? path.basename(codeIconPath, path.extname(codeIconPath)) : undefined;
+		const appIconName = codeIconName ?? (hasAssetCatalog ? DARWIN_DEFAULT_APP_ICON_NAME : undefined);
+		const actoolInputs = [];
+		if (hasAssetCatalog) {
+			actoolInputs.push(assetCatalogPath);
+		}
+		if (hasCodeIcon) {
+			actoolInputs.push(codeIconPath);
+		}
 
 		const checksums = computeChecksums(out, [
 			'vs/base/parts/sandbox/electron-browser/preload.js',
@@ -424,9 +506,9 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		const telemetry = gulp.src('.build/telemetry/**', { base: '.build/telemetry', dot: true });
 
 		const jsFilter = util.filter(data => !data.isDirectory() && /\.js$/.test(data.path));
-		const root = path.resolve(path.join(import.meta.dirname, '..'));
-		const productionDependencies = getProductionDependencies(root);
-		const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat().concat('!**/*.mk');
+		const workspaceRoot = path.resolve(path.join(import.meta.dirname, '..'));
+		const productionDependencies = getProductionDependencies(workspaceRoot);
+		const dependenciesSrc = productionDependencies.map(d => path.relative(workspaceRoot, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat().concat('!**/*.mk');
 
 		const depFilterPattern = ['**', `!**/${config.version}/**`, '!**/bin/darwin-arm64-87/**', '!**/package-lock.json', '!**/yarn.lock'];
 		if (stripSourceMapsInPackagingTasks) {
@@ -547,7 +629,13 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			.pipe(util.skipDirectories())
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
-			.pipe(electron(electronConfig))
+			.pipe(electron(electronConfig));
+
+		if (platform === 'darwin') {
+			result = result.pipe(stripDarwinCFBundleIconFileExtension(appIconName));
+		}
+
+		result = result
 			.pipe(filter([
 				'**',
 				'!LICENSE',
@@ -637,7 +725,21 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			productJsonFn: () => productJsonContents
 		});
 
-		return result.pipe(vfs.dest(destination));
+		const packagedStream = result.pipe(vfs.dest(destination));
+		await util.streamToPromise(packagedStream);
+
+		if (platform === 'darwin') {
+			const appBundlePath = path.join(destination, `${product.nameLong}.app`);
+			const resourcesDir = path.join(appBundlePath, 'Contents', 'Resources');
+			if (!fs.existsSync(resourcesDir)) {
+				throw new Error(`Expected to find macOS resources at ${resourcesDir}`);
+			}
+			if (actoolInputs.length) {
+				await compileDarwinAssetCatalog(resourcesDir, { appIconName, inputAssetPaths: actoolInputs });
+			} else {
+				console.warn('Skipping asset catalog compilation: no asset inputs found.');
+			}
+		}
 	};
 	task.taskName = `package-${platform}-${arch}`;
 	return task;

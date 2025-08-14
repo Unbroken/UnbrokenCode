@@ -80,6 +80,8 @@ suite('EditorGroupsService', () => {
 
 	async function createToolbarTestGroup() {
 		const [part, instantiationService] = await createPart();
+		// The editor actions show in the tab bar, which the minimal default of `workbench.editor.showTabs` hides
+		disposables.add(part.enforcePartOptions({ showTabs: 'multiple' }));
 		const group = part.activeGroup;
 		const change = disposables.add(new Emitter<void>());
 		const action = (label: string) => disposables.add(new Action(label, label));
@@ -437,6 +439,8 @@ suite('EditorGroupsService', () => {
 			}
 		});
 		const [part] = await createPart(instantiationService);
+		// The tab bar only shows multiple tabs, which the minimal default of `workbench.editor.showTabs` hides
+		disposables.add(part.enforcePartOptions({ showTabs: 'multiple' }));
 		part.addGroup(part.activeGroup, GroupDirection.RIGHT);
 
 		assert.deepStrictEqual({

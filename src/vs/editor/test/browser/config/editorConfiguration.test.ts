@@ -102,7 +102,9 @@ suite('Common Editor Config', () => {
 	test('wordWrap compat true', () => {
 		const config = new TestWrappingConfiguration({
 			// eslint-disable-next-line local/code-no-any-casts
-			wordWrap: <any>true
+			wordWrap: <any>true,
+			minimap: { enabled: true },
+			folding: true
 		});
 		assertWrapping(config, true, 80);
 		config.dispose();
@@ -110,7 +112,9 @@ suite('Common Editor Config', () => {
 
 	test('wordWrap on', () => {
 		const config = new TestWrappingConfiguration({
-			wordWrap: 'on'
+			wordWrap: 'on',
+			minimap: { enabled: true },
+			folding: true
 		});
 		assertWrapping(config, true, 80);
 		config.dispose();
@@ -121,7 +125,8 @@ suite('Common Editor Config', () => {
 			wordWrap: 'on',
 			minimap: {
 				enabled: false
-			}
+			},
+			folding: true
 		});
 		assertWrapping(config, true, 88);
 		config.dispose();
@@ -130,7 +135,9 @@ suite('Common Editor Config', () => {
 	test('wordWrap on does not use wordWrapColumn', () => {
 		const config = new TestWrappingConfiguration({
 			wordWrap: 'on',
-			wordWrapColumn: 10
+			wordWrapColumn: 10,
+			minimap: { enabled: true },
+			folding: true
 		});
 		assertWrapping(config, true, 80);
 		config.dispose();

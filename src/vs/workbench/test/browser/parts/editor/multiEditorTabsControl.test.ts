@@ -65,7 +65,7 @@ suite('MultiEditorTabsControl', () => {
 
 	setup(() => {
 		disposables = new DisposableStore();
-		partOptions = { ...DEFAULT_EDITOR_PART_OPTIONS };
+		partOptions = { ...DEFAULT_EDITOR_PART_OPTIONS, showTabs: 'multiple', tabHeight: 'default' };
 		newWindowTransfers = [];
 		addMenuVisible = true;
 		addMenuChange = disposables.add(new Emitter<void>());

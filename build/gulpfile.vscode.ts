@@ -397,7 +397,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				result = es.merge(result, gulp.src('resources/win32/insider/bin/code.cmd', { base: 'resources/win32/insider' })
 					.pipe(replace('@@NAME@@', product.nameShort))
 					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
-					.pipe(rename(function (f) { f.basename = product.applicationName; })));
+					.pipe(rename(function (f) { f.basename = 'code'; })));
 
 				result = es.merge(result, gulp.src('resources/win32/insider/bin/code.sh', { base: 'resources/win32/insider' })
 					.pipe(replace('@@NAME@@', product.nameShort))
@@ -408,11 +408,11 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', quality))
-					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
+					.pipe(rename(function (f) { f.basename = 'code'; f.extname = ''; })));
 			} else {
 				result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
 					.pipe(replace('@@NAME@@', product.nameShort))
-					.pipe(rename(function (f) { f.basename = product.applicationName; })));
+					.pipe(rename(function (f) { f.basename = 'code'; })));
 
 				result = es.merge(result, gulp.src('resources/win32/bin/code.sh', { base: 'resources/win32' })
 					.pipe(replace('@@NAME@@', product.nameShort))
@@ -422,7 +422,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@APPNAME@@', product.applicationName))
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', String(quality)))
-					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
+					.pipe(rename(function (f) { f.basename = 'code'; f.extname = ''; })));
 			}
 
 			result = es.merge(result, gulp.src('resources/win32/VisualElementsManifest.xml', { base: 'resources/win32' })

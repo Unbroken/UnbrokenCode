@@ -45,7 +45,7 @@ suite('Sessions - Editor tabs trailing layout', () => {
 
 	setup(() => {
 		store.add(toDisposable(() => ModifierKeyEmitter.disposeInstance()));
-		partOptions = { ...DEFAULT_EDITOR_PART_OPTIONS, wrapTabs: true, tabSizing: 'fixed', tabSizingFixedMinWidth: 120, tabSizingFixedMaxWidth: 120 };
+		partOptions = { ...DEFAULT_EDITOR_PART_OPTIONS, showTabs: 'multiple', tabHeight: 'default', wrapTabs: true, tabSizing: 'fixed', tabSizingFixedMinWidth: 120, tabSizingFixedMaxWidth: 120 };
 		root = $('.monaco-workbench.modern-ui-tabs.modern-ui-connected-editor-tabs.agent-sessions-workbench.dock-detail-panel');
 		root.style.cssText = '--vscode-spacing-size20: 2px; --vscode-spacing-size40: 4px; --vscode-spacing-size60: 6px; --vscode-spacing-size80: 8px; --vscode-spacing-size160: 16px; --vscode-spacing-size200: 20px; --vscode-spacing-size280: 28px; --vscode-strokeThickness: 1px; --vscode-cornerRadius-small: 4px; --vscode-cornerRadius-medium: 6px; --vscode-cornerRadius-large: 8px; --vscode-fontSize-body1: 13px; --vscode-fontWeight-regular: 400;';
 		const editor = $('.part.editor.editor-tabs-multiple');

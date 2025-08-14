@@ -39,6 +39,7 @@ import { GroupDirection, IContentPart, IEditorGroupsService } from '../../../../
 import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
 import { createEditorParts, registerTestEditor, TestEditorParts, TestFileEditorInput, workbenchInstantiationService } from '../../workbenchTestServices.js';
 import '../../../../contrib/modernUI/browser/media/tabs.css';
+import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 
 suite('Part Grid', () => {
 
@@ -70,7 +71,11 @@ suite('Part Grid', () => {
 	let instantiationService: TestInstantiationService;
 
 	async function createParts(): Promise<TestEditorParts> {
-		instantiationService = workbenchInstantiationService({ contextKeyService: instantiationService => instantiationService.createInstance(MockScopableContextKeyService) }, disposables);
+		instantiationService = workbenchInstantiationService({
+			// Upstream's tabs, which the tests drag onto, rather than our default of none
+			configurationService: () => new TestConfigurationService({ workbench: { editor: { showTabs: 'multiple' } } }),
+			contextKeyService: instantiationService => instantiationService.createInstance(MockScopableContextKeyService)
+		}, disposables);
 		instantiationService.invokeFunction(accessor => Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).start(accessor));
 		instantiationService.stub(IWorkbenchLayoutService, 'getMaximumEditorDimensions', () => ({ width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY }));
 		instantiationService.stub(IAuxiliaryWindowService, new class extends mock<IAuxiliaryWindowService>() { override getWindow() { return undefined; } }());

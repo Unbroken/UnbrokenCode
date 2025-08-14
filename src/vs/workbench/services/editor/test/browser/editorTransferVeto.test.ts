@@ -32,6 +32,7 @@ import { SideBySideEditorInput } from '../../../../common/editor/sideBySideEdito
 import { createEditorParts, registerTestEditor, TestEditorParts, TestFileEditorInput, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { IAuxiliaryWindowService } from '../../../auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { GroupDirection, GroupsOrder, IAuxiliaryEditorPart, IContentPart, IEditorGroup, IEditorGroupsService, IEditorPart, IModalEditorPart, MergeGroupMode } from '../../common/editorGroupsService.js';
+import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 
 /** Records the errors it is asked to show, as a veto is shown. */
 class RecordingDialogService extends TestDialogService {
@@ -91,7 +92,11 @@ suite('Editor transfer vetoes', () => {
 	}
 
 	async function createServices(): Promise<{ parts: TestEditorParts; dialogs: RecordingDialogService; instantiationService: TestInstantiationService }> {
-		const instantiationService = workbenchInstantiationService({ contextKeyService: instantiationService => instantiationService.createInstance(MockScopableContextKeyService) }, disposables);
+		const instantiationService = workbenchInstantiationService({
+			// Upstream's tabs, which the tests drag onto, rather than our default of none
+			configurationService: () => new TestConfigurationService({ workbench: { editor: { showTabs: 'multiple' } } }),
+			contextKeyService: instantiationService => instantiationService.createInstance(MockScopableContextKeyService)
+		}, disposables);
 		const dialogs = new RecordingDialogService();
 		instantiationService.stub(IDialogService, dialogs);
 		instantiationService.invokeFunction(accessor => Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).start(accessor));

@@ -1677,7 +1677,7 @@ suite('Chat window', () => {
 
 	test('the tabs of its chat part, of chats with long titles, are all as wide, at most as an editor tab is by default, whatever sizing editor tabs have and as the options of its main part change; the tabs of other parts size as editor tabs do', async () => {
 		const store = disposables.add(new DisposableStore());
-		const instantiationService = workbenchInstantiationService({ configurationService: () => new TestConfigurationService({ workbench: { editor: { tabSizing: 'shrink', tabSizingFixedMinWidth: 50, tabSizingFixedMaxWidth: 300 } } }) }, store);
+		const instantiationService = workbenchInstantiationService({ configurationService: () => new TestConfigurationService({ workbench: { editor: { showTabs: 'multiple', tabSizing: 'shrink', tabSizingFixedMinWidth: 50, tabSizingFixedMaxWidth: 300 } } }) }, store);
 		instantiationService.invokeFunction(accessor => Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).start(accessor));
 		const parts = await createEditorParts(instantiationService, store);
 		const createPart = (label: string) => {

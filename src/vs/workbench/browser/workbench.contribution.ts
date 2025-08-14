@@ -69,7 +69,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 					localize('workbench.editor.showTabs.none', "The editor title area is not displayed."),
 				],
 				'description': localize('showEditorTabs', "Controls whether opened editors should show as individual tabs, one single large tab or if the title area should not be shown."),
-				'default': 'multiple'
+				'default': 'none'
 			},
 			[LayoutSettings.EDITOR_ACTIONS_LOCATION]: {
 				'type': 'string',
@@ -254,7 +254,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			'window.density.editorTabHeight': {
 				'type': 'string',
 				'enum': ['default', 'compact'],
-				'default': 'default',
+				'default': 'compact',
 				'markdownDescription': localize({ comment: ['{0}, {1} will be a setting name rendered as a link'], key: 'workbench.editor.tabHeight' }, "Controls the height of editor tabs. Also applies to the title control bar when {0} is not set to {1}.", '`#workbench.editor.showTabs#`', '`multiple`')
 			},
 			[LayoutSettings.MODERN_UI_DENSITY]: {
@@ -264,7 +264,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 					localize('windowDensityLayout.default', "Uses the standard spacing between workbench parts and a taller title bar in the Agents window."),
 					localize('windowDensityLayout.compact', "Removes the gaps between workbench parts and reduces their internal spacing to provide more room for content. Uses a shorter title bar in the Agents window."),
 				],
-				'default': ModernUIDensity.Default,
+				'default': ModernUIDensity.Compact,
 				'markdownDescription': localize({ key: 'windowDensityLayout', comment: ['{0} is a placeholder for a setting identifier.'] }, "Controls the spacing density of the workbench layout. Applies in the Agents window and when {0} is enabled in the editor window.", '`#workbench.experimental.modernUI#`'),
 			},
 			'workbench.editor.pinnedTabSizing': {
@@ -521,7 +521,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			'workbench.commandPalette.preserveInput': {
 				'type': 'boolean',
 				'description': localize('preserveInput', "Controls whether the last typed input to the command palette should be restored when opening it the next time."),
-				'default': false
+				'default': true
 			},
 			'workbench.commandPalette.experimental.suggestCommands': {
 				'type': 'boolean',
@@ -560,7 +560,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			'workbench.quickOpen.preserveInput': {
 				'type': 'boolean',
 				'description': localize('workbench.quickOpen.preserveInput', "Controls whether the last typed input to Quick Open should be restored when opening it the next time."),
-				'default': false
+				'default': true
 			},
 			'workbench.settings.openDefaultSettings': {
 				'type': 'boolean',
@@ -674,7 +674,7 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 			[LayoutSettings.ACTIVITY_BAR_LOCATION]: {
 				'type': 'string',
 				'enum': ['default', 'top', 'bottom', 'hidden'],
-				'default': 'default',
+				'default': 'top',
 				'markdownDescription': localize({ comment: ['This is the description for a setting'], key: 'activityBarLocation' }, "Controls the location of the Activity Bar relative to the Primary and Secondary Side Bars."),
 				'enumDescriptions': [
 					localize('workbench.activityBar.location.default', "Show the Activity Bar on the side of the Primary Side Bar and on top of the Secondary Side Bar."),

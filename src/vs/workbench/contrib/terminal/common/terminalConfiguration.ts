@@ -249,7 +249,7 @@ const terminalConfiguration: IStringDictionary<IConfigurationPropertySchema> = {
 	[TerminalSettingId.BellDuration]: {
 		markdownDescription: localize('terminal.integrated.bellDuration', "The number of milliseconds to show the bell within a terminal tab when triggered."),
 		type: 'number',
-		default: 1000
+		default: 50000
 	},
 	[TerminalSettingId.FontWeight]: {
 		'anyOf': [

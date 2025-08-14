@@ -418,8 +418,8 @@ export function generateTokensCSSForColorMap(colorMap: readonly Color[], highlig
 	}
 	rules.push('.mtki { font-style: italic; }');
 	rules.push('.mtkb { font-weight: bold; }');
-	rules.push('.mtku { text-decoration: underline; text-underline-position: under; }');
+	rules.push('.mtku { text-decoration: underline; }');
 	rules.push('.mtks { text-decoration: line-through; }');
-	rules.push('.mtks.mtku { text-decoration: underline line-through; text-underline-position: under; }');
+	rules.push('.mtks.mtku { text-decoration: underline line-through; }');
 	return rules.join('\n');
 }

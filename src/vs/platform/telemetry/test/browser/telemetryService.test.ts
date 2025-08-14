@@ -192,13 +192,12 @@ suite('TelemetryService', () => {
 		service.dispose();
 	});
 
-	test('telemetry on by default', function () {
+	test('telemetry off by default', function () {
 		const testAppender = new TestTelemetryAppender();
 		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent');
-		assert.strictEqual(testAppender.getEventsCount(), 1);
-		assert.strictEqual(testAppender.events[0].eventName, 'testEvent');
+		assert.strictEqual(testAppender.getEventsCount(), 0); // No events logged when telemetry is off
 
 		service.dispose();
 	});

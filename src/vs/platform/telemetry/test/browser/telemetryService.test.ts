@@ -113,9 +113,13 @@ suite('TelemetryService', () => {
 
 	const TestProductService: IProductService = { _serviceBrand: undefined, ...product };
 
+	function getTelemetryEnabledConfigurationService() {
+		return new TestConfigurationService({ 'telemetry.telemetryLevel': 'all' });
+	}
+
 	test('Disposing', sinonTestFn(function () {
 		const testAppender = new TestTelemetryAppender();
-		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
+		const service = new TelemetryService({ appenders: [testAppender] }, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		service.publicLog('testPrivateEvent');
 		assert.strictEqual(testAppender.getEventsCount(), 1);
@@ -127,7 +131,7 @@ suite('TelemetryService', () => {
 	// event reporting
 	test('Simple event', sinonTestFn(function () {
 		const testAppender = new TestTelemetryAppender();
-		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
+		const service = new TelemetryService({ appenders: [testAppender] }, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent');
 		assert.strictEqual(testAppender.getEventsCount(), 1);
@@ -139,7 +143,7 @@ suite('TelemetryService', () => {
 
 	test('Event with data', sinonTestFn(function () {
 		const testAppender = new TestTelemetryAppender();
-		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
+		const service = new TelemetryService({ appenders: [testAppender] }, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent', {
 			'stringProp': 'property',
@@ -166,7 +170,7 @@ suite('TelemetryService', () => {
 		const service = new TelemetryService({
 			appenders: [testAppender],
 			commonProperties: { foo: 'JA!', get bar() { return Math.random() % 2 === 0; } }
-		}, new TestConfigurationService(), TestProductService);
+		}, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent');
 		const [first] = testAppender.events;
@@ -183,7 +187,7 @@ suite('TelemetryService', () => {
 		const service = new TelemetryService({
 			appenders: [testAppender],
 			commonProperties: { foo: 'JA!', get bar() { return Math.random() % 2 === 0; } }
-		}, new TestConfigurationService(), TestProductService);
+		}, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent', { hightower: 'xl', price: 8000 });
 		const [first] = testAppender.events;
@@ -204,7 +208,7 @@ suite('TelemetryService', () => {
 				sessionID: 'one',
 				['common.machineId']: 'three',
 			}
-		}, new TestConfigurationService(), TestProductService);
+		}, getTelemetryEnabledConfigurationService(), TestProductService);
 
 		assert.strictEqual(service.sessionId, 'one');
 		assert.strictEqual(service.machineId, 'three');
@@ -212,20 +216,19 @@ suite('TelemetryService', () => {
 		service.dispose();
 	});
 
-	test('telemetry on by default', function () {
+	test('telemetry off by default', function () {
 		const testAppender = new TestTelemetryAppender();
 		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
 
 		service.publicLog('testEvent');
-		assert.strictEqual(testAppender.getEventsCount(), 1);
-		assert.strictEqual(testAppender.events[0].eventName, 'testEvent');
+		assert.strictEqual(testAppender.getEventsCount(), 0); // No events logged when telemetry is off
 
 		service.dispose();
 	});
 
 	class TestErrorTelemetryService extends TelemetryService {
 		constructor(config: ITelemetryServiceConfig) {
-			super({ ...config, sendErrorTelemetry: true }, new TestConfigurationService, TestProductService);
+			super({ ...config, sendErrorTelemetry: true }, getTelemetryEnabledConfigurationService(), TestProductService);
 		}
 	}
 
@@ -772,7 +775,7 @@ suite('TelemetryService', () => {
 
 	test('Telemetry Service sends events when telemetry is on', sinonTestFn(function () {
 		const testAppender = new TestTelemetryAppender();
-		const service = new TelemetryService({ appenders: [testAppender] }, new TestConfigurationService(), TestProductService);
+		const service = new TelemetryService({ appenders: [testAppender] }, getTelemetryEnabledConfigurationService(), TestProductService);
 		service.publicLog('testEvent');
 		assert.strictEqual(testAppender.getEventsCount(), 1);
 		service.dispose();

@@ -64,7 +64,7 @@ export class TelemetryService implements ITelemetryService {
 		this.msftInternal = this._commonProperties['common.msftInternal'] as boolean | undefined;
 
 		this._piiPaths = config.piiPaths || [];
-		this._telemetryLevel = TelemetryLevel.USAGE;
+		this._telemetryLevel = TelemetryLevel.NONE;
 		this._sendErrorTelemetry = !!config.sendErrorTelemetry;
 
 		// static cleanup pattern for: `vscode-file:///DANGEROUS/PATH/resources/app/Useful/Information`
@@ -217,7 +217,7 @@ configurationRegistry.registerConfiguration({
 				localize('telemetry.telemetryLevel.off', "Disables all product telemetry.")
 			],
 			'markdownDescription': getTelemetryLevelSettingDescription(),
-			'default': TelemetryConfiguration.ON,
+			'default': TelemetryConfiguration.OFF,
 			'restricted': true,
 			'scope': ConfigurationScope.APPLICATION,
 			'tags': ['usesOnlineServices', 'telemetry'],

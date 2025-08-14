@@ -532,7 +532,7 @@ configurationRegistry.registerConfiguration({
 		'debug.toolBarLocation': {
 			enum: ['floating', 'docked', 'commandCenter', 'hidden'],
 			markdownDescription: nls.localize({ comment: ['This is the description for a setting'], key: 'toolBarLocation' }, "Controls the location of the debug toolbar. Either `floating` in all views, `docked` in the debug view, `commandCenter` (requires {0}), or `hidden`.", '`#window.commandCenter#`'),
-			default: 'floating',
+			default: 'commandCenter',
 			markdownEnumDescriptions: [
 				nls.localize('debugToolBar.floating', "Show debug toolbar in all views."),
 				nls.localize('debugToolBar.docked', "Show debug toolbar only in debug views."),

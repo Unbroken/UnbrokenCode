@@ -2454,15 +2454,15 @@ class EditorDecorationsCollection implements editorCommon.IEditorDecorationsColl
 	}
 }
 
-const squigglyStart = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 3' enable-background='new 0 0 6 3' height='3' width='6'><g fill='`);
-const squigglyEnd = encodeURIComponent(`'><polygon points='5.5,0 2.5,3 1.1,3 4.1,0'/><polygon points='4,0 6,2 6,0.6 5.4,0'/><polygon points='0,2 1,3 2.4,3 0,0.6'/></g></svg>`);
+const squigglyStart = encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 2' enable-background='new 0 0 6 2' height='2' width='6'><g fill='`);
+const squigglyEnd = encodeURIComponent(`'><polygon points='5.5,0 2.5,2 1.1,2 4.1,0'/><polygon points='4,0 6,1.3333333333333333 6,0.4 5.4,0'/><polygon points='0,1.3333333333333333 1,2 2.4,2 0,0.4'/></g></svg>`);
 
 function getSquigglySVGData(color: Color) {
 	return squigglyStart + encodeURIComponent(color.toString()) + squigglyEnd;
 }
 
-const dotdotdotStart = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" height="3" width="12"><g fill="`);
-const dotdotdotEnd = encodeURIComponent(`"><circle cx="1" cy="1" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="9" cy="1" r="1"/></g></svg>`);
+const dotdotdotStart = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" height="2" width="12"><g fill="`);
+const dotdotdotEnd = encodeURIComponent(`"><circle cx="1" cy="0.6666666666666666" r="0.6666666666666666"/><circle cx="5" cy="0.6666666666666666" r="0.6666666666666666"/><circle cx="9" cy="0.6666666666666666" r="0.6666666666666666"/></g></svg>`);
 
 function getDotDotDotSVGData(color: Color) {
 	return dotdotdotStart + encodeURIComponent(color.toString()) + dotdotdotEnd;

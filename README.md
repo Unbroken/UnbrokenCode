@@ -56,6 +56,23 @@ Download the latest release for your platform:
 
 Simply download the `.zip` file for your platform, extract it, and run the app. The universal build is recommended for most users.
 
+#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering
+For the best experience with Unbroken Code's crisp font rendering, disable font smoothing system-wide:
+
+```bash
+defaults -currentHost write -g AppleFontSmoothing -int 0
+```
+
+This enables pixel-perfect font rendering that matches the precision of the built-in font. To re-enable font smoothing later:
+
+```bash
+defaults -currentHost delete -g AppleFontSmoothing
+```
+
+Note: This is a system-wide setting that affects all applications. You'll need to log out and back in for the change to take full effect.
+
+**Why disable font smoothing?** Apple's font smoothing makes text appear bold and blurry, especially on non-Retina displays. For a detailed explanation, see [this excellent article by Nikita Prokopov](https://tonsky.me/blog/monitors/#turn-off-font-smoothing) on why font smoothing is problematic and how it destroys text clarity.
+
 ## Building from Source
 
 Want to build your own? Check out the upstream [build instructions](https://github.com/microsoft/vscode/wiki/How-to-Contribute) - they still apply here, but now you get all the good stuff included.

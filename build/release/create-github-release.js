@@ -174,7 +174,8 @@ async function createGitHubRelease(octokit, tagName, releaseName, body, draft = 
             name: releaseName,
             body: body,
             draft: draft,
-            prerelease: false
+            prerelease: false,
+            target_commitish: targetCommit
         });
         // Create ExtendedRelease object with existing assets
         release = {

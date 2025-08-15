@@ -47,6 +47,7 @@ const path = __importStar(require("path"));
 const crypto = __importStar(require("crypto"));
 const child_process_1 = require("child_process");
 const rest_1 = require("@octokit/rest");
+const create_dmg_installer_1 = require("./create-dmg-installer");
 const REPO_OWNER = 'Unbroken';
 const REPO_NAME = 'UnbrokenCode';
 function getProductInfo() {
@@ -97,19 +98,32 @@ function getFileSize(filePath) {
     return fs.statSync(filePath).size;
 }
 function createDMG(appPath, dmgPath, volumeName) {
-    console.log(`Creating DMG from ${appPath} to ${dmgPath}`);
-    // Use hdiutil to create a DMG
-    const tempDmg = dmgPath.replace('.dmg', '.temp.dmg');
-    // Create DMG
-    (0, child_process_1.execSync)(`hdiutil create -volname "${volumeName}" -srcfolder "${appPath}" -ov -format UDRW "${tempDmg}"`, {
-        stdio: 'inherit'
+    // Generate background image if it doesn't exist
+    const scriptDir = __dirname;
+    const backgroundImage = path.join(scriptDir, 'dmg-background.png');
+    // Try to generate the background if it doesn't exist
+    if (!fs.existsSync(backgroundImage)) {
+        try {
+            (0, child_process_1.execSync)(`"${path.join(scriptDir, 'generate-dmg-background.sh')}"`, { stdio: 'inherit' });
+        }
+        catch (error) {
+            console.log('Could not generate DMG background image, continuing without it');
+        }
+    }
+    // Use the enhanced DMG creator
+    (0, create_dmg_installer_1.createDMGWithInstaller)({
+        appPath,
+        dmgPath,
+        volumeName,
+        backgroundImage: fs.existsSync(backgroundImage) ? backgroundImage : undefined,
+        windowWidth: 600,
+        windowHeight: 456, // Increased to account for status bar
+        iconSize: 100,
+        appIconX: 175,
+        appIconY: 200,
+        applicationsIconX: 425,
+        applicationsIconY: 200
     });
-    // Convert to compressed DMG
-    (0, child_process_1.execSync)(`hdiutil convert "${tempDmg}" -format UDZO -o "${dmgPath}"`, {
-        stdio: 'inherit'
-    });
-    // Remove temp DMG
-    fs.unlinkSync(tempDmg);
 }
 function createZip(appPath, zipPath) {
     console.log(`Creating ZIP from ${appPath} to ${zipPath}`);
@@ -284,6 +298,8 @@ async function uploadReleaseAsset(octokit, releaseId, asset) {
     }
 }
 async function main() {
+    const shouldPublish = process.argv.includes('--publish');
+    const regenerateDMG = process.argv.includes('--regenerate-dmg');
     const distDir = path.join(__dirname, '../../.dist');
     const product = getProductInfo();
     const commit = getCurrentCommit();
@@ -359,6 +375,10 @@ async function main() {
         // Create DMG
         const dmgName = `UnbrokenCode-darwin-${arch}-${version}.dmg`;
         const dmgPath = path.join(distDir, dmgName);
+        if (regenerateDMG && fs.existsSync(dmgPath)) {
+            console.log(`Removing existing DMG: ${dmgPath}`);
+            fs.unlinkSync(dmgPath);
+        }
         if (!fs.existsSync(dmgPath)) {
             createDMG(appPath, dmgPath, `Unbroken Code ${version}`);
         }
@@ -445,8 +465,7 @@ async function main() {
         '### Auto-Update',
         'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.'
     ].join('\n');
-    // Check for --publish flag
-    const shouldPublish = process.argv.includes('--publish');
+    // Check for command line flags
     // Always create as draft first to upload all artifacts before it's visible
     const release = await createGitHubRelease(octokit, tagName, `${product.nameLong} ${version}`, releaseBody, true // Always create as draft initially
     );

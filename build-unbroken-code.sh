@@ -7,6 +7,7 @@ NEW_VERSION=false
 CREATE_RELEASE=false
 PUBLISH_RELEASE=false
 SKIP_BUILD=false
+REGENERATE_DMG=false
 
 for arg in "$@"; do
 	case $arg in
@@ -27,6 +28,10 @@ for arg in "$@"; do
 			SKIP_BUILD=true
 			shift
 			;;
+		--regenerate-dmg)
+			REGENERATE_DMG=true
+			shift
+			;;
 		--help)
 			echo "Usage: $0 [OPTIONS]"
 			echo ""
@@ -35,6 +40,7 @@ for arg in "$@"; do
 			echo "  --release        Create GitHub release (draft) after building"
 			echo "  --publish        Create and publish GitHub release (non-draft)"
 			echo "  --skip-build     Skip the build process (only for --release)"
+			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
 			echo "  --help           Show this help message"
 			echo ""
 			echo "Examples:"
@@ -43,6 +49,7 @@ for arg in "$@"; do
 			echo "  $0 --new-version --release   # Update version, build, and create draft release"
 			echo "  $0 --release --publish       # Build and create published release"
 			echo "  $0 --skip-build --release    # Create release from existing build"
+			echo "  $0 --regenerate-dmg --release # Regenerate DMG files and create release"
 			exit 0
 			;;
 		*)
@@ -117,14 +124,30 @@ function Create_GitHub_Release()
 		fi
 	fi
 	
+	# Build command with options
+	RELEASE_CMD="node build/release/create-github-release.js"
+	
+	if $PUBLISH_RELEASE; then
+		RELEASE_CMD="$RELEASE_CMD --publish"
+	fi
+	
+	if $REGENERATE_DMG; then
+		RELEASE_CMD="$RELEASE_CMD --regenerate-dmg"
+	fi
+	
 	# Check if release should be published or draft
 	if $PUBLISH_RELEASE; then
 		echo "Creating PUBLISHED release..."
-		node build/release/create-github-release.js --publish
 	else
 		echo "Creating DRAFT release..."
-		node build/release/create-github-release.js
 	fi
+	
+	if $REGENERATE_DMG; then
+		echo "Will regenerate DMG files..."
+	fi
+	
+	# Execute the release command
+	$RELEASE_CMD
 	
 	if [ $? -eq 0 ]; then
 		echo "GitHub release created successfully!"

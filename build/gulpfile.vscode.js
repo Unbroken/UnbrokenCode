@@ -210,7 +210,9 @@ function computeChecksum(filename) {
 function packageTask(platform, arch, sourceFolderName, destinationFolderName, opts) {
 	opts = opts || {};
 
-	const destination = path.join(path.dirname(root), destinationFolderName);
+	// Allow overriding build output directory via environment variable
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const destination = path.join(buildOutputDir, destinationFolderName);
 	platform = platform || process.platform;
 
 	const task = () => {
@@ -468,7 +470,8 @@ function patchWin32DependenciesTask(destinationFolderName) {
 	};
 }
 
-const buildRoot = path.dirname(root);
+// Allow overriding build output directory via environment variable
+const buildRoot = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
 
 const BUILD_TARGETS = [
 	{ platform: 'win32', arch: 'x64' },

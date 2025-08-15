@@ -57,32 +57,42 @@ async function main(buildDir) {
         }),
         preAutoEntitlements: false,
         preEmbedProvisioningProfile: false,
-        keychain: path_1.default.join(tempDir, 'buildagent.keychain'),
         version: getElectronVersion(),
         identity,
     };
     // Only overwrite plist entries for x64 and arm64 builds,
     // universal will get its copy from the x64 build.
     if (arch !== 'universal') {
-        await (0, cross_spawn_promise_1.spawn)('plutil', [
-            '-insert',
-            'NSAppleEventsUsageDescription',
-            '-string',
-            'An application in Visual Studio Code wants to use AppleScript.',
-            `${infoPlistPath}`
-        ]);
+        try {
+            await (0, cross_spawn_promise_1.spawn)('plutil', [
+                '-insert',
+                'NSAppleEventsUsageDescription',
+                '-string',
+                'An application in Unbroken Code wants to use AppleScript.',
+                `${infoPlistPath}`
+            ]);
+        }
+        catch (error) {
+            await (0, cross_spawn_promise_1.spawn)('plutil', [
+                '-replace',
+                'NSAppleEventsUsageDescription',
+                '-string',
+                'An application in Unbroken Code wants to use AppleScript.',
+                `${infoPlistPath}`
+            ]);
+        }
         await (0, cross_spawn_promise_1.spawn)('plutil', [
             '-replace',
             'NSMicrophoneUsageDescription',
             '-string',
-            'An application in Visual Studio Code wants to use the Microphone.',
+            'An application in Unbroken Code wants to use the Microphone.',
             `${infoPlistPath}`
         ]);
         await (0, cross_spawn_promise_1.spawn)('plutil', [
             '-replace',
             'NSCameraUsageDescription',
             '-string',
-            'An application in Visual Studio Code wants to use the Camera.',
+            'An application in Unbroken Code wants to use the Camera.',
             `${infoPlistPath}`
         ]);
     }

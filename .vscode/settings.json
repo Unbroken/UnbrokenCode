@@ -45,6 +45,7 @@
 	"files.exclude": {
 		".git": true,
 		".build": true,
+		".dist": true,
 		".profile-oss": true,
 		"**/.DS_Store": true,
 		".vscode-test": true,

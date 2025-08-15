@@ -1,78 +1,117 @@
-# Visual Studio Code - Open Source ("Code - OSS")
-[![Feature Requests](https://img.shields.io/github/issues/microsoft/vscode/feature-request.svg)](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-[![Bugs](https://img.shields.io/github/issues/microsoft/vscode/bug.svg)](https://github.com/microsoft/vscode/issues?utf8=✓&q=is%3Aissue+is%3Aopen+label%3Abug)
-[![Gitter](https://img.shields.io/badge/chat-on%20gitter-yellow.svg)](https://gitter.im/Microsoft/vscode)
+# Unbroken Code - The VS Code Fork That Actually Works for C++ Developers
 
-## The Repository
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Unbroken/UnbrokenCode)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
+[![Based on VS Code](https://img.shields.io/badge/Based%20on-VS%20Code-blue)](https://github.com/microsoft/vscode)
 
-This repository ("`Code - OSS`") is where we (Microsoft) develop the [Visual Studio Code](https://code.visualstudio.com) product together with the community. Not only do we work on code and issues here, we also publish our [roadmap](https://github.com/microsoft/vscode/wiki/Roadmap), [monthly iteration plans](https://github.com/microsoft/vscode/wiki/Iteration-Plans), and our [endgame plans](https://github.com/microsoft/vscode/wiki/Running-the-Endgame). This source code is available to everyone under the standard [MIT license](https://github.com/microsoft/vscode/blob/main/LICENSE.txt).
-
-## Visual Studio Code
+## The IDE That Ships What You Actually Need
 
 <p align="center">
-  <img alt="VS Code in action" src="https://user-images.githubusercontent.com/35271042/118224532-3842c400-b438-11eb-923d-a5f66fa6785a.png">
+  <img width="828" height="584" alt="Unbroken Code in action" src="https://github.com/user-attachments/assets/7598487a-04d4-4c97-9cf6-e9195ca337fa">
 </p>
 
-[Visual Studio Code](https://code.visualstudio.com) is a distribution of the `Code - OSS` repository with Microsoft-specific customizations released under a traditional [Microsoft product license](https://code.visualstudio.com/License/).
+**Unbroken Code** is a supercharged fork of Visual Studio Code, meticulously enhanced for C++ developers and everyone else who are tired of waiting for *those* pull requests to be approved upstream. You know, the ones that are "too useful" or "too specific" for the general audience. We ship them anyway.
 
-[Visual Studio Code](https://code.visualstudio.com) combines the simplicity of a code editor with what developers need for their core edit-build-debug cycle. It provides comprehensive code editing, navigation, and understanding support along with lightweight debugging, a rich extensibility model, and lightweight integration with existing tools.
+## Why Unbroken Code?
 
-Visual Studio Code is updated monthly with new features and bug fixes. You can download it for Windows, macOS, and Linux on [Visual Studio Code's website](https://code.visualstudio.com/Download). To get the latest releases every day, install the [Insiders build](https://code.visualstudio.com/insiders).
+Let's be honest - VS Code is great, but when you're deep in C++ development, you need more than great. You need **unbroken**. This fork includes all those patches that somehow never quite make it upstream (we wonder why 🤔), plus enhancements specifically tailored for serious C++ development.
+
+### 🚀 Key Enhancements Over Standard VS Code
+
+#### **Productivity Unleashed**
+- **Smart Problem Navigation** - actually remembers where you were when problems disappear, with automatic synchronization between marker navigation and the problems panel
+- **Sequential Problem Output** - problems appear in the order they occur (revolutionary, right?)
+- **Silent Find Commands** - navigate search matches without opening the find widget for a cleaner, less intrusive search experience
+- **Better Search Result Navigation** - keyboard shortcuts that actually work as expected
+- **Git Repository Filtering** - hide unchanged repos because clutter is the enemy
+- **External Git UI Integration** - seamlessly launch Sublime Merge, Sourcetree, GitKraken, Tower, or GitHub Desktop directly from the editor with commands for repository, file history, line history, and blame views
+- **More items in title bar** - use that space for something useful
+- **Minimal layout by default** - less chrome, more code
+- **Better Navigation**
+	- Consistent word based navigation: Search for SingleSeparator in keyboard shortcuts
+	- Consistent navigation around decorations such as inlay hints
+	- **File Explorer Leaf Navigation** - jump directly to next/previous file (skipping folders) with optional auto-expand for seamless tree traversal
+
+#### **Developer Experience First**
+- **Telemetry OFF by default** - your code is your business
+- **Open VSX marketplace** - freedom of choice in extensions
+- **Compatible 'code' command** - works with all your existing tools and workflows
+- **GitHub Copilot Chat** - bundled as an integrated extension for modern AI-assisted development
+- **'isUnbroken' context key** - create custom keybindings specific to Unbroken Code, useful when switching between editors
+- **Extension Quarantine Security** - automatic protection against supply chain attacks by quarantining newly released extension versions (default: 7 days, configurable)
+
+### 🎨 Clean, Efficient Interface
+- Waste less space in UI - every pixel counts
+- Layout icons stay visible even with editor actions in title bar
+- Thoughtfully designed defaults for a minimal, distraction-free experience
+- Cleaner centered layout that actually centers on screen instead of in editor window and uses all available space to the right (and centering is configurable as default for new workspaces)
+- **Problems panel in primary sidebar** - better default location than the bottom panel for a cleaner workflow, and updated rendering that prioritizes the error message making the sidebar location feasible
+
+#### **Better editor experience**
+- **Enhanced color space control** for syntax highlighting and all themed colors - your eyes will thank you
+- **Smart Inlay Hints** - defaults to "offUnlessPressed" mode (show only when holding Ctrl/Cmd)
+- **Smaller error squiggles** - see your actual code, not just red lines
+- **Optimized underline positioning** for smaller fonts - pixel-perfect at any zoom level
+- **Editor ruler at 190** - opinionated default, matching the default font which is 6 px wide.
+
+#### **C++ Development Superpowers**
+- **Malterlib Extension** shipped by default - because why wouldn't you want this?
+- **C++ extensions** shipped by default - enhanced versions of ClangD and CodeLLDB extensions
+- **Advanced Problem Matchers** with categorized sub-problems - finally, build errors that make sense
+
+## Installation
+
+Download the latest release for your platform:
+
+**[📥 Download Unbroken Code](https://github.com/Unbroken/UnbrokenCode/releases/latest)**
+
+### macOS
+
+#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering
+For the best experience with Unbroken Code's crisp font rendering, disable font smoothing system-wide:
+
+```bash
+defaults -currentHost write -g AppleFontSmoothing -int 0
+```
+
+This enables pixel-perfect font rendering that matches the precision of the built-in font. To re-enable font smoothing later:
+
+```bash
+defaults -currentHost delete -g AppleFontSmoothing
+```
+
+Note: This is a system-wide setting that affects all applications. You'll need to log out and back in for the change to take full effect.
+
+**Why disable font smoothing?** Apple's font smoothing makes text appear bold and blurry, especially on non-Retina displays. For a detailed explanation, see [this excellent article by Nikita Prokopov](https://tonsky.me/blog/monitors/#turn-off-font-smoothing) on why font smoothing is problematic and how it destroys text clarity.
+
+## Building from Source
+
+Want to build your own? Check out the upstream [build instructions](https://github.com/microsoft/vscode/wiki/How-to-Contribute) - they still apply here, but now you get all the good stuff included.
+
+## Documentation
+
+For general VS Code documentation, features, and guides, see the [upstream README](https://github.com/microsoft/vscode/blob/main/README.md) and [official documentation](https://code.visualstudio.com/docs).
+
+## Why This Fork Exists
+
+Sometimes the best features are the ones that are "too opinionated" or "too niche" for mainstream adoption. We disagree. If it makes developers more productive, especially in C++ development, it belongs in the editor. This fork is for developers who want their tools to just work, without compromise.
 
 ## Contributing
 
-There are many ways in which you can participate in this project, for example:
-
-* [Submit bugs and feature requests](https://github.com/microsoft/vscode/issues), and help us verify as they are checked in
-* Review [source code changes](https://github.com/microsoft/vscode/pulls)
-* Review the [documentation](https://github.com/microsoft/vscode-docs) and make pull requests for anything from typos to additional and new content
-
-If you are interested in fixing issues and contributing directly to the code base,
-please see the document [How to Contribute](https://github.com/microsoft/vscode/wiki/How-to-Contribute), which covers the following:
-
-* [How to build and run from source](https://github.com/microsoft/vscode/wiki/How-to-Contribute)
-* [The development workflow, including debugging and running tests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#debugging)
-* [Coding guidelines](https://github.com/microsoft/vscode/wiki/Coding-Guidelines)
-* [Submitting pull requests](https://github.com/microsoft/vscode/wiki/How-to-Contribute#pull-requests)
-* [Finding an issue to work on](https://github.com/microsoft/vscode/wiki/How-to-Contribute#where-to-contribute)
-* [Contributing to translations](https://aka.ms/vscodeloc)
-
-## Feedback
-
-* Ask a question on [Stack Overflow](https://stackoverflow.com/questions/tagged/vscode)
-* [Request a new feature](CONTRIBUTING.md)
-* Upvote [popular feature requests](https://github.com/microsoft/vscode/issues?q=is%3Aopen+is%3Aissue+label%3Afeature-request+sort%3Areactions-%2B1-desc)
-* [File an issue](https://github.com/microsoft/vscode/issues)
-* Connect with the extension author community on [GitHub Discussions](https://github.com/microsoft/vscode-discussions/discussions) or [Slack](https://aka.ms/vscode-dev-community)
-* Follow [@code](https://x.com/code) and let us know what you think!
-
-See our [wiki](https://github.com/microsoft/vscode/wiki/Feedback-Channels) for a description of each of these channels and information on some other available community-driven channels.
-
-## Related Projects
-
-Many of the core components and extensions to VS Code live in their own repositories on GitHub. For example, the [node debug adapter](https://github.com/microsoft/vscode-node-debug) and the [mono debug adapter](https://github.com/microsoft/vscode-mono-debug) repositories are separate from each other. For a complete list, please visit the [Related Projects](https://github.com/microsoft/vscode/wiki/Related-Projects) page on our [wiki](https://github.com/microsoft/vscode/wiki).
-
-## Bundled Extensions
-
-VS Code includes a set of built-in extensions located in the [extensions](extensions) folder, including grammars and snippets for many languages. Extensions that provide rich language support (inline suggestions, Go to Definition) for a language have the suffix `language-features`. For example, the `json` extension provides coloring for `JSON` and the `json-language-features` extension provides rich language support for `JSON`.
-
-## Development Container
-
-This repository includes a Visual Studio Code Dev Containers / GitHub Codespaces development container.
-
-* For [Dev Containers](https://aka.ms/vscode-remote/download/containers), use the **Dev Containers: Clone Repository in Container Volume...** command which creates a Docker volume for better disk I/O on macOS and Windows.
-  * If you already have VS Code and Docker installed, you can also click [here](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/microsoft/vscode) to get started. This will cause VS Code to automatically install the Dev Containers extension if needed, clone the source code into a container volume, and spin up a dev container for use.
-
-* For Codespaces, install the [GitHub Codespaces](https://marketplace.visualstudio.com/items?itemName=GitHub.codespaces) extension in VS Code, and use the **Codespaces: Create New Codespace** command.
-
-Docker / the Codespace should have at least **4 Cores and 6 GB of RAM (8 GB recommended)** to run a full build. See the [development container README](.devcontainer/README.md) for more information.
-
-## Code of Conduct
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+Found another patch that's too useful for upstream? We'd love to see it! Open an issue or submit a PR. We're particularly interested in:
+- C++ development enhancements
+- Build system improvements
+- Performance optimizations
+- Developer productivity features
 
 ## License
 
-Copyright (c) Microsoft Corporation. All rights reserved.
+Like VS Code, Unbroken Code is licensed under the [MIT License](LICENSE.txt).
 
-Licensed under the [MIT](LICENSE.txt) license.
+## Acknowledgments
+
+Built on the excellent foundation of [Visual Studio Code](https://github.com/microsoft/vscode). We stand on the shoulders of giants, we just give them better shoes.
+
+---
+
+*Unbroken Code - Because broken workflows break developers.*

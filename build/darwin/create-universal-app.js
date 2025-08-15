@@ -38,7 +38,7 @@ async function main(buildDir) {
         outAppPath,
         force: true,
         mergeASARs: true,
-        x64ArchFiles: '{*/kerberos.node,**/extensions/microsoft-authentication/dist/libmsalruntime.dylib,**/extensions/microsoft-authentication/dist/msal-node-runtime.node}',
+        x64ArchFiles: '{*/kerberos.node,**/extensions/microsoft-authentication/dist/libmsalruntime.dylib,**/extensions/microsoft-authentication/dist/msal-node-runtime.node,**/bin/vsce-sign}',
         filesToSkipComparison: (file) => {
             for (const expected of filesToSkip) {
                 if ((0, minimatch_1.default)(file, expected)) {

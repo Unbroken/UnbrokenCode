@@ -14,8 +14,21 @@ import { IProductService } from '../../product/common/productService.js';
 import { IRequestService } from '../../request/common/request.js';
 import { AvailableForDownload, DisablementReason, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 
-export function createUpdateURL(platform: string, quality: string, productService: IProductService): string {
-	return `${productService.updateUrl}/api/update/${platform}/${quality}/${productService.commit}`;
+export function createUpdateURL(platform: string, _quality: string, productService: IProductService): string {
+	// Unbroken Code: Use static GitHub releases feed structure
+	// Quality parameter is not used as we only have 'stable' releases
+
+	// Use consistent naming for all platforms: latest-{platform}.json
+	// The feed generator creates platform-specific feeds with the appropriate format:
+	// - Squirrel.Mac format for darwin-* platforms
+	// - IUpdate format for linux-* and win32-* platforms
+
+	if (platform === 'darwin' || platform === 'darwin-universal') {
+		return `${productService.updateUrl}/latest-darwin-universal.json`;
+	}
+
+	// All other platforms use their platform identifier directly
+	return `${productService.updateUrl}/latest-${platform}.json`;
 }
 
 export type UpdateErrorClassification = {

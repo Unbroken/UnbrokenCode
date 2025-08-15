@@ -21,7 +21,8 @@ function writeISODate(outDir) {
     const result = () => new Promise((resolve, _) => {
         const outDirectory = path_1.default.join(root, outDir);
         fs_1.default.mkdirSync(outDirectory, { recursive: true });
-        const date = new Date().toISOString();
+        // Allow overriding the build date via environment variable
+        const date = process.env.VSCODE_BUILD_DATE || new Date().toISOString();
         fs_1.default.writeFileSync(path_1.default.join(outDirectory, 'date'), date, 'utf8');
         resolve();
     });
@@ -29,6 +30,10 @@ function writeISODate(outDir) {
     return result;
 }
 function readISODate(outDir) {
+    // First check if date is provided via environment variable
+    if (process.env.VSCODE_BUILD_DATE) {
+        return process.env.VSCODE_BUILD_DATE;
+    }
     const outDirectory = path_1.default.join(root, outDir);
     return fs_1.default.readFileSync(path_1.default.join(outDirectory, 'date'), 'utf8');
 }

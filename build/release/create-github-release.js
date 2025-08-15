@@ -352,7 +352,6 @@ async function main() {
     const octokit = new rest_1.Octokit({ auth: token });
     // Prepare release assets
     const assets = [];
-    const releaseNotes = [];
     // Verify all architectures are built
     const missingArchitectures = [];
     for (const arch of architectures) {
@@ -399,17 +398,6 @@ async function main() {
             path: zipPath,
             contentType: 'application/zip'
         });
-        // Generate metadata for release notes
-        const dmgHash = getFileHash(dmgPath);
-        const zipHash = getFileHash(zipPath);
-        const dmgSize = getFileSize(dmgPath);
-        const zipSize = getFileSize(zipPath);
-        releaseNotes.push(`### macOS ${arch}`);
-        releaseNotes.push(`- **DMG**: \`${dmgName}\` (${(dmgSize / 1024 / 1024).toFixed(2)} MB)`);
-        releaseNotes.push(`  - SHA256: \`${dmgHash}\``);
-        releaseNotes.push(`- **ZIP**: \`${zipName}\` (${(zipSize / 1024 / 1024).toFixed(2)} MB)`);
-        releaseNotes.push(`  - SHA256: \`${zipHash}\``);
-        releaseNotes.push('');
     }
     // Create update manifest JSON for auto-updater
     // IMPORTANT: macOS auto-updater (Squirrel.Mac) requires ZIP files, not DMG!
@@ -447,11 +435,8 @@ async function main() {
     });
     // Create release body
     const releaseBody = [
-        `## ${product.nameLong} ${version}`,
-        '',
         `Commit: \`${commit}\``,
         '',
-        ...releaseNotes,
         '---',
         '### Installation',
         '',

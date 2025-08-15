@@ -59,7 +59,6 @@ async function main(buildDir?: string): Promise<void> {
 		}),
 		preAutoEntitlements: false,
 		preEmbedProvisioningProfile: false,
-		keychain: path.join(tempDir, 'buildagent.keychain'),
 		version: getElectronVersion(),
 		identity,
 	};
@@ -67,25 +66,35 @@ async function main(buildDir?: string): Promise<void> {
 	// Only overwrite plist entries for x64 and arm64 builds,
 	// universal will get its copy from the x64 build.
 	if (arch !== 'universal') {
-		await spawn('plutil', [
-			'-insert',
-			'NSAppleEventsUsageDescription',
-			'-string',
-			'An application in Visual Studio Code wants to use AppleScript.',
-			`${infoPlistPath}`
-		]);
+		try {
+			await spawn('plutil', [
+				'-insert',
+				'NSAppleEventsUsageDescription',
+				'-string',
+				'An application in Unbroken Code wants to use AppleScript.',
+				`${infoPlistPath}`
+			]);
+		} catch (error) {
+			await spawn('plutil', [
+				'-replace',
+				'NSAppleEventsUsageDescription',
+				'-string',
+				'An application in Unbroken Code wants to use AppleScript.',
+				`${infoPlistPath}`
+			]);
+		}
 		await spawn('plutil', [
 			'-replace',
 			'NSMicrophoneUsageDescription',
 			'-string',
-			'An application in Visual Studio Code wants to use the Microphone.',
+			'An application in Unbroken Code wants to use the Microphone.',
 			`${infoPlistPath}`
 		]);
 		await spawn('plutil', [
 			'-replace',
 			'NSCameraUsageDescription',
 			'-string',
-			'An application in Visual Studio Code wants to use the Camera.',
+			'An application in Unbroken Code wants to use the Camera.',
 			`${infoPlistPath}`
 		]);
 	}

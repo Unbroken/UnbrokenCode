@@ -45,7 +45,16 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 
 ## Installation
 
-[Installation instructions coming soon]
+Download the latest release for your platform:
+
+**[📥 Download Unbroken Code](https://github.com/Unbroken/UnbrokenCode/releases/latest)**
+
+### macOS
+- **macOS (Universal)**: Works on both Intel and Apple Silicon Macs
+- **macOS (Intel)**: For Intel-based Macs
+- **macOS (Apple Silicon)**: For M1/M2/M3 Macs
+
+Simply download the `.zip` file for your platform, extract it, and run the app. The universal build is recommended for most users.
 
 ## Building from Source
 

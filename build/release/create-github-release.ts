@@ -480,6 +480,17 @@ async function main() {
 		'',
 		'Open the DMG and drag Unbroken Code to your Applications folder.',
 		'',
+		'#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering',
+		'For the best experience with Unbroken Code\'s crisp font rendering, disable font smoothing:',
+		'',
+		'```bash',
+		'defaults -currentHost write -g AppleFontSmoothing -int 0',
+		'```',
+		'',
+		'To re-enable: `defaults -currentHost delete -g AppleFontSmoothing`',
+		'',
+		'**Why?** Apple\'s font smoothing makes text appear bold and blurry. [Learn more](https://tonsky.me/blog/monitors/#turn-off-font-smoothing)',
+		'',
 		'### Auto-Update',
 		'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.'
 	].join('\n');

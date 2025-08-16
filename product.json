@@ -44,6 +44,14 @@
 	"linkProtectionTrustedDomains": [
 		"https://open-vsx.org"
 	],
+	"win32ContextMenu": {
+		"x64": {
+			"clsid": "0D8071EB-EA1A-47E2-861B-AF7593BE585A"
+		},
+		"arm64": {
+			"clsid": "E8C46538-EDA4-4454-91E4-36EF68176018"
+		}
+	},
 	"languageExtensionTips": [
 		"llvm-vs-code-extensions.vscode-clangd",
 		"vadimcn.vscode-lldb",

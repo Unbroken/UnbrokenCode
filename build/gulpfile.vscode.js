@@ -442,7 +442,8 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 }
 
 function patchWin32DependenciesTask(destinationFolderName) {
-	const cwd = path.join(path.dirname(root), destinationFolderName);
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const cwd = path.join(buildOutputDir, destinationFolderName);
 
 	return async () => {
 		const deps = await glob('**/*.node', { cwd, ignore: 'extensions/node_modules/@parcel/watcher/**' });

@@ -190,6 +190,8 @@ class PromptHeaderDiagnosticsProvider extends ProviderInstanceBase {
 			message: localize('promptHeaderDiagnosticsProvider.modeNotFound', "Unknown mode '{0}'. Available modes: {1}", modeValue, availableModes.join(', ')),
 			severity: MarkerSeverity.Warning,
 			...modeNode.range,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0,
 		});
 		return undefined;
 

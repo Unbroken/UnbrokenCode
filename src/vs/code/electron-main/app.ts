@@ -54,6 +54,8 @@ import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/disk
 import { IFileService } from '../../platform/files/common/files.js';
 import { DiskFileSystemProviderChannel } from '../../platform/files/electron-main/diskFileSystemProviderServer.js';
 import { DiskFileSystemProvider } from '../../platform/files/node/diskFileSystemProvider.js';
+import { IFontSmoothingService } from '../../platform/fontSmoothing/common/fontSmoothingService.js';
+import { FontSmoothingService } from '../../platform/fontSmoothing/electron-main/fontSmoothingService.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IInstantiationService, ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
@@ -1188,6 +1190,9 @@ export class CodeApplication extends Disposable {
 		const dialogMainService = new DialogMainService(this.logService, this.productService);
 		services.set(IDialogMainService, dialogMainService);
 
+		// Font Smoothing
+		services.set(IFontSmoothingService, new SyncDescriptor(FontSmoothingService, undefined, false));
+
 		// Launch
 		services.set(ILaunchMainService, new SyncDescriptor(LaunchMainService, undefined, false /* proxied to other processes */));
 
@@ -1442,6 +1447,10 @@ export class CodeApplication extends Disposable {
 		mainProcessElectronServer.registerChannel(NativeMcpDiscoveryHelperChannelName, mcpDiscoveryChannel);
 		const mcpGatewayChannel = this._register(new McpGatewayChannel(mainProcessElectronServer, accessor.get(IMcpGatewayService), accessor.get(ILoggerMainService)));
 		mainProcessElectronServer.registerChannel(McpGatewayChannelName, mcpGatewayChannel);
+
+		// Font Smoothing
+		const fontSmoothingChannel = ProxyChannel.fromService(accessor.get(IFontSmoothingService), disposables);
+		mainProcessElectronServer.registerChannel('fontSmoothing', fontSmoothingChannel);
 
 		// Logger
 		const loggerChannel = this._register(new LoggerChannel(accessor.get(ILoggerMainService)));

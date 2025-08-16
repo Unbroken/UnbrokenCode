@@ -115,6 +115,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/fontSmoothing",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/html",
 			"project": "vscode-workbench"
 		},

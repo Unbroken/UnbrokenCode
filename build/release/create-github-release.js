@@ -88,6 +88,95 @@ function getBuiltCommit() {
     }
     return uniqueCommits[0];
 }
+function getReleaseTagsFromGit() {
+    try {
+        // Fetch tags from origin to ensure we have the latest
+        (0, child_process_1.execSync)('git fetch origin --tags --prune-tags', { stdio: 'pipe' });
+        const output = (0, child_process_1.execSync)('git tag -l "release/*"', { encoding: 'utf8' }).trim();
+        return output ? output.split('\n') : [];
+    }
+    catch (error) {
+        console.warn('Warning: Could not get release tags from git');
+        return [];
+    }
+}
+function sortReleaseTagsByVersion(tags) {
+    return tags.sort((a, b) => {
+        // Extract version numbers from tags like "release/1.104.2"
+        const versionA = a.replace('release/', '');
+        const versionB = b.replace('release/', '');
+        // Parse version numbers for proper comparison
+        const parseVersion = (version) => {
+            const parts = version.split('.').map(part => parseInt(part, 10));
+            return parts;
+        };
+        const partsA = parseVersion(versionA);
+        const partsB = parseVersion(versionB);
+        // Compare each part of the version number
+        for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+            const partA = partsA[i] || 0;
+            const partB = partsB[i] || 0;
+            if (partA !== partB) {
+                return partB - partA; // Descending order (newest first)
+            }
+        }
+        return 0;
+    });
+}
+function getCommitsBetween(fromCommit, toCommit) {
+    try {
+        const output = (0, child_process_1.execSync)(`git rev-list --reverse ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
+        return output ? output.split('\n') : [];
+    }
+    catch (error) {
+        console.warn(`Warning: Could not get commits between ${fromCommit} and ${toCommit}`);
+        return [];
+    }
+}
+function getCommitMessage(commit) {
+    try {
+        return (0, child_process_1.execSync)(`git log -1 --pretty=format:"%B" ${commit}`, { encoding: 'utf8' }).trim();
+    }
+    catch (error) {
+        console.warn(`Warning: Could not get commit message for ${commit}`);
+        return '';
+    }
+}
+function generateReleaseNotes(buildCommit, currentTag) {
+    const releaseTags = getReleaseTagsFromGit();
+    // Filter out the current tag we're creating
+    const filteredTags = releaseTags.filter(tag => tag !== currentTag);
+    if (filteredTags.length === 0) {
+        console.log('No previous release tags found, no release notes to generate');
+        return [];
+    }
+    const sortedTags = sortReleaseTagsByVersion(filteredTags);
+    const latestReleaseTag = sortedTags[0];
+    console.log(`Generating release notes from ${latestReleaseTag} to current build commit`);
+    // Get commit hash for the latest release tag
+    let latestReleaseCommit;
+    try {
+        latestReleaseCommit = (0, child_process_1.execSync)(`git rev-list -n 1 ${latestReleaseTag}`, { encoding: 'utf8' }).trim();
+    }
+    catch (error) {
+        console.warn(`Warning: Could not get commit for tag ${latestReleaseTag}`);
+        return [];
+    }
+    const commits = getCommitsBetween(latestReleaseCommit, buildCommit);
+    const releaseNotes = [];
+    for (const commit of commits) {
+        const message = getCommitMessage(commit);
+        // Filter out messages containing '[no release notes]'
+        if (message && !message.toLowerCase().includes('[no release notes]')) {
+            // Take only the first line of the commit message
+            const firstLine = message.split('\n')[0].trim();
+            if (firstLine && firstLine !== 'Bump version') {
+                releaseNotes.push(firstLine);
+            }
+        }
+    }
+    return releaseNotes;
+}
 function getFileHash(filePath) {
     const fileBuffer = fs.readFileSync(filePath);
     const hashSum = crypto.createHash('sha256');
@@ -142,10 +231,9 @@ function getGitHubToken() {
     }
     return token;
 }
-async function createGitHubRelease(octokit, tagName, releaseName, body, draft = true) {
+async function createGitHubRelease(octokit, tagName, releaseName, body, targetCommit, draft = true) {
     console.log(`Checking for existing release: ${tagName}`);
-    // Get the commit from the built product.json files
-    const targetCommit = getBuiltCommit();
+    // Use the provided target commit
     // Check if the commit exists on origin/main
     try {
         (0, child_process_1.execSync)(`git fetch origin main`, { stdio: 'pipe' });
@@ -434,37 +522,22 @@ async function main() {
         path: manifestPath,
         contentType: 'application/json'
     });
+    // Generate release notes
+    const builtCommit = getBuiltCommit();
+    const releaseNotes = generateReleaseNotes(builtCommit, tagName);
     // Create release body
-    const releaseBody = [
-        `Commit: \`${commit}\``,
-        '',
-        '---',
-        '### Installation',
-        '',
-        '**macOS**: Download the DMG file for your architecture:',
-        '- Apple Silicon: `UnbrokenCode-darwin-arm64-*.dmg`',
-        '- Intel: `UnbrokenCode-darwin-x64-*.dmg`',
-        '- Universal (works on both): `UnbrokenCode-darwin-universal-*.dmg`',
-        '',
-        'Open the DMG and drag Unbroken Code to your Applications folder.',
-        '',
-        '#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering',
-        'For the best experience with Unbroken Code\'s crisp font rendering, disable font smoothing:',
-        '',
-        '```bash',
-        'defaults -currentHost write -g AppleFontSmoothing -int 0',
-        '```',
-        '',
-        'To re-enable: `defaults -currentHost delete -g AppleFontSmoothing`',
-        '',
-        '**Why?** Apple\'s font smoothing makes text appear bold and blurry. [Learn more](https://tonsky.me/blog/monitors/#turn-off-font-smoothing)',
-        '',
-        '### Auto-Update',
-        'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.'
-    ].join('\n');
+    const releaseBodyParts = [
+        `Commit: \`${commit}\``
+    ];
+    // Add release notes if any were found
+    if (releaseNotes.length > 0) {
+        releaseBodyParts.push('', '## What\'s New', '', ...releaseNotes.map(note => `- ${note}`));
+    }
+    releaseBodyParts.push('', '---', '### Installation', '', '**macOS**: Download the DMG file for your architecture:', '- Apple Silicon: `UnbrokenCode-darwin-arm64-*.dmg`', '- Intel: `UnbrokenCode-darwin-x64-*.dmg`', '- Universal (works on both): `UnbrokenCode-darwin-universal-*.dmg`', '', 'Open the DMG and drag Unbroken Code to your Applications folder.', '', '#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering', 'For the best experience with Unbroken Code\'s crisp font rendering, disable font smoothing:', '', '```bash', 'defaults -currentHost write -g AppleFontSmoothing -int 0', '```', '', 'To re-enable: `defaults -currentHost delete -g AppleFontSmoothing`', '', '**Why?** Apple\'s font smoothing makes text appear bold and blurry. [Learn more](https://tonsky.me/blog/monitors/#turn-off-font-smoothing)', '', '### Auto-Update', 'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.');
+    const releaseBody = releaseBodyParts.join('\n');
     // Check for command line flags
     // Always create as draft first to upload all artifacts before it's visible
-    const release = await createGitHubRelease(octokit, tagName, `${product.nameLong} ${version}`, releaseBody, true // Always create as draft initially
+    const release = await createGitHubRelease(octokit, tagName, `${product.nameLong} ${version}`, releaseBody, builtCommit, true // Always create as draft initially
     );
     // Optimize asset uploads (only upload changed assets)
     console.log('\nOptimizing asset uploads...');

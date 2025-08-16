@@ -57,7 +57,7 @@ function createDMGWithInstaller(options) {
     }
     // Also check for any mounted DMGs that might conflict
     try {
-        const hdiutilInfo = (0, child_process_1.execSync)(`hdiutil info`, { encoding: 'utf8' });
+        const hdiutilInfo = (0, child_process_1.execSync)(`hdiutil info`, { encoding: 'utf8', stdio: 'pipe' });
         const lines = hdiutilInfo.split('\n');
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -80,32 +80,33 @@ function createDMGWithInstaller(options) {
     try {
         // Clean up any existing temp directory
         if (fs.existsSync(tempDir)) {
-            (0, child_process_1.execSync)(`rm -rf "${tempDir}"`);
+            (0, child_process_1.execSync)(`rm -rf "${tempDir}"`, { stdio: 'pipe' });
         }
         fs.mkdirSync(tempDir, { recursive: true });
         // Copy the app to temp directory
         const appName = path.basename(appPath);
         const tempAppPath = path.join(tempDir, appName);
         console.log(`Copying app to temporary directory...`);
-        (0, child_process_1.execSync)(`cp -R "${appPath}" "${tempAppPath}"`);
+        (0, child_process_1.execSync)(`cp -R "${appPath}" "${tempAppPath}"`, { stdio: 'pipe' });
         // Create Applications symlink
         const applicationsLink = path.join(tempDir, 'Applications');
         console.log(`Creating Applications symlink...`);
-        (0, child_process_1.execSync)(`ln -s /Applications "${applicationsLink}"`);
+        (0, child_process_1.execSync)(`ln -s /Applications "${applicationsLink}"`, { stdio: 'pipe' });
         // Note: We'll copy the background image after mounting the DMG
         // Calculate required size (app size + overhead for background, etc.)
-        const appStats = (0, child_process_1.execSync)(`du -sm "${tempAppPath}"`, { encoding: 'utf8' });
+        const appStats = (0, child_process_1.execSync)(`du -sm "${tempAppPath}"`, { encoding: 'utf8', stdio: 'pipe' });
         const appSizeMB = parseInt(appStats.split('\t')[0]) || 500;
         const dmgSizeMB = Math.ceil(appSizeMB * 1.3) + 50; // 30% overhead + 50MB extra
         // Create DMG with calculated size
         console.log(`Creating DMG volume (${dmgSizeMB}MB)...`);
         (0, child_process_1.execSync)(`hdiutil create -volname "${volumeName}" -srcfolder "${tempDir}" -ov -format UDRW -size ${dmgSizeMB}m "${tempDmg}"`, {
-            stdio: 'inherit'
+            stdio: 'pipe'
         });
         // Mount the DMG
         console.log(`Mounting DMG for customization...`);
         const mountOutput = (0, child_process_1.execSync)(`hdiutil attach "${tempDmg}" -readwrite -noverify -noautoopen`, {
-            encoding: 'utf8'
+            encoding: 'utf8',
+            stdio: 'pipe'
         });
         // Extract mount point from output
         const mountPoint = mountOutput.split('\t').pop()?.trim() || `/Volumes/${volumeName}`;
@@ -139,32 +140,49 @@ function createDMGWithInstaller(options) {
             // Create AppleScript for DMG customization
             const appleScript = `
 tell application "Finder"
+	activate
 	tell disk "${volumeName}"
 		open
-		set current view of container window to icon view
+
+		activate
+		delay 1
+
+		set toolbar visible of container window to true
+		set statusbar visible of container window to true
+		set pathbar visible of container window to true
+
+		delay 1
+		tell application "System Events" to key code 17 using {command down, shift down}
+		delay 1
+
 		set toolbar visible of container window to false
 		set statusbar visible of container window to false
-		set the bounds of container window to {100, 100, ${100 + windowWidth}, ${100 + windowHeight}}
+		set pathbar visible of container window to false
+
+		delay 1
+		tell application "System Events" to key code 17 using {command down, shift down}
+		delay 1
+
+		set current view of container window to icon view
 		set viewOptions to the icon view options of container window
-		set arrangement of viewOptions to not arranged
 		set icon size of viewOptions to ${iconSize}
 		set text size of viewOptions to 12
+		set arrangement of viewOptions to not arranged
+		set the bounds of container window to {100, 100, ${100 + windowWidth}, ${100 + windowHeight}}
+
+		delay 1
+
 		${hasBackground ? `set background picture of viewOptions to file ".background:${backgroundFilename}"` : ''}
 
-		-- Force text color for dark background
-		try
-			set label position of viewOptions to bottom
-		end try
-
-		-- Position the app icon
 		set position of item "${appName}" of container window to {${appIconX}, ${appIconY}}
-
-		-- Position the Applications symlink
 		set position of item "Applications" of container window to {${applicationsIconX}, ${applicationsIconY}}
 
-		-- Update and close
-		update without registering applications
 		delay 2
+
+		update without registering applications
+
+		delay 2
+
 		close
 	end tell
 end tell
@@ -172,40 +190,40 @@ end tell
             // Apply customization
             console.log(`Applying DMG customization...`);
             try {
-                (0, child_process_1.execSync)(`osascript -e '${appleScript}'`, { stdio: 'inherit' });
+                (0, child_process_1.execSync)(`osascript -e '${appleScript}'`, { stdio: 'pipe' });
             }
             catch (scriptError) {
                 console.log(`Warning: Could not fully customize DMG window: ${scriptError}`);
-                // Continue anyway - the DMG is still functional
+                throw scriptError;
             }
             // Hide background folder if it exists
             if (hasBackground) {
                 try {
-                    (0, child_process_1.execSync)(`SetFile -a V "${mountPoint}/.background"`, { stdio: 'ignore' });
+                    (0, child_process_1.execSync)(`SetFile -a V "${mountPoint}/.background"`, { stdio: 'pipe' });
                 }
                 catch (e) {
                     // SetFile might not be available, that's okay
                 }
             }
             // Sync to ensure all changes are written
-            (0, child_process_1.execSync)('sync');
+            (0, child_process_1.execSync)('sync', { stdio: 'pipe' });
         }
         finally {
             // Unmount the DMG
             console.log(`Unmounting DMG...`);
-            (0, child_process_1.execSync)(`hdiutil detach "${mountPoint}" -force`, { stdio: 'inherit' });
+            (0, child_process_1.execSync)(`hdiutil detach "${mountPoint}" -force`, { stdio: 'pipe' });
         }
         // Convert to compressed DMG
         console.log(`Compressing DMG...`);
         (0, child_process_1.execSync)(`hdiutil convert "${tempDmg}" -format UDZO -o "${dmgPath}" -ov`, {
-            stdio: 'inherit'
+            stdio: 'pipe'
         });
         console.log(`✓ Created enhanced DMG installer: ${dmgPath}`);
     }
     finally {
         // Clean up temp files
         if (fs.existsSync(tempDir)) {
-            (0, child_process_1.execSync)(`rm -rf "${tempDir}"`);
+            (0, child_process_1.execSync)(`rm -rf "${tempDir}"`, { stdio: 'pipe' });
         }
         if (fs.existsSync(tempDmg)) {
             fs.unlinkSync(tempDmg);

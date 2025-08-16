@@ -12,6 +12,12 @@ import { createDMGWithInstaller } from './create-dmg-installer';
 
 const REPO_OWNER = 'Unbroken';
 const REPO_NAME = 'UnbrokenCode';
+const DEBUG = process.env.RELEASE_DEBUG === '1' || process.argv.includes('--debug');
+function debugLog(...args: any[]): void {
+	if (DEBUG) {
+		console.log('[release:debug]', ...args);
+	}
+}
 
 interface ReleaseAsset {
 	name: string;
@@ -82,7 +88,9 @@ function getReleaseTagsFromGit(): string[] {
 		// Fetch tags from origin to ensure we have the latest
 		execSync('git fetch origin --tags --prune-tags', { stdio: 'pipe' });
 		const output = execSync('git tag -l "release/*"', { encoding: 'utf8' }).trim();
-		return output ? output.split('\n') : [];
+		const tags = output ? output.split('\n') : [];
+		debugLog('Found release tags:', tags);
+		return tags;
 	} catch (error) {
 		console.warn('Warning: Could not get release tags from git');
 		return [];
@@ -118,14 +126,33 @@ function sortReleaseTagsByVersion(tags: string[]): string[] {
 	});
 }
 
-function getCommitsBetween(fromCommit: string, toCommit: string): string[] {
+function getCommitsBetween(fromCommit: string, toCommit: string, excludeMerges: boolean = true): string[] {
 	try {
-		const output = execSync(`git rev-list --reverse ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
+		const noMerges = excludeMerges ? ' --no-merges' : '';
+		const output = execSync(`git rev-list --reverse${noMerges} ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
 		return output ? output.split('\n') : [];
 	} catch (error) {
 		console.warn(`Warning: Could not get commits between ${fromCommit} and ${toCommit}`);
 		return [];
 	}
+}
+
+function getCommitSetBetween(fromCommit: string | null, toCommit: string | null): Set<string> {
+	const result = new Set<string>();
+	if (!fromCommit || !toCommit || fromCommit === toCommit) {
+		return result;
+	}
+	try {
+		const output = execSync(`git rev-list ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
+		if (output) {
+			for (const sha of output.split('\n')) {
+				result.add(sha);
+			}
+		}
+	} catch (error) {
+		// ignore
+	}
+	return result;
 }
 
 function getCommitMessage(commit: string): string {
@@ -137,7 +164,131 @@ function getCommitMessage(commit: string): string {
 	}
 }
 
-function generateReleaseNotes(buildCommit: string, currentTag: string): string[] {
+function getCommitSubjectsBetween(fromCommit: string, toCommit: string): Set<string> {
+	const subjects = new Set<string>();
+	try {
+		const output = execSync(`git log --no-merges --format=%s ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
+		if (output) {
+			for (const line of output.split('\n')) {
+				const subject = line.trim();
+				if (subject) {
+					subjects.add(subject);
+				}
+			}
+		}
+	} catch (error) {
+		// ignore
+	}
+	return subjects;
+}
+
+function isAncestor(ancestor: string, descendant: string): boolean {
+	try {
+		execSync(`git merge-base --is-ancestor ${ancestor} ${descendant}`, { stdio: 'pipe' });
+		return true;
+	} catch (error) {
+		return false;
+	}
+}
+
+function getMergeBase(commitA: string, commitB: string): string | null {
+	try {
+		return execSync(`git merge-base ${commitA} ${commitB}`, { encoding: 'utf8' }).trim();
+	} catch (error) {
+		return null;
+	}
+}
+
+function remoteExists(remote: string): boolean {
+	try {
+		execSync(`git remote get-url ${remote}`, { stdio: 'pipe' });
+		return true;
+	} catch (error) {
+		return false;
+	}
+}
+
+function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
+	const shaSet = new Set<string>();
+	const subjectSet = new Set<string>();
+
+	debugLog('Checking for upstream remote...');
+	if (!remoteExists('upstream')) {
+		debugLog('No upstream remote configured. Skipping upstream filtering.');
+		return { shaSet, subjectSet };
+	}
+
+	try {
+		execSync('git fetch upstream --tags --prune', { stdio: 'pipe' });
+		// Ensure branch exists
+		execSync('git rev-parse --verify upstream/main', { stdio: 'pipe' });
+		debugLog('Fetched upstream/main successfully');
+	} catch (error) {
+		debugLog('Failed to fetch/verify upstream/main. Skipping upstream filtering.', (error as any)?.message ?? String(error));
+		return { shaSet, subjectSet };
+	}
+
+	try {
+		const shasOutput = execSync('git rev-list upstream/main', { encoding: 'utf8', maxBuffer: 1024 * 1024 * 256 }).trim();
+		if (shasOutput) {
+			for (const sha of shasOutput.split('\n')) {
+				shaSet.add(sha);
+			}
+		}
+		debugLog('Upstream SHA set size:', shaSet.size);
+	} catch (error) {
+		debugLog('Error building upstream SHA set:', (error as any)?.message ?? String(error));
+	}
+
+	try {
+		const subjectsOutput = execSync('git log --format=%s upstream/main', { encoding: 'utf8', maxBuffer: 1024 * 1024 * 256 }).trim();
+		if (subjectsOutput) {
+			for (const subj of subjectsOutput.split('\n')) {
+				subjectSet.add(subj.trim());
+			}
+		}
+		debugLog('Upstream subject set size:', subjectSet.size);
+	} catch (error) {
+		debugLog('Error building upstream subject set:', (error as any)?.message ?? String(error));
+	}
+
+	return { shaSet, subjectSet };
+}
+
+async function getPreviousReleaseNotesSubjects(octokit: Octokit, tag: string): Promise<Set<string>> {
+	const subjects = new Set<string>();
+	try {
+		const { data } = await octokit.repos.getReleaseByTag({ owner: REPO_OWNER, repo: REPO_NAME, tag });
+		const body = data.body || '';
+		const lines = body.split('\n');
+		let inWhatsNew = false;
+		for (const rawLine of lines) {
+			const line = rawLine.trim();
+			if (/^##\s+What'?s New/i.test(line)) {
+				inWhatsNew = true;
+				continue;
+			}
+			if (inWhatsNew) {
+				// Stop when hitting a new section or separation
+				if (/^---\s*$/.test(line) || /^###\s+/.test(line) || /^####\s+/.test(line) || /^##\s+/.test(line) || /^```/.test(line)) {
+					break;
+				}
+				if (/^[-\*]\s+/.test(line)) {
+					const text = line.replace(/^[-\*]\s+/, '').trim();
+					if (text) {
+						subjects.add(text);
+					}
+				}
+			}
+		}
+		debugLog(`Parsed ${subjects.size} previous release note subjects from ${tag}`, Array.from(subjects).slice(0, 10));
+	} catch (error) {
+		// No previous release or cannot fetch; ignore
+	}
+	return subjects;
+}
+
+async function generateReleaseNotes(octokit: Octokit, buildCommit: string, currentTag: string): Promise<string[]> {
 	const releaseTags = getReleaseTagsFromGit();
 
 	// Filter out the current tag we're creating
@@ -162,22 +313,105 @@ function generateReleaseNotes(buildCommit: string, currentTag: string): string[]
 		return [];
 	}
 
-	const commits = getCommitsBetween(latestReleaseCommit, buildCommit);
+	debugLog('Latest release tag:', latestReleaseTag, 'latestReleaseCommit:', latestReleaseCommit, 'buildCommit:', buildCommit);
+
+	const rebased = !isAncestor(latestReleaseCommit, buildCommit);
+	let baseForRange = latestReleaseCommit;
+	let mergeBaseNew: string | null = null;
+	let mergeBasePrev: string | null = null;
+	let upstreamSegment: Set<string> | null = null;
+	let prevReleaseSubjects: Set<string> | null = null;
+	if (rebased) {
+		mergeBaseNew = getMergeBase(latestReleaseCommit, buildCommit);
+		if (mergeBaseNew) {
+			baseForRange = mergeBaseNew;
+		}
+		try {
+			if (remoteExists('upstream')) {
+				execSync('git fetch upstream main --tags --prune', { stdio: 'pipe' });
+				mergeBasePrev = getMergeBase('upstream/main', latestReleaseCommit);
+				upstreamSegment = getCommitSetBetween(mergeBasePrev, latestReleaseCommit);
+			}
+		} catch (error) {
+			// ignore
+		}
+		// Build subject set for previous release range (mergeBaseNew..latestReleaseCommit)
+		prevReleaseSubjects = getCommitSubjectsBetween(mergeBaseNew || latestReleaseCommit, latestReleaseCommit);
+		debugLog('Rebase detected. mergeBaseNew:', mergeBaseNew, 'mergeBasePrev:', mergeBasePrev, 'upstreamSegmentSize:', upstreamSegment ? upstreamSegment.size : 0, 'prevReleaseSubjects:', prevReleaseSubjects.size, 'baseForRange:', baseForRange);
+	}
+	else {
+		debugLog('No rebase detected. Base for range is previous release commit.');
+	}
+
+	const commits = getCommitsBetween(baseForRange, buildCommit, true);
+	const { shaSet: upstreamShaSet, subjectSet: upstreamSubjectSet } = getUpstreamSets();
+	const previousSubjects = await getPreviousReleaseNotesSubjects(octokit, latestReleaseTag);
+
+	debugLog('Candidate commits count:', commits.length);
+	debugLog('Upstream filter sizes:', { shas: upstreamShaSet.size, subjects: upstreamSubjectSet.size });
+	debugLog('Previous subjects count:', previousSubjects.size);
+
 	const releaseNotes: string[] = [];
+	const seenSubjects = new Set<string>();
 
 	for (const commit of commits) {
 		const message = getCommitMessage(commit);
-
-		// Filter out messages containing '[no release notes]'
-		if (message && !message.toLowerCase().includes('[no release notes]')) {
-			// Take only the first line of the commit message
-			const firstLine = message.split('\n')[0].trim();
-			if (firstLine && firstLine !== 'Bump version') {
-				releaseNotes.push(firstLine);
-			}
+		if (!message) {
+			debugLog('Skipping commit with empty message:', commit.substring(0, 7));
+			continue;
 		}
+		// Take only the first line of the commit message
+		const firstLine = message.split('\n')[0].trim();
+
+		// Skip obvious non-notes
+		if (!firstLine || firstLine === 'Bump version') {
+			debugLog('[skip trivial]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+		if (message.toLowerCase().includes('[no release notes]')) {
+			debugLog('[skip tag no release notes]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+
+		// Exclude commits that come from upstream (by SHA or by subject if available)
+		if (upstreamShaSet.size > 0 && upstreamShaSet.has(commit)) {
+			debugLog('[skip upstream-sha]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+		if (upstreamSubjectSet.size > 0 && upstreamSubjectSet.has(firstLine)) {
+			debugLog('[skip upstream-subject]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+
+		// On rebase: exclude commit subjects that were already in previous release range (mergeBaseNew..latestReleaseCommit)
+		if (rebased && prevReleaseSubjects && prevReleaseSubjects.has(firstLine)) {
+			debugLog('[skip prev-release-subject]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+
+		// Exclude messages already present in previous release notes
+		if (previousSubjects.has(firstLine)) {
+			debugLog('[skip duplicate-previous]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+
+		// De-duplicate within current set by subject
+		if (seenSubjects.has(firstLine)) {
+			debugLog('[skip duplicate-current]', commit.substring(0, 7), firstLine);
+			continue;
+		}
+		seenSubjects.add(firstLine);
+		releaseNotes.push(firstLine);
+		debugLog('[add]', commit.substring(0, 7), firstLine);
 	}
 
+	if (rebased) {
+		// Add a note indicating the rebase occurred
+		releaseNotes.unshift('Rebased on upstream');
+		debugLog('Added rebase note to release notes');
+	}
+
+	debugLog('Final release notes count:', releaseNotes.length);
 	return releaseNotes;
 }
 
@@ -572,7 +806,7 @@ async function main() {
 
 	// Generate release notes
 	const builtCommit = getBuiltCommit();
-	const releaseNotes = generateReleaseNotes(builtCommit, tagName);
+	const releaseNotes = await generateReleaseNotes(octokit, builtCommit, tagName);
 
 	// Create release body
 	const releaseBodyParts = [

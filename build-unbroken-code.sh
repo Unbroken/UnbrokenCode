@@ -7,7 +7,21 @@ NEW_VERSION=false
 CREATE_RELEASE=false
 PUBLISH_RELEASE=false
 SKIP_BUILD=false
+SKIP_GULP_BUILD=false
 REGENERATE_DMG=false
+BUILD_WINDOWS=false
+BUILD_MACOS=true
+
+# Auto-detect platform if no explicit platform flags are given
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+	# We're on Windows (Git Bash), default to Windows build
+	BUILD_WINDOWS=true
+	BUILD_MACOS=false
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+	# We're on macOS, default to macOS build
+	BUILD_WINDOWS=false
+	BUILD_MACOS=true
+fi
 
 for arg in "$@"; do
 	case $arg in
@@ -28,8 +42,27 @@ for arg in "$@"; do
 			SKIP_BUILD=true
 			shift
 			;;
+		--skip-gulp-build)
+			SKIP_GULP_BUILD=true
+			shift
+			;;
 		--regenerate-dmg)
 			REGENERATE_DMG=true
+			shift
+			;;
+		--windows)
+			BUILD_WINDOWS=true
+			BUILD_MACOS=false
+			shift
+			;;
+		--macos)
+			BUILD_MACOS=true
+			BUILD_WINDOWS=false
+			shift
+			;;
+		--all-platforms)
+			BUILD_WINDOWS=true
+			BUILD_MACOS=true
 			shift
 			;;
 		--help)
@@ -37,19 +70,34 @@ for arg in "$@"; do
 			echo ""
 			echo "Options:"
 			echo "  --new-version    Increment version number before building"
-			echo "  --release        Create GitHub release (draft) after building"
-			echo "  --publish        Create and publish GitHub release (non-draft)"
-			echo "  --skip-build     Skip the build process (only for --release)"
+			echo "  --release        Create/update GitHub release (draft) after building"
+			echo "  --publish        Publish the GitHub release (make it public)"
+			echo "  --skip-build     Skip the build process (only for --release/--publish)"
+			echo "  --skip-gulp-build Skip gulp build, only create installers/universal binary"
 			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
+			echo "  --windows        Build Windows binaries (x64 and arm64)"
+			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
+			echo "  --all-platforms  Build for all platforms (macOS and Windows)"
 			echo "  --help           Show this help message"
 			echo ""
-			echo "Examples:"
-			echo "  $0                           # Build only"
+			echo "Platform auto-detection:"
+			echo "  - macOS: builds macOS binaries by default"
+			echo "  - Windows (Git Bash): builds Windows binaries by default"
+			echo ""
+			echo "Multi-machine release workflow:"
+			echo "  # Step 1: On macOS machine"
+			echo "  $0 --new-version --release   # Create draft release with macOS builds"
+			echo ""
+			echo "  # Step 2: On Windows machine (Git Bash)"
+			echo "  $0 --release                 # Add Windows builds to existing draft release"
+			echo ""
+			echo "  # Step 3: On any machine"
+			echo "  $0 --skip-build --publish    # Publish the complete release"
+			echo ""
+			echo "Single-platform examples:"
+			echo "  $0                           # Build for current platform"
 			echo "  $0 --new-version             # Update version only"
-			echo "  $0 --new-version --release   # Update version, build, and create draft release"
-			echo "  $0 --release --publish       # Build and create published release"
-			echo "  $0 --skip-build --release    # Create release from existing build"
-			echo "  $0 --regenerate-dmg --release # Regenerate DMG files and create release"
+			echo "  $0 --release                 # Build and create/update draft release"
 			exit 0
 			;;
 		*)
@@ -60,33 +108,65 @@ for arg in "$@"; do
 	esac
 done
 
+# Function to wait for all background jobs and check for errors
+function WaitWithErrorPropagation()
+{
+	local description="${1:-waiting for background jobs}"
+	local job_failed=false
+	local failed_jobs=""
+
+	# Get all background job PIDs
+	local pids=$(jobs -p)
+
+	if [ -z "$pids" ]; then
+		return 0
+	fi
+
+	# Wait for each job and check its exit status
+	for pid in $pids; do
+		if ! wait $pid; then
+			job_failed=true
+			failed_jobs="$failed_jobs $pid"
+		fi
+	done
+
+	if $job_failed; then
+		echo
+		echo -e "\033[31mError:\033[0m Failed while $description (PIDs:$failed_jobs)"
+		echo
+		return 1
+	fi
+
+	return 0
+}
+
 # Function to update version
 function Update_Version()
 {
 	echo "Updating Unbroken Code version..."
-	
+
 	# Read current patch version from unbroken.version
 	if [ -f "unbroken.version" ]; then
 		PATCH_VERSION=$(cat unbroken.version)
 	else
 		PATCH_VERSION=0
 	fi
-	
+
 	# Increment patch version
 	PATCH_VERSION=$((PATCH_VERSION + 1))
-	
+
 	# Save new patch version
 	echo $PATCH_VERSION > unbroken.version
-	
+
 	# Get major.minor from package.json
 	CURRENT_VERSION=$(node -p "require('./package.json').version")
 	MAJOR_MINOR=$(echo $CURRENT_VERSION | cut -d. -f1,2)
-	
+
 	# Create new version string
 	NEW_VERSION_STRING="${MAJOR_MINOR}.${PATCH_VERSION}"
-	
+
 	echo "Updating version from $CURRENT_VERSION to $NEW_VERSION_STRING"
-	
+
 	# Update package.json
 	node -e "
 		const fs = require('fs');
@@ -94,14 +174,14 @@ function Update_Version()
 		pkg.version = '${NEW_VERSION_STRING}';
 		fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\\n');
 	"
-	
+
 	# Run npm install to update package-lock.json and other files
 	echo "Running npm install to update dependency files..."
 	npm install
-	
+
 	echo "Version updated to $NEW_VERSION_STRING"
 	echo "Patch version $PATCH_VERSION saved to unbroken.version"
-	
+
 	# Commit the version change
 	echo ""
 	echo "To commit the version change, run:"
@@ -114,7 +194,7 @@ function Create_GitHub_Release()
 {
 	echo ""
 	echo "Creating GitHub release..."
-	
+
 	# Get GitHub token from git credentials if not already set
 	if [ -z "${GITHUB_TOKEN:-}" ]; then
 		GITHUB_TOKEN=$(echo "url=https://github.com" | git credential fill | grep "^password=" | cut -d= -f2)
@@ -123,32 +203,32 @@ function Create_GitHub_Release()
 			echo "Using GitHub token from git credentials"
 		fi
 	fi
-	
+
 	# Build command with options
 	RELEASE_CMD="node build/release/create-github-release.js"
-	
+
 	if $PUBLISH_RELEASE; then
 		RELEASE_CMD="$RELEASE_CMD --publish"
 	fi
-	
+
 	if $REGENERATE_DMG; then
 		RELEASE_CMD="$RELEASE_CMD --regenerate-dmg"
 	fi
-	
+
 	# Check if release should be published or draft
 	if $PUBLISH_RELEASE; then
 		echo "Creating PUBLISHED release..."
 	else
 		echo "Creating DRAFT release..."
 	fi
-	
+
 	if $REGENERATE_DMG; then
 		echo "Will regenerate DMG files..."
 	fi
-	
+
 	# Execute the release command
 	$RELEASE_CMD
-	
+
 	if [ $? -eq 0 ]; then
 		echo "GitHub release created successfully!"
 	else
@@ -172,29 +252,34 @@ if $NEW_VERSION; then
 fi
 
 # 1) Load NVM (handles common install locations)
-export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-
-if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then # macOS (Apple Silicon via Homebrew)
-	export NVM_DIR="${NVM_DIR:-/opt/homebrew/opt/nvm}"
-	. "/opt/homebrew/opt/nvm/nvm.sh"
-elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
-	export NVM_DIR="${NVM_DIR:-/usr/local/opt/nvm}"
-	. "/usr/local/opt/nvm/nvm.sh"
+if [ $BUILD_WINDOWS ]; then
+	nvm install `cat .nvmrc`
+	nvm use `cat .nvmrc`
 else
-	echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
-	exit 1
-fi
+	export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
-# 2) Respect .nvmrc (nearest one in the directory tree)
-#    - Installs the version if needed (no output unless errors)
-#    - Uses 'default' if no .nvmrc is found
-if nvmrc_path="$(nvm_find_nvmrc)"; then
-	# Install (if missing) and use the version from .nvmrc
-	nvm install --no-progress
-	nvm use
-else
-	# No .nvmrc here; use your default if set
-	nvm use default || true
+	if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then # macOS (Apple Silicon via Homebrew)
+		export NVM_DIR="${NVM_DIR:-/opt/homebrew/opt/nvm}"
+		. "/opt/homebrew/opt/nvm/nvm.sh"
+	elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
+		export NVM_DIR="${NVM_DIR:-/usr/local/opt/nvm}"
+		. "/usr/local/opt/nvm/nvm.sh"
+	else
+		echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
+		exit 1
+	fi
+
+	# 2) Respect .nvmrc (nearest one in the directory tree)
+	#    - Installs the version if needed (no output unless errors)
+	#    - Uses 'default' if no .nvmrc is found
+	if nvmrc_path="$(nvm_find_nvmrc)"; then
+		# Install (if missing) and use the version from .nvmrc
+		nvm install --no-progress
+		nvm use
+	else
+		# No .nvmrc here; use your default if set
+		nvm use default || true
+	fi
 fi
 
 echo "Using Node $(node -v) at $(command -v node)"
@@ -205,11 +290,126 @@ echo "Using build date: $VSCODE_BUILD_DATE"
 
 export VSCODE_QUALITY=stable
 
+function Build_Windows()
+{
+	if $SKIP_GULP_BUILD; then
+		echo "Skipping gulp build, only creating Windows installers..."
+	else
+		echo "Building Windows binaries..."
+	fi
+
+	# Create .dist directory for Windows builds
+	DIST_DIR="$PWD/.dist"
+	mkdir -p "$DIST_DIR"
+	echo "Using distribution directory: $DIST_DIR"
+
+	# Set environment variable to build directly to .dist directory
+	export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
+
+	if ! $SKIP_GULP_BUILD; then
+		# Build Windows x64
+		echo "Building Windows x64..."
+		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu=x64
+		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-win32-x64
+
+		# Build Windows arm64
+		echo "Building Windows arm64..."
+		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu=arm64
+		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64
+
+	fi
+
+	# Download Explorer dlls for Windows 11 integration (appx)
+	echo "Downloading Explorer dlls..."
+	VSCODE_ARCH=x64 node build/win32/explorer-dll-fetcher .build/win32/appx
+	VSCODE_ARCH=arm64 node build/win32/explorer-dll-fetcher .build/win32/appx
+
+	# Create installers
+	echo "Creating Windows installers..."
+
+	# Build inno-updater for x64
+	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-inno-updater
+
+	# Build inno-updater for arm64
+	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-inno-updater
+
+	# Find makeappx.exe from Windows SDK
+	MAKEAPPX=""
+	SDK_BASE="/c/Program Files (x86)/Windows Kits/10/bin"
+	if [ -d "$SDK_BASE" ]; then
+		# Find the latest SDK version
+		for sdk_dir in "$SDK_BASE"/10.0.*/x64; do
+			if [ -f "$sdk_dir/makeappx.exe" ]; then
+				MAKEAPPX="$sdk_dir/makeappx.exe"
+			fi
+		done
+	fi
+
+	# Prepare appx packages for Windows 11 integration (if makeappx is available)
+	if [ -n "$MAKEAPPX" ]; then
+		echo "Found makeappx at: $MAKEAPPX"
+		echo "Preparing appx packages..."
+
+		# For x64
+		if [ -d "$DIST_DIR/VSCode-win32-x64/appx/manifest" ]; then
+			"$MAKEAPPX" pack -d "$DIST_DIR/VSCode-win32-x64/appx/manifest" -p "$DIST_DIR/VSCode-win32-x64/appx/code_x64.appx" -nv
+			rm -rf "$DIST_DIR/VSCode-win32-x64/appx/manifest"
+		fi
+
+		# For arm64
+		if [ -d "$DIST_DIR/VSCode-win32-arm64/appx/manifest" ]; then
+			"$MAKEAPPX" pack -d "$DIST_DIR/VSCode-win32-arm64/appx/manifest" -p "$DIST_DIR/VSCode-win32-arm64/appx/code_arm64.appx" -nv
+			rm -rf "$DIST_DIR/VSCode-win32-arm64/appx/manifest"
+		fi
+	else
+		echo "Error: makeappx.exe not found in Windows SDK."
+		echo "Looked in: $SDK_BASE"
+		echo "To create appx packages, ensure Windows SDK is installed with Visual Studio."
+		echo "Continuing without appx packages..."
+
+		exit 1
+	fi
+
+	# Copy explorer dlls to appx directories
+	if [ -f ".build/win32/appx/code_explorer_command_x64.dll" ]; then
+		cp ".build/win32/appx/code_explorer_command_x64.dll" "$DIST_DIR/VSCode-win32-x64/appx/"
+	fi
+
+	if [ -f ".build/win32/appx/code_explorer_command_arm64.dll" ]; then
+		cp ".build/win32/appx/code_explorer_command_arm64.dll" "$DIST_DIR/VSCode-win32-arm64/appx/"
+	fi
+
+	# User installer for x64
+	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-user-setup
+
+	# System installer for x64
+	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-system-setup
+
+	# User installer for arm64
+	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-user-setup
+
+	# System installer for arm64
+	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-system-setup
+
+	if $SKIP_GULP_BUILD; then
+		echo "Windows installers created successfully!"
+	else
+		echo "Windows binaries built successfully!"
+	fi
+}
+
 function Build_macOS()
 {
 	DO_BUILD=true
 	DO_SIGN=true
 	DO_NOTARIZE=true
+
+	if $SKIP_GULP_BUILD; then
+		echo "Skipping gulp build, only creating universal binary..."
+		DO_BUILD=false
+	else
+		echo "Building macOS binaries..."
+	fi
 
 	which npm
 	which node
@@ -223,7 +423,7 @@ function Build_macOS()
 	if $DO_BUILD; then
 		# Set environment variable to build directly to .dist directory
 		export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
-		
+
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
 
@@ -244,7 +444,10 @@ function Build_macOS()
 
 		cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-arm64" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
 		cp -r "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-x64" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
+	fi
 
+	# Create universal binary (even when skipping gulp build)
+	if $SKIP_GULP_BUILD || $DO_BUILD; then
 		DEBUG="*" VSCODE_ARCH=universal node build/darwin/create-universal-app.js "$DIST_DIR"
 	fi
 
@@ -261,7 +464,7 @@ function Build_macOS()
 		VSCODE_ARCH=arm64 node build/darwin/sign.js "$DIST_DIR" &
 		VSCODE_ARCH=x64 node build/darwin/sign.js "$DIST_DIR" &
 		VSCODE_ARCH=universal node build/darwin/sign.js "$DIST_DIR" &
-		wait
+		WaitWithErrorPropagation "signing macOS architectures"
 	fi
 
 	# Notarize and staple all architectures
@@ -270,17 +473,38 @@ function Build_macOS()
 		VSCODE_ARCH=arm64 node build/darwin/notarize.js "$DIST_DIR" &
 		VSCODE_ARCH=x64 node build/darwin/notarize.js "$DIST_DIR" &
 		VSCODE_ARCH=universal node build/darwin/notarize.js "$DIST_DIR" &
-
-		wait
+		WaitWithErrorPropagation "notarizing macOS architectures"
 	fi
 }
 
 # Skip build if --skip-build flag is set
 if ! $SKIP_BUILD; then
-	Build_macOS &
-	wait
-	echo ""
-	echo "Build completed successfully!"
+	# Track if any builds were run
+	BUILD_RUN=false
+
+	# Build macOS if requested
+	if $BUILD_MACOS; then
+		echo "Starting macOS build..."
+		Build_macOS &
+		BUILD_RUN=true
+	fi
+
+	# Build Windows if requested
+	if $BUILD_WINDOWS; then
+		echo "Starting Windows build..."
+		Build_Windows &
+		BUILD_RUN=true
+	fi
+
+	# Wait for all builds to complete
+	if $BUILD_RUN; then
+		WaitWithErrorPropagation "building platforms"
+		echo ""
+		echo "Build completed successfully!"
+	else
+		echo "No build platforms selected. Use --help for options."
+		exit 1
+	fi
 else
 	echo "Skipping build process (--skip-build flag set)"
 fi

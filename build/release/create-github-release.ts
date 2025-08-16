@@ -109,7 +109,7 @@ function createDMG(appPath: string, dmgPath: string, volumeName: string): void {
 		volumeName,
 		backgroundImage: fs.existsSync(backgroundImage) ? backgroundImage : undefined,
 		windowWidth: 600,
-		windowHeight: 456, // Increased to account for status bar
+		windowHeight: 428, // Increased to account for status bar
 		iconSize: 100,
 		appIconX: 175,
 		appIconY: 200,

@@ -96,6 +96,7 @@ import '../platform/agentHost/electron-browser/remoteAgentHostService.js';
 import './services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './services/process/electron-browser/processService.js';
 import './services/power/electron-browser/powerService.js';
+import './services/fontSmoothing/electron-browser/fontSmoothingService.js';
 
 import { registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IUserDataInitializationService, UserDataInitializationService } from './services/userData/browser/userDataInit.js';
@@ -187,6 +188,9 @@ import './contrib/encryption/electron-browser/encryption.contribution.js';
 
 // Emergency Alert
 import './contrib/emergencyAlert/electron-browser/emergencyAlert.contribution.js';
+
+// Font Smoothing
+import './contrib/fontSmoothing/browser/fontSmoothing.contribution.js';
 
 // MCP
 import './contrib/mcp/electron-browser/mcp.contribution.js';

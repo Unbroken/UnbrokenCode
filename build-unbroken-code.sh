@@ -11,6 +11,7 @@ SKIP_GULP_BUILD=false
 REGENERATE_DMG=false
 BUILD_WINDOWS=false
 BUILD_MACOS=true
+BUILD_LINUX=false
 IGNORE_SUBMODULE_CHECK=false
 
 # Auto-detect platform if no explicit platform flags are given
@@ -18,10 +19,17 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
 	# We're on Windows (Git Bash), default to Windows build
 	BUILD_WINDOWS=true
 	BUILD_MACOS=false
+	BUILD_LINUX=false
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	# We're on macOS, default to macOS build
 	BUILD_WINDOWS=false
 	BUILD_MACOS=true
+	BUILD_LINUX=false
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+	# We're on Linux, default to Linux build
+	BUILD_WINDOWS=false
+	BUILD_MACOS=false
+	BUILD_LINUX=true
 fi
 
 for arg in "$@"; do
@@ -54,16 +62,25 @@ for arg in "$@"; do
 		--windows)
 			BUILD_WINDOWS=true
 			BUILD_MACOS=false
+			BUILD_LINUX=false
 			shift
 			;;
 		--macos)
 			BUILD_MACOS=true
 			BUILD_WINDOWS=false
+			BUILD_LINUX=false
+			shift
+			;;
+		--linux)
+			BUILD_LINUX=true
+			BUILD_WINDOWS=false
+			BUILD_MACOS=false
 			shift
 			;;
 		--all-platforms)
 			BUILD_WINDOWS=true
 			BUILD_MACOS=true
+			BUILD_LINUX=true
 			shift
 			;;
 		--ignore-submodule-check)
@@ -82,13 +99,15 @@ for arg in "$@"; do
 			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
 			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
-			echo "  --all-platforms  Build for all platforms (macOS and Windows)"
+			echo "  --linux          Build Linux binaries (x64, arm64, deb, rpm, tar.gz, CLI)"
+			echo "  --all-platforms  Build for all platforms (macOS, Windows, and Linux)"
 			echo "  --ignore-submodule-check  Skip checking if submodules have new commits"
 			echo "  --help           Show this help message"
 			echo ""
 			echo "Platform auto-detection:"
 			echo "  - macOS: builds macOS binaries by default"
 			echo "  - Windows (Git Bash): builds Windows binaries by default"
+			echo "  - Linux: builds Linux binaries by default"
 			echo ""
 			echo "Multi-machine release workflow:"
 			echo "  # Step 1: On macOS machine"
@@ -120,29 +139,29 @@ function Check_Submodule_Updates()
 	echo "Checking if submodules have new commits..."
 	local submodule_outdated=false
 	local outdated_submodules=""
-	
+
 	# Check if there are any submodules
 	if ! git submodule status >/dev/null 2>&1; then
 		echo "No submodules found"
 		return 0
 	fi
-	
+
 	# Use git submodule foreach to check each submodule
 	git submodule foreach --quiet '
 		submodule_name="$name"
 		submodule_path="$sm_path"
-		
+
 		echo "Checking submodule: $submodule_name at $submodule_path"
-		
+
 		# Fetch latest from remote (try both master and main)
 		git fetch origin master >/dev/null 2>&1 || git fetch origin main >/dev/null 2>&1
-		
+
 		# Get current commit
 		current_commit=$(git rev-parse HEAD)
-		
+
 		# Get latest commit on master/main
 		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
-		
+
 		if [ "$current_commit" != "$remote_commit" ]; then
 			echo "  ⚠️  Submodule '\''$submodule_name'\'' is behind remote master/main"
 			echo "     Current: $current_commit"
@@ -160,22 +179,22 @@ function Check_Submodule_Updates()
 			echo "$line"
 		fi
 	done
-	
+
 	# Check if any submodules were outdated (using a different approach due to subshell)
 	local check_result
 	check_result=$(git submodule foreach --quiet '
 		# Fetch latest from remote
 		git fetch origin master >/dev/null 2>&1 || git fetch origin main >/dev/null 2>&1
-		
+
 		# Get current and remote commits
 		current_commit=$(git rev-parse HEAD)
 		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
-		
+
 		if [ "$current_commit" != "$remote_commit" ]; then
 			echo "OUTDATED:$name"
 		fi
 	' | grep "^OUTDATED:" | cut -d: -f2)
-	
+
 	if [ -n "$check_result" ]; then
 		echo ""
 		echo -e "\033[31mError:\033[0m The following submodules have new commits available: $check_result"
@@ -186,7 +205,7 @@ function Check_Submodule_Updates()
 	else
 		echo "All submodules are up-to-date"
 	fi
-	
+
 	return 0
 }
 
@@ -324,7 +343,7 @@ echo "Checking git submodules..."
 if [ -f ".gitmodules" ]; then
 	git submodule update --init --recursive
 	echo "Git submodules updated"
-	
+
 	# Check if submodules have new commits (unless ignored)
 	if ! $IGNORE_SUBMODULE_CHECK; then
 		if ! Check_Submodule_Updates; then
@@ -358,14 +377,21 @@ if $BUILD_WINDOWS ; then
 else
 	export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
-	if [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then # macOS (Apple Silicon via Homebrew)
-		export NVM_DIR="${NVM_DIR:-/opt/homebrew/opt/nvm}"
+	# Check common NVM locations
+	if [ -s "$NVM_DIR/nvm.sh" ]; then                 # Standard location (Linux & macOS)
+		. "$NVM_DIR/nvm.sh"
+	elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then  # macOS (Apple Silicon via Homebrew)
+		export NVM_DIR="/opt/homebrew/opt/nvm"
 		. "/opt/homebrew/opt/nvm/nvm.sh"
 	elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
-		export NVM_DIR="${NVM_DIR:-/usr/local/opt/nvm}"
+		export NVM_DIR="/usr/local/opt/nvm"
 		. "/usr/local/opt/nvm/nvm.sh"
+	elif [ -s "$HOME/.nvm/nvm.sh" ]; then             # Fallback to home directory
+		export NVM_DIR="$HOME/.nvm"
+		. "$HOME/.nvm/nvm.sh"
 	else
 		echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
+		echo "To install nvm on Linux/macOS: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash" >&2
 		exit 1
 	fi
 
@@ -398,6 +424,11 @@ function Build_Windows()
 		echo "Building Windows binaries..."
 	fi
 
+	export PATH="/c/Strawberry/perl/bin/perl:$PATH"
+	export PERL=/c/Strawberry/perl/bin/perl.exe
+	export OPENSSL_SRC_PERL=/c/Strawberry/perl/bin/perl.exe
+	hash -r
+
 	# Create .dist directory for Windows builds
 	DIST_DIR="$PWD/.dist"
 	mkdir -p "$DIST_DIR"
@@ -422,6 +453,55 @@ function Build_Windows()
 	echo "Downloading Explorer dlls..."
 	VSCODE_ARCH=x64 node build/win32/explorer-dll-fetcher .build/win32/appx
 	VSCODE_ARCH=arm64 node build/win32/explorer-dll-fetcher .build/win32/appx
+
+	# Build CLI for Windows
+	echo "Building Windows CLI..."
+
+	# Check if Rust is installed
+	if ! command -v cargo &> /dev/null; then
+		echo "Installing Rust for CLI build..."
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+		source "$HOME/.cargo/env"
+	fi
+
+	# Add Windows targets
+	rustup target add x86_64-pc-windows-msvc
+	rustup target add aarch64-pc-windows-msvc
+
+	# Build CLI for x64
+	echo "Building CLI for Windows x64..."
+	(cd cli && cargo build --release --target x86_64-pc-windows-msvc)
+
+	# Build CLI for arm64
+	echo "Building CLI for Windows arm64..."
+	(cd cli && cargo build --release --target aarch64-pc-windows-msvc)
+
+	# Integrate CLI into the main applications
+	echo "Integrating CLI into Windows x64 application..."
+
+	# Get the tunnel application name from product.json
+	CLI_APP_NAME=$(cd "$DIST_DIR" && node -p "JSON.parse(require('fs').readFileSync('VSCode-win32-x64/resources/app/product.json')).tunnelApplicationName || 'code-tunnel'")
+
+	# Create bin directory if it doesn't exist
+	mkdir -p "$DIST_DIR/VSCode-win32-x64/bin"
+
+	# Copy CLI binary to the application's bin directory
+	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$DIST_DIR/VSCode-win32-x64/bin/$CLI_APP_NAME.exe"
+
+	echo "CLI integrated as $CLI_APP_NAME.exe (x64)"
+
+	echo "Integrating CLI into Windows arm64 application..."
+
+	# Get the tunnel application name from product.json
+	CLI_APP_NAME=$(cd "$DIST_DIR" && node -p "JSON.parse(require('fs').readFileSync('VSCode-win32-arm64/resources/app/product.json')).tunnelApplicationName || 'code-tunnel'")
+
+	# Create bin directory if it doesn't exist
+	mkdir -p "$DIST_DIR/VSCode-win32-arm64/bin"
+
+	# Copy CLI binary to the application's bin directory
+	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$DIST_DIR/VSCode-win32-arm64/bin/$CLI_APP_NAME.exe"
+
+	echo "CLI integrated as $CLI_APP_NAME.exe (arm64)"
 
 	# Create installers
 	echo "Creating Windows installers..."
@@ -479,21 +559,244 @@ function Build_Windows()
 	fi
 
 	# User installer for x64
-	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-user-setup
+	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-user-setup &
 
 	# System installer for x64
-	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-system-setup
+	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-system-setup &
 
 	# User installer for arm64
-	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-user-setup
+	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-user-setup &
 
 	# System installer for arm64
-	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-system-setup
+	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-system-setup &
+
+	WaitWithErrorPropagation "creating installers"
+
+	# Create standalone CLI binary packages
+	echo "Creating CLI binary packages..."
+
+	# Create temporary directory for CLI packaging
+	CLI_TEMP_DIR="$DIST_DIR/temp_cli_win32_x64"
+	mkdir -p "$CLI_TEMP_DIR"
+
+	# Copy CLI binary with Unbroken Code name
+	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$CLI_TEMP_DIR/unbroken-code.exe"
+
+	# Create zip package (use PowerShell on Windows, convert paths)
+	WIN_CLI_TEMP_DIR=$(cygpath -w "$CLI_TEMP_DIR")
+	WIN_ZIP_PATH=$(cygpath -w "$DIST_DIR/unbroken_code_cli_win32_x64_cli.zip")
+	powershell -Command "Compress-Archive -Path '$WIN_CLI_TEMP_DIR\*' -DestinationPath '$WIN_ZIP_PATH' -Force"
+
+	# Copy standalone binary
+	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$DIST_DIR/unbroken-code-cli-win32-x64.exe"
+
+	# Cleanup temp directory
+	rm -rf "$CLI_TEMP_DIR"
+
+	echo "Created unbroken_code_cli_win32_x64_cli.zip"
+
+	# Create temporary directory for CLI packaging
+	CLI_TEMP_DIR="$DIST_DIR/temp_cli_win32_arm64"
+	mkdir -p "$CLI_TEMP_DIR"
+
+	# Copy CLI binary with Unbroken Code name
+	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$CLI_TEMP_DIR/unbroken-code.exe"
+
+	# Create zip package (use PowerShell on Windows, convert paths)
+	WIN_CLI_TEMP_DIR=$(cygpath -w "$CLI_TEMP_DIR")
+	WIN_ZIP_PATH=$(cygpath -w "$DIST_DIR/unbroken_code_cli_win32_arm64_cli.zip")
+	powershell -Command "Compress-Archive -Path '$WIN_CLI_TEMP_DIR\*' -DestinationPath '$WIN_ZIP_PATH' -Force"
+
+	# Copy standalone binary
+	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$DIST_DIR/unbroken-code-cli-win32-arm64.exe"
+
+	# Cleanup temp directory
+	rm -rf "$CLI_TEMP_DIR"
+
+	echo "Created unbroken_code_cli_win32_arm64_cli.zip"
 
 	if $SKIP_GULP_BUILD; then
 		echo "Windows installers created successfully!"
 	else
 		echo "Windows binaries built successfully!"
+	fi
+}
+
+function Build_Linux()
+{
+	if $SKIP_GULP_BUILD; then
+		echo "Skipping gulp build, only creating Linux packages..."
+	else
+		echo "Building Linux binaries..."
+	fi
+
+	# Create .dist directory for Linux builds
+	DIST_DIR="$PWD/.dist"
+	mkdir -p "$DIST_DIR"
+	echo "Using distribution directory: $DIST_DIR"
+
+	# Set environment variable to build directly to .dist directory
+	export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
+
+	# Check for required dependencies
+	echo "Checking for required build dependencies..."
+	MISSING_DEPS=""
+
+	# Check for rpm (needed for RPM builds on Debian/Ubuntu)
+	if ! command -v rpm &> /dev/null; then
+		MISSING_DEPS="$MISSING_DEPS rpm"
+	fi
+
+	# Check for dpkg-deb (needed for DEB builds)
+	if ! command -v dpkg-deb &> /dev/null; then
+		MISSING_DEPS="$MISSING_DEPS dpkg-dev"
+	fi
+
+	# Check for rpmbuild (comes with rpm package on Debian/Ubuntu)
+	if ! command -v rpmbuild &> /dev/null; then
+		MISSING_DEPS="$MISSING_DEPS rpm"
+	fi
+
+	# Check for OpenSSL development packages (needed for CLI build)
+	if ! pkg-config --exists openssl 2>/dev/null; then
+		MISSING_DEPS="$MISSING_DEPS libssl-dev"
+	fi
+
+	# Check for pkg-config (needed to find OpenSSL)
+	if ! command -v pkg-config &> /dev/null; then
+		MISSING_DEPS="$MISSING_DEPS pkg-config"
+	fi
+
+	if [ -n "$MISSING_DEPS" ]; then
+		echo "Warning: Missing dependencies:$MISSING_DEPS"
+		echo "To install on Debian/Ubuntu: sudo apt-get install$MISSING_DEPS"
+		echo "To install on Fedora/RedHat: sudo dnf install rpm-build alien openssl-devel pkgconf-pkg-config"
+		echo ""
+		echo "Continuing with available build targets..."
+	fi
+
+	# Determine which architecture to build for
+	CURRENT_ARCH=$(uname -m)
+	if [ "$CURRENT_ARCH" = "aarch64" ]; then
+		BUILD_ARCH="arm64"
+	else
+		BUILD_ARCH="x64"
+	fi
+
+	if ! $SKIP_GULP_BUILD; then
+		# Build for current architecture (non-minified)
+		echo "Building Linux $BUILD_ARCH (native)..."
+		npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm ci
+		npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH
+	fi
+
+	# Build CLI for Linux
+	echo "Building Linux CLI..."
+
+	# Check if Rust is installed
+	if ! command -v cargo &> /dev/null; then
+		echo "Installing Rust for CLI build..."
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+		source "$HOME/.cargo/env"
+	fi
+
+	# Build CLI for current architecture
+	echo "Building CLI for Linux $BUILD_ARCH..."
+
+	if [ "$BUILD_ARCH" = "arm64" ]; then
+		CLI_TARGET="aarch64-unknown-linux-gnu"
+	else
+		CLI_TARGET="x86_64-unknown-linux-gnu"
+	fi
+
+	rustup target add $CLI_TARGET
+	(cd cli && cargo build --release --target $CLI_TARGET)
+
+	# Integrate CLI into the main application (like VS Code does)
+	echo "Integrating CLI into main application..."
+
+	# Get the tunnel application name from product.json
+	CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-linux-$BUILD_ARCH/resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+
+	# Create bin directory if it doesn't exist
+	mkdir -p "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin"
+
+	# Copy CLI binary to the application's bin directory
+	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin/$CLI_APP_NAME"
+	chmod +x "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin/$CLI_APP_NAME"
+
+	echo "CLI integrated as $CLI_APP_NAME"
+
+	# Create packages
+	echo "Creating Linux packages..."
+
+	# Build .deb packages
+	if command -v dpkg-deb &> /dev/null; then
+		echo "Building .deb package for $BUILD_ARCH..."
+
+		# Prepare and build deb for current architecture
+		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-prepare-deb
+		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-build-deb
+
+		echo "DEB package created successfully!"
+	else
+		echo "Skipping .deb package creation (dpkg-deb not found)"
+	fi
+
+	# Build .rpm packages
+	if command -v rpmbuild &> /dev/null; then
+		echo "Building .rpm package for $BUILD_ARCH..."
+
+		# Prepare and build rpm for current architecture
+		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-prepare-rpm
+		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-build-rpm
+
+		echo "RPM package created successfully!"
+	else
+		echo "Skipping .rpm package creation (rpmbuild not found)"
+	fi
+
+	# Create tar.gz archive for current architecture
+	echo "Creating tar.gz archive for $BUILD_ARCH..."
+
+	# Create archive with renamed folder for current architecture
+	if [ -d "$DIST_DIR/VSCode-linux-$BUILD_ARCH" ]; then
+		tar -czf "$DIST_DIR/UnbrokenCode-linux-$BUILD_ARCH.tar.gz" -C "$DIST_DIR" --transform "s/^VSCode-linux-$BUILD_ARCH/UnbrokenCode-linux-$BUILD_ARCH/" "VSCode-linux-$BUILD_ARCH"
+		echo "Created UnbrokenCode-linux-$BUILD_ARCH.tar.gz"
+	fi
+
+	# Create standalone CLI binary package
+	echo "Creating CLI binary package..."
+
+	if [ "$BUILD_ARCH" = "arm64" ]; then
+		CLI_TARGET="aarch64-unknown-linux-gnu"
+	else
+		CLI_TARGET="x86_64-unknown-linux-gnu"
+	fi
+
+	# Create temporary directory for CLI packaging
+	CLI_TEMP_DIR="$DIST_DIR/temp_cli_linux_$BUILD_ARCH"
+	mkdir -p "$CLI_TEMP_DIR"
+
+	# Copy CLI binary with Unbroken Code name
+	cp "cli/target/$CLI_TARGET/release/code" "$CLI_TEMP_DIR/unbroken-code"
+	chmod +x "$CLI_TEMP_DIR/unbroken-code"
+
+	# Create tar.gz package
+	(cd "$CLI_TEMP_DIR" && tar -czf "$DIST_DIR/unbroken_code_cli_linux_${BUILD_ARCH}_cli.tar.gz" .)
+
+	# Copy standalone binary
+	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/unbroken-code-cli-linux-$BUILD_ARCH"
+
+	# Cleanup temp directory
+	rm -rf "$CLI_TEMP_DIR"
+
+	echo "Created unbroken_code_cli_linux_${BUILD_ARCH}_cli.tar.gz"
+
+	if $SKIP_GULP_BUILD; then
+		echo "Linux packages created successfully!"
+	else
+		echo "Linux binaries and packages built successfully!"
 	fi
 }
 
@@ -517,6 +820,28 @@ function Build_macOS()
 	DIST_DIR="$PWD/.dist"
 	mkdir -p "$DIST_DIR"
 	echo "Using distribution directory: $DIST_DIR"
+
+	# Build CLI for macOS
+	echo "Building macOS CLI..."
+
+	# Check if Rust is installed
+	if ! command -v cargo &> /dev/null; then
+		echo "Installing Rust for CLI build..."
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+		source "$HOME/.cargo/env"
+	fi
+
+	# Add macOS targets
+	rustup target add x86_64-apple-darwin
+	rustup target add aarch64-apple-darwin
+
+	# Build CLI for x64
+	echo "Building CLI for macOS x64..."
+	(cd cli && cargo build --release --target x86_64-apple-darwin)
+
+	# Build CLI for arm64
+	echo "Building CLI for macOS arm64..."
+	(cd cli && cargo build --release --target aarch64-apple-darwin)
 
 	# Build both architectures with the same date
 	if $DO_BUILD; then
@@ -545,9 +870,110 @@ function Build_macOS()
 		cp -r "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-x64" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
 	fi
 
+	# Integrate CLI into the main applications
+	if true; then
+		echo "Integrating CLI into macOS x64 application..."
+
+		# Get the tunnel application name from product.json
+		CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+
+		# Create bin directory if it doesn't exist
+		mkdir -p "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin"
+
+		# Copy CLI binary to the application's bin directory
+		cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+		chmod +x "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+
+		echo "CLI integrated as $CLI_APP_NAME (x64)"
+
+		echo "Integrating CLI into macOS arm64 application..."
+
+		# Get the tunnel application name from product.json
+		CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+
+		# Create bin directory if it doesn't exist
+		mkdir -p "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin"
+
+		# Copy CLI binary to the application's bin directory
+		cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+		chmod +x "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+
+		echo "CLI integrated as $CLI_APP_NAME (arm64)"
+	fi
+
+	if true; then
+		# Create standalone CLI binary packages
+		echo "Creating CLI binary packages..."
+
+		# Create temporary directory for CLI packaging
+		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_x64"
+		mkdir -p "$CLI_TEMP_DIR"
+
+		# Copy CLI binary with Unbroken Code name
+		cp "cli/target/x86_64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
+		chmod +x "$CLI_TEMP_DIR/unbroken-code"
+
+		# Create zip package (remove existing to avoid appending)
+		rm -f "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip"
+		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip" .)
+
+		# Copy standalone binary
+		cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-x64"
+
+		# Cleanup temp directory
+		rm -rf "$CLI_TEMP_DIR"
+
+		echo "Created unbroken_code_cli_darwin_x64_cli.zip"
+
+		# Create temporary directory for CLI packaging
+		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_arm64"
+		mkdir -p "$CLI_TEMP_DIR"
+
+		# Copy CLI binary with Unbroken Code name
+		cp "cli/target/aarch64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
+		chmod +x "$CLI_TEMP_DIR/unbroken-code"
+
+		# Create zip package (remove existing to avoid appending)
+		rm -f "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip"
+		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip" .)
+
+		# Copy standalone binary
+		cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-arm64"
+
+		# Cleanup temp directory
+		rm -rf "$CLI_TEMP_DIR"
+
+		echo "Created unbroken_code_cli_darwin_arm64_cli.zip"
+	fi
+
 	# Create universal binary (even when skipping gulp build)
-	if $SKIP_GULP_BUILD || $DO_BUILD; then
+	if true; then
 		DEBUG="*" VSCODE_ARCH=universal node build/darwin/create-universal-app.js "$DIST_DIR"
+
+		# Create universal CLI binary if both architectures exist
+		echo "Creating universal CLI binary..."
+		lipo -create \
+			"cli/target/x86_64-apple-darwin/release/code" \
+			"cli/target/aarch64-apple-darwin/release/code" \
+			-output "$DIST_DIR/unbroken-code-cli-darwin-universal"
+		echo "Created universal CLI binary"
+
+		# Create universal CLI binary package
+		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_universal"
+		mkdir -p "$CLI_TEMP_DIR"
+
+		# Copy universal CLI binary with Unbroken Code name
+		cp "$DIST_DIR/unbroken-code-cli-darwin-universal" "$CLI_TEMP_DIR/unbroken-code"
+		chmod +x "$CLI_TEMP_DIR/unbroken-code"
+
+		# Create zip package (remove existing to avoid appending)
+		rm -f "$DIST_DIR/unbroken_code_cli_darwin_universal_cli.zip"
+		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_universal_cli.zip" .)
+
+		# Cleanup temp directory
+		rm -rf "$CLI_TEMP_DIR"
+
+		echo "Created unbroken_code_cli_darwin_universal_cli.zip"
 	fi
 
 	export AGENT_TEMPDIRECTORY=`mktemp -d`
@@ -592,6 +1018,13 @@ if ! $SKIP_BUILD; then
 	if $BUILD_WINDOWS; then
 		echo "Starting Windows build..."
 		Build_Windows &
+		BUILD_RUN=true
+	fi
+
+	# Build Linux if requested
+	if $BUILD_LINUX; then
+		echo "Starting Linux build..."
+		Build_Linux &
 		BUILD_RUN=true
 	fi
 

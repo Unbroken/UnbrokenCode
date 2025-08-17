@@ -580,7 +580,7 @@ configurationRegistry.registerConfiguration({
 		'debug.console.lineHeight': {
 			type: 'number',
 			description: nls.localize('debug.console.lineHeight', "Controls the line height in pixels in the Debug Console. Use 0 to compute the line height from the font size."),
-			default: 1
+			default: 10
 		},
 		'debug.console.wordWrap': {
 			type: 'boolean',

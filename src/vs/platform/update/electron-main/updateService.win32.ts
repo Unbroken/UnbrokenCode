@@ -129,6 +129,13 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 					return Promise.resolve(null);
 				}
 
+				// Compare commits - if they're the same, no update is needed
+				if (update.version === this.productService.commit) {
+					this.logService.trace('update#doCheckForUpdates(): no update available, current commit matches server commit', { current: this.productService.commit, server: update.version });
+					this.setState(State.Idle(updateType));
+					return Promise.resolve(null);
+				}
+
 				if (updateType === UpdateType.Archive) {
 					this.setState(State.AvailableForDownload(update));
 					return Promise.resolve(null);

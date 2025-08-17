@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 import { createDMGWithInstaller } from './create-dmg-installer';
 
@@ -268,40 +268,7 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 	return { shaSet, subjectSet };
 }
 
-async function getPreviousReleaseNotesSubjects(octokit: Octokit, tag: string): Promise<Set<string>> {
-	const subjects = new Set<string>();
-	try {
-		const { data } = await octokit.repos.getReleaseByTag({ owner: REPO_OWNER, repo: REPO_NAME, tag });
-		const body = data.body || '';
-		const lines = body.split('\n');
-		let inWhatsNew = false;
-		for (const rawLine of lines) {
-			const line = rawLine.trim();
-			if (/^##\s+What'?s New/i.test(line)) {
-				inWhatsNew = true;
-				continue;
-			}
-			if (inWhatsNew) {
-				// Stop when hitting a new section or separation
-				if (/^---\s*$/.test(line) || /^###\s+/.test(line) || /^####\s+/.test(line) || /^##\s+/.test(line) || /^```/.test(line)) {
-					break;
-				}
-				if (/^[-\*]\s+/.test(line)) {
-					const text = line.replace(/^[-\*]\s+/, '').trim();
-					if (text) {
-						subjects.add(text);
-					}
-				}
-			}
-		}
-		debugLog(`Parsed ${subjects.size} previous release note subjects from ${tag}`, Array.from(subjects).slice(0, 10));
-	} catch (error) {
-		// No previous release or cannot fetch; ignore
-	}
-	return subjects;
-}
-
-async function generateReleaseNotes(octokit: Octokit, buildCommit: string, currentTag: string): Promise<string[]> {
+async function generateReleaseNotes(buildCommit: string, currentTag: string): Promise<string[]> {
 	const releaseTags = getReleaseTagsFromGit();
 
 	// Filter out the current tag we're creating
@@ -358,11 +325,9 @@ async function generateReleaseNotes(octokit: Octokit, buildCommit: string, curre
 
 	const commits = getCommitsBetween(baseForRange, buildCommit, true);
 	const { shaSet: upstreamShaSet, subjectSet: upstreamSubjectSet } = getUpstreamSets();
-	const previousSubjects = await getPreviousReleaseNotesSubjects(octokit, latestReleaseTag);
 
 	debugLog('Candidate commits count:', commits.length);
 	debugLog('Upstream filter sizes:', { shas: upstreamShaSet.size, subjects: upstreamSubjectSet.size });
-	debugLog('Previous subjects count:', previousSubjects.size);
 
 	const releaseNotes: string[] = [];
 	const seenSubjects = new Set<string>();
@@ -399,12 +364,6 @@ async function generateReleaseNotes(octokit: Octokit, buildCommit: string, curre
 		// On rebase: exclude commit subjects that were already in previous release range (mergeBaseNew..latestReleaseCommit)
 		if (rebased && prevReleaseSubjects && prevReleaseSubjects.has(firstLine)) {
 			debugLog('[skip prev-release-subject]', commit.substring(0, 7), firstLine);
-			continue;
-		}
-
-		// Exclude messages already present in previous release notes
-		if (previousSubjects.has(firstLine)) {
-			debugLog('[skip duplicate-previous]', commit.substring(0, 7), firstLine);
 			continue;
 		}
 
@@ -491,8 +450,46 @@ function getGitHubToken(): string {
 	return token;
 }
 
+async function findExistingRelease(octokit: Octokit, tagName: string, releaseName: string): Promise<any> {
+	let existingRelease: any = null;
+
+	// First try to find by tag (for published releases)
+	try {
+		const { data } = await octokit.repos.getReleaseByTag({
+			owner: REPO_OWNER,
+			repo: REPO_NAME,
+			tag: tagName
+		});
+		existingRelease = data;
+		console.log(`Found existing published release by tag`);
+	} catch (error: any) {
+		if (error.status === 404) {
+			// Tag not found, check for draft releases with same name
+			console.log(`No published release found, checking for drafts...`);
+			try {
+				const { data: releases } = await octokit.repos.listReleases({
+					owner: REPO_OWNER,
+					repo: REPO_NAME,
+					per_page: 50
+				});
+
+				// Look for draft release with matching name
+				existingRelease = releases.find(r => r.name === releaseName);
+				if (existingRelease) {
+					console.log(`Found existing draft release: ${existingRelease.name}`);
+				}
+			} catch (listError) {
+				console.log(`Failed to list releases:`, listError);
+			}
+		}
+	}
+
+	return existingRelease;
+}
+
 async function createGitHubRelease(octokit: Octokit, tagName: string, releaseName: string, body: string, targetCommit: string, draft: boolean = true): Promise<ExtendedRelease> {
 	console.log(`Checking for existing release: ${tagName}`);
+	console.log(`Target commit: ${targetCommit}`);
 
 	// Use the provided target commit
 
@@ -507,21 +504,54 @@ async function createGitHubRelease(octokit: Octokit, tagName: string, releaseNam
 		process.exit(1);
 	}
 
-	// Try to get existing release first
-	let release: ExtendedRelease;
+	// Ensure Git tag exists (for both create and update paths)
+	console.log(`Ensuring Git tag exists: ${tagName} at commit ${targetCommit}`);
 	try {
-		const { data } = await octokit.repos.getReleaseByTag({
+		await octokit.git.createRef({
 			owner: REPO_OWNER,
 			repo: REPO_NAME,
-			tag: tagName
+			ref: `refs/tags/${tagName}`,
+			sha: targetCommit
 		});
-		console.log(`Found existing release, updating...`);
+		console.log(`Successfully created Git tag: ${tagName}`);
+	} catch (error: any) {
+		if (error.status === 422 && error.response?.data?.message?.includes('already exists')) {
+			console.log(`Git tag ${tagName} already exists, continuing...`);
 
-		// Update the existing release
+			// Update the tag to point to the new commit if needed
+			try {
+				await octokit.git.updateRef({
+					owner: REPO_OWNER,
+					repo: REPO_NAME,
+					ref: `tags/${tagName}`,
+					sha: targetCommit,
+					force: true
+				});
+				console.log(`Updated Git tag ${tagName} to point to commit ${targetCommit}`);
+			} catch (updateError: any) {
+				console.log(`Could not update tag: ${updateError.message}`);
+			}
+		} else {
+			console.error(`Failed to create Git tag: ${error.message}`);
+			throw error;
+		}
+	}
+
+	// Try to get existing release first
+	let release: ExtendedRelease;
+	const existingRelease = await findExistingRelease(octokit, tagName, releaseName);
+
+	if (existingRelease) {
+		console.log(`Updating existing release...`);
+		console.log(`Existing release commit: ${existingRelease.target_commitish}`);
+		console.log(`Existing assets count: ${existingRelease.assets?.length || 0}`);
+
+		// Update the existing release - ensure it's associated with the tag
 		const updateResult = await octokit.repos.updateRelease({
 			owner: REPO_OWNER,
 			repo: REPO_NAME,
-			release_id: data.id,
+			release_id: existingRelease.id,
+			tag_name: tagName,  // Ensure the release is associated with the tag
 			name: releaseName,
 			body: body,
 			draft: draft,
@@ -532,31 +562,28 @@ async function createGitHubRelease(octokit: Octokit, tagName: string, releaseNam
 		// Create ExtendedRelease object with existing assets
 		release = {
 			...updateResult.data,
-			existingAssets: data.assets || []
+			existingAssets: existingRelease.assets || []
 		};
-	} catch (error: any) {
-		if (error.status === 404) {
-			// Release doesn't exist, create it
-			console.log(`Creating new release: ${tagName}`);
-			const createResult = await octokit.repos.createRelease({
-				owner: REPO_OWNER,
-				repo: REPO_NAME,
-				tag_name: tagName,
-				name: releaseName,
-				body: body,
-				draft: draft,
-				prerelease: false,
-				target_commitish: targetCommit
-			});
+	} else {
+		// Release doesn't exist, create it
+		console.log(`Creating new release: ${tagName}`);
 
-			// Create ExtendedRelease object for new release
-			release = {
-				...createResult.data,
-				existingAssets: [] // No existing assets for new releases
-			};
-		} else {
-			throw error;
-		}
+		const createResult = await octokit.repos.createRelease({
+			owner: REPO_OWNER,
+			repo: REPO_NAME,
+			tag_name: tagName,
+			name: releaseName,
+			body: body,
+			draft: draft,
+			prerelease: false,
+			target_commitish: targetCommit
+		});
+
+		// Create ExtendedRelease object for new release
+		release = {
+			...createResult.data,
+			existingAssets: [] // No existing assets for new releases
+		};
 	}
 
 	console.log(`Release ready: ${release.html_url}`);
@@ -604,7 +631,7 @@ async function optimizeAssetUploads(octokit: Octokit, release: ExtendedRelease, 
 	// Determine which platform we're building for based on the assets
 	const hasDarwinAssets = assets.some(asset => asset.name.includes('darwin'));
 	const hasWindowsAssets = assets.some(asset => asset.name.includes('win32'));
-	
+
 	console.log(`Current build includes: ${hasDarwinAssets ? 'macOS' : ''} ${hasWindowsAssets ? 'Windows' : ''}`.trim());
 
 	// IMPORTANT: Only delete assets from the current platform to preserve cross-platform builds
@@ -616,7 +643,7 @@ async function optimizeAssetUploads(octokit: Octokit, release: ExtendedRelease, 
 			const isDarwinAsset = existingAsset.name.includes('darwin');
 			const isWindowsAsset = existingAsset.name.includes('win32') || existingAsset.name.includes('Setup');
 			const isGenericAsset = existingAsset.name === 'updates.json'; // Always update generic assets
-			
+
 			// Only delete if it's from the current platform or a generic asset
 			if ((isDarwinAsset && hasDarwinAssets) || (isWindowsAsset && hasWindowsAssets) || isGenericAsset) {
 				console.log(`  - Removing ${existingAsset.name} (no longer generated by current platform)`);
@@ -830,6 +857,11 @@ async function main() {
 	// Process Windows architectures if available
 	if (hasWindowsBuilds) {
 		console.log('Processing Windows builds...');
+
+		// Collect zip creation tasks to run in parallel
+		const zipTasks: Promise<void>[] = [];
+		const zipAssets: Array<{ name: string; path: string; contentType: string }> = [];
+
 		for (const arch of windowsArchitectures) {
 			const winDir = path.join(distDir, `VSCode-win32-${arch}`);
 			if (!fs.existsSync(winDir)) {
@@ -837,21 +869,59 @@ async function main() {
 				continue;
 			}
 
-			// Create compressed archive of the Windows build
-			const archiveName = `UnbrokenCode-win32-${arch}-${version}.tar.gz`;
-			const archivePath = path.join(distDir, archiveName);
-			if (!fs.existsSync(archivePath)) {
-				console.log(`Creating Windows ${arch} compressed archive...`);
-				// Use tar command (available in Git Bash) for Windows builds
-				execSync(`cd "${distDir}" && tar -czf "${archiveName}" "VSCode-win32-${arch}"`, {
-					stdio: 'inherit'
-				});
-			}
-			assets.push({
-				name: archiveName,
-				path: archivePath,
-				contentType: 'application/gzip'
+			// Create ZIP archive of the Windows build
+			const zipName = `UnbrokenCode-win32-${arch}-${version}.zip`;
+			const zipPath = path.join(distDir, zipName);
+
+			zipAssets.push({
+				name: zipName,
+				path: zipPath,
+				contentType: 'application/zip'
 			});
+
+			if (!fs.existsSync(zipPath)) {
+				console.log(`Creating Windows ${arch} ZIP archive...`);
+
+				// Create promise for parallel execution
+				const zipTask = new Promise<void>((resolve, reject) => {
+					const powershell = spawn('powershell', [
+						'-Command',
+						`Compress-Archive -Path '${distDir}/VSCode-win32-${arch}' -DestinationPath '${zipPath}' -Force`
+					], {
+						stdio: 'inherit'
+					});
+
+					powershell.on('close', (code) => {
+						if (code === 0) {
+							resolve();
+						} else {
+							reject(new Error(`ZIP creation failed for ${arch} with code ${code}`));
+						}
+					});
+
+					powershell.on('error', reject);
+				});
+
+				zipTasks.push(zipTask);
+			}
+		}
+
+		// Wait for all zip creation tasks to complete
+		if (zipTasks.length > 0) {
+			console.log(`Creating ${zipTasks.length} ZIP archives in parallel...`);
+			await Promise.all(zipTasks);
+			console.log('All ZIP archives created successfully!');
+		}
+
+		// Add all zip assets to the main assets array
+		assets.push(...zipAssets);
+
+		// Process installers sequentially (they're usually quick)
+		for (const arch of windowsArchitectures) {
+			const winDir = path.join(distDir, `VSCode-win32-${arch}`);
+			if (!fs.existsSync(winDir)) {
+				continue;
+			}
 
 			// Check for installers
 			const targets = ['user', 'system'];
@@ -914,33 +984,37 @@ async function main() {
 	};
 
 	// Download existing updates.json from the release to merge with our changes
-	try {
-		console.log('Checking for existing updates.json from previous builds...');
-		const existingRelease = await octokit.repos.getReleaseByTag({
-			owner: REPO_OWNER,
-			repo: REPO_NAME,
-			tag: tagName
+	console.log('Checking for existing updates.json from previous builds...');
+	const existingRelease = await findExistingRelease(octokit, tagName, `${product.nameLong} ${version}`);
+
+	const existingUpdatesAsset = existingRelease?.assets?.find((asset: any) => asset.name === 'updates.json');
+	if (existingRelease && existingUpdatesAsset) {
+		console.log('Found existing updates.json, downloading for merge via API...');
+		const assetUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingUpdatesAsset.id}`;
+		const response = await fetch(assetUrl, {
+			headers: {
+				'Accept': 'application/octet-stream',
+				'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+				'User-Agent': 'Unbroken-Code-Release-Script'
+			}
 		});
-		
-		const existingUpdatesAsset = existingRelease.data.assets.find(asset => asset.name === 'updates.json');
-		if (existingUpdatesAsset) {
-			console.log('Found existing updates.json, downloading for merge...');
-			const response = await fetch(existingUpdatesAsset.browser_download_url);
-			const existingManifest = await response.json();
-			
-			// Merge existing assets, preserving assets from other platforms
-			updateManifest = {
-				...existingManifest,
-				version: version,
-				productVersion: version,
-				commit: commit,
-				timestamp: buildTimestamp,
-				assets: { ...existingManifest.assets }
-			};
-			console.log('Merged existing updates.json with current build');
+
+		if (!response.ok) {
+			throw new Error(`Failed to download existing updates.json: ${response.status} ${response.statusText}`);
 		}
-	} catch (error) {
-		console.log('No existing updates.json found or unable to download, creating new one');
+
+		const existingManifest = await response.json();
+
+		// Merge existing assets, preserving assets from other platforms
+		updateManifest = {
+			...existingManifest,
+			version: version,
+			productVersion: version,
+			commit: commit,
+			timestamp: buildTimestamp,
+			assets: { ...existingManifest.assets }
+		};
+		console.log('Merged existing updates.json with current build');
 	}
 
 	// Add macOS assets to update manifest (will overwrite existing macOS entries)
@@ -997,7 +1071,7 @@ async function main() {
 
 	// Generate release notes
 	const builtCommit = getBuiltCommit();
-	const releaseNotes = await generateReleaseNotes(octokit, builtCommit, tagName);
+	const releaseNotes = await generateReleaseNotes(builtCommit, tagName);
 
 	// Create release body
 	const releaseBodyParts = [
@@ -1014,19 +1088,53 @@ async function main() {
 		);
 	}
 
+	// Check which platforms are available in the final merged manifest (for install instructions)
+	const hasManifestDarwinBuilds = Object.keys(updateManifest.assets).some(key => key.startsWith('darwin-'));
+	const hasManifestWindowsBuilds = Object.keys(updateManifest.assets).some(key => key.startsWith('win32-'));
+
+	// Generate download links for available assets
+	const generateDownloadLink = (filename: string) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(tagName)}/${filename}`;
+
 	// Add installation instructions based on available platforms
 	releaseBodyParts.push('', '---', '### Installation', '');
 
-	if (hasDarwinBuilds) {
+	if (hasManifestDarwinBuilds) {
+		const macOSDownloads: string[] = [];
+
+		// Find available macOS assets from update manifest
+		const manifestAssetKeys = Object.keys(updateManifest.assets);
+
+		// Extract filenames from update manifest URLs
+		const getFilenameFromUrl = (url: string) => url.split('/').pop() || '';
+
+		const arm64Asset = manifestAssetKeys.find(key => key === 'darwin-arm64');
+		const x64Asset = manifestAssetKeys.find(key => key === 'darwin-x64');
+		const universalAsset = manifestAssetKeys.find(key => key === 'darwin-universal');
+
+		if (arm64Asset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[arm64Asset].url);
+			macOSDownloads.push(`- **Apple Silicon**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+		if (x64Asset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[x64Asset].url);
+			macOSDownloads.push(`- **Intel**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+		if (universalAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[universalAsset].url);
+			macOSDownloads.push(`- **Universal** (works on both): [${filename}](${generateDownloadLink(filename)})`);
+		}
+
 		releaseBodyParts.push(
-			'**macOS**: Download the DMG file for your architecture:',
-			'- Apple Silicon: `UnbrokenCode-darwin-arm64-*.dmg`',
-			'- Intel: `UnbrokenCode-darwin-x64-*.dmg`',
-			'- Universal (works on both): `UnbrokenCode-darwin-universal-*.dmg`',
+			// allow-any-unicode-next-line
+			'## 🖥️ macOS Installation',
+			'',
+			'Download the DMG file for your architecture:',
+			...macOSDownloads,
 			'',
 			'Open the DMG and drag Unbroken Code to your Applications folder.',
 			'',
-			'#### Recommended: Disable Font Smoothing for Pixel-Perfect Rendering',
+			// allow-any-unicode-next-line
+			'### 💡 Recommended: Disable Font Smoothing for Pixel-Perfect Rendering',
 			'For the best experience with Unbroken Code\'s crisp font rendering, disable font smoothing:',
 			'',
 			'```bash',
@@ -1040,30 +1148,107 @@ async function main() {
 		);
 	}
 
-	if (hasWindowsBuilds) {
-		releaseBodyParts.push(
-			'**Windows**: Choose your installation method:',
+	if (hasManifestWindowsBuilds) {
+		const windowsZips: string[] = [];
+
+		// Find available Windows assets from update manifest
+		const manifestAssetKeys = Object.keys(updateManifest.assets);
+
+		// Extract filenames from update manifest URLs
+		const getFilenameFromUrl = (url: string) => url.split('/').pop() || '';
+
+		// Find ZIP assets
+		const x64ZipAsset = manifestAssetKeys.find(key => key === 'win32-x64');
+		const arm64ZipAsset = manifestAssetKeys.find(key => key === 'win32-arm64');
+
+		// Find setup assets
+		const x64UserSetupAsset = manifestAssetKeys.find(key => key === 'win32-x64-user-setup');
+		const x64SystemSetupAsset = manifestAssetKeys.find(key => key === 'win32-x64-system-setup');
+		const arm64UserSetupAsset = manifestAssetKeys.find(key => key === 'win32-arm64-user-setup');
+		const arm64SystemSetupAsset = manifestAssetKeys.find(key => key === 'win32-arm64-system-setup');
+
+		// User installers
+		const userInstallers: string[] = [];
+		if (x64UserSetupAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[x64UserSetupAsset].url);
+			userInstallers.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+		if (arm64UserSetupAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[arm64UserSetupAsset].url);
+			userInstallers.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+
+		// System installers
+		const systemInstallers: string[] = [];
+		if (x64SystemSetupAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[x64SystemSetupAsset].url);
+			systemInstallers.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+		if (arm64SystemSetupAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[arm64SystemSetupAsset].url);
+			systemInstallers.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+
+		// Portable ZIPs
+		if (x64ZipAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[x64ZipAsset].url);
+			windowsZips.push(`- **x64 Portable**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+		if (arm64ZipAsset) {
+			const filename = getFilenameFromUrl(updateManifest.assets[arm64ZipAsset].url);
+			windowsZips.push(`- **ARM64 Portable**: [${filename}](${generateDownloadLink(filename)})`);
+		}
+
+		const installSections: string[] = [
 			'',
-			'#### Installer (Recommended)',
-			'- **User Install** (no admin required): `UnbrokenCodeSetup-{arch}-user-*.exe`',
-			'- **System Install** (requires admin): `UnbrokenCodeSetup-{arch}-system-*.exe`',
+			// allow-any-unicode-next-line
+			'## 💻 Windows Installation',
 			'',
-			'Architecture:',
-			'- x64: For Intel/AMD 64-bit processors',
-			'- arm64: For ARM-based Windows devices',
-			'',
-			'#### Portable ZIP',
-			'For a portable installation, download:',
-			'- `UnbrokenCode-win32-x64-*.zip` (Intel/AMD)',
-			'- `UnbrokenCode-win32-arm64-*.zip` (ARM)',
-			'',
-			'Extract the ZIP and run `Code.exe` from the extracted folder.',
-			''
-		);
+			'Choose your installation method:'
+		];
+
+		// Add user installer section if available
+		if (userInstallers.length > 0) {
+			installSections.push(
+				'',
+				// allow-any-unicode-next-line
+				'### 👤 User Install (Recommended)',
+				'No admin privileges required. Installs only for the current user.',
+				...userInstallers
+			);
+		}
+
+		// Add system installer section if available
+		if (systemInstallers.length > 0) {
+			installSections.push(
+				'',
+				// allow-any-unicode-next-line
+				'### 🔧 System Install',
+				'Requires administrator privileges. Installs for all users on the system.',
+				...systemInstallers
+			);
+		}
+
+		// Add portable section if available
+		if (windowsZips.length > 0) {
+			installSections.push(
+				'',
+				// allow-any-unicode-next-line
+				'### 📁 Portable ZIP',
+				'No installation required. Extract and run directly.',
+				...windowsZips,
+				'',
+				'Extract the ZIP and run `Code.exe` from the extracted folder.'
+			);
+		}
+
+		installSections.push('');
+		releaseBodyParts.push(...installSections);
 	}
 
 	releaseBodyParts.push(
-		'### Auto-Update',
+		// allow-any-unicode-next-line
+		'## 🔄 Auto-Update',
 		'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.'
 	);
 

@@ -148,25 +148,37 @@ async function generateUpdateFeed(octokit: Octokit): Promise<UpdateFeed> {
 
 				// Fallback: construct feed from asset names
 				// IMPORTANT: Use ZIP files for macOS auto-updater (Squirrel.Mac requirement)
-				const platforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal'];
+				// Use tar.gz files for Linux
+				const platforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal', 'linux-x64', 'linux-arm64'];
 
 				if (!feed.releases[version]) {
 					feed.releases[version] = {};
 				}
 
 				for (const platform of platforms) {
-					const zipAsset = release.assets?.find(a =>
-						a.name.includes(platform) && a.name.endsWith('.zip')
-					);
+					let asset;
+					
+					// For macOS, look for ZIP files
+					if (platform.startsWith('darwin-')) {
+						asset = release.assets?.find(a =>
+							a.name.includes(platform) && a.name.endsWith('.zip')
+						);
+					}
+					// For Linux, look for tar.gz files
+					else if (platform.startsWith('linux-')) {
+						asset = release.assets?.find(a =>
+							a.name.includes(platform) && a.name.endsWith('.tar.gz')
+						);
+					}
 
-					if (zipAsset) {
+					if (asset) {
 						const entryTimestamp = new Date(release.published_at || release.created_at).getTime();
 						const entry: UpdateFeedEntry = {
 							version: version,
 							productVersion: version,
 							timestamp: entryTimestamp,
-							url: zipAsset.browser_download_url,
-							size: zipAsset.size,
+							url: asset.browser_download_url,
+							size: asset.size,
 							supportsFastUpdate: true,
 							quality: 'stable',
 							commit: commit
@@ -348,16 +360,16 @@ async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed): Promise<void
 		}
 	}
 
-	// 2. Linux/Windows feeds (IUpdate format) - prepare for future
-	const otherPlatforms = ['linux-x64', 'linux-arm64', 'linux-armhf'];
-	for (const platform of otherPlatforms) {
+	// 2. Linux feeds (IUpdate format) - using tar.gz archives
+	const linuxPlatforms = ['linux-x64', 'linux-arm64'];
+	for (const platform of linuxPlatforms) {
 		if (feed.latest[platform]) {
-			// VS Code IUpdate format for Linux
+			// VS Code IUpdate format for Linux - uses tar.gz archives
 			const iUpdateFeed: UpdateFeedEntry = {
 				version: feed.latest[platform].commit || feed.latest[platform].version, // Commit hash for Linux
 				productVersion: feed.latest[platform].version,
 				timestamp: feed.latest[platform].timestamp,
-				url: feed.latest[platform].url,
+				url: feed.latest[platform].url, // Should point to tar.gz file
 				sha256hash: feed.latest[platform].sha256hash,
 				size: feed.latest[platform].size,
 				supportsFastUpdate: feed.latest[platform].supportsFastUpdate,

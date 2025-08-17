@@ -25,6 +25,9 @@ const exec = util.promisify(cp.exec);
 const root = path.dirname(__dirname);
 const commit = getVersion(root);
 
+// Support VSCODE_BUILD_OUTPUT_DIR for Linux builds
+const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+
 const linuxPackageRevision = Math.floor(new Date().getTime() / 1000);
 
 /**
@@ -35,7 +38,7 @@ function getDebPackageArch(arch) {
 }
 
 function prepareDebPackage(arch) {
-	const binaryDir = '../VSCode-linux-' + arch;
+	const binaryDir = path.join(buildOutputDir, 'VSCode-linux-' + arch);
 	const debArch = getDebPackageArch(arch);
 	const destination = '.build/linux/deb/' + debArch + '/' + product.applicationName + '-' + debArch;
 
@@ -152,7 +155,7 @@ function getRpmPackageArch(arch) {
  * @param {string} arch
  */
 function prepareRpmPackage(arch) {
-	const binaryDir = '../VSCode-linux-' + arch;
+	const binaryDir = path.join(buildOutputDir, 'VSCode-linux-' + arch);
 	const rpmArch = getRpmPackageArch(arch);
 	const stripBinary = process.env['STRIP'] ?? '/usr/bin/strip';
 
@@ -248,7 +251,7 @@ function getSnapBuildPath(arch) {
  * @param {string} arch
  */
 function prepareSnapPackage(arch) {
-	const binaryDir = '../VSCode-linux-' + arch;
+	const binaryDir = path.join(buildOutputDir, 'VSCode-linux-' + arch);
 	const destination = getSnapBuildPath(arch);
 
 	return function () {

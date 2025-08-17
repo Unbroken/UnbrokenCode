@@ -54,7 +54,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 	@memoize
 	get cachePath(): Promise<string> {
-		const result = path.join(tmpdir(), `vscode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
+		const result = path.join(tmpdir(), `unbrokencode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
 		return fs.promises.mkdir(result, { recursive: true }).then(() => result);
 	}
 
@@ -185,7 +185,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 	private async getUpdatePackagePath(version: string): Promise<string> {
 		const cachePath = await this.cachePath;
-		return path.join(cachePath, `CodeSetup-${this.productService.quality}-${version}.exe`);
+		return path.join(cachePath, `UnbrokenCodeSetup-${this.productService.quality}-${version}.exe`);
 	}
 
 	private async cleanup(exceptVersion: string | null = null): Promise<void> {
@@ -219,7 +219,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 		const cachePath = await this.cachePath;
 
-		this.availableUpdate.updateFilePath = path.join(cachePath, `CodeSetup-${this.productService.quality}-${update.version}.flag`);
+		this.availableUpdate.updateFilePath = path.join(cachePath, `UnbrokenCodeSetup-${this.productService.quality}-${update.version}.flag`);
 
 		await pfs.Promises.writeFile(this.availableUpdate.updateFilePath, 'flag');
 		const child = spawn(this.availableUpdate.packagePath, ['/verysilent', '/log', `/update="${this.availableUpdate.updateFilePath}"`, '/nocloseapplications', '/mergetasks=runcode,!desktopicon,!quicklaunchicon'], {

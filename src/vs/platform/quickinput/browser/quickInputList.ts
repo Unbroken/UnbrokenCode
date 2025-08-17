@@ -276,7 +276,7 @@ class QuickInputItemDelegate implements IListVirtualDelegate<IQuickPickElement> 
 		if (element instanceof QuickPickSeparatorElement) {
 			return 30;
 		}
-		return element.saneDetail ? 44 : 22;
+		return element.saneDetail ? 44 : 16;
 	}
 
 	getTemplateId(element: IQuickPickElement): string {

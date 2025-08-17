@@ -31,6 +31,7 @@
 	"licenseFileName": "LICENSE.txt",
 	"reportIssueUrl": "https://github.com/Unbroken/UnbrokenCode/issues/new",
 	"updateUrl": "https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed",
+	"downloadUrl": "https://github.com/Unbroken/UnbrokenCode/releases/latest",
 	"darwinUniversalAssetId": "darwin-universal",
 	"nodejsRepository": "https://nodejs.org",
 	"urlProtocol": "unbroken-code",

@@ -167,7 +167,13 @@
 }
 
 .quick-input-list {
-	line-height: 22px;
+	line-height: 16px;
+	font-size: 11px;
+}
+
+.quick-input-list .monaco-action-bar .action-item .codicon {
+	width: 15px;
+	height: 10px;
 }
 
 .quick-input-widget.hidden-input .quick-input-list {

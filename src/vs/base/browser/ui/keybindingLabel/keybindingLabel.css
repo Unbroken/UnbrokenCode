@@ -6,7 +6,7 @@
 .monaco-keybinding {
 	display: flex;
 	align-items: center;
-	line-height: 10px;
+	line-height: 6px;
 }
 
 .monaco-keybinding > .monaco-keybinding-key {
@@ -15,9 +15,9 @@
 	border-width: 1px;
 	border-radius: 3px;
 	vertical-align: middle;
-	font-size: 11px;
+	font-size: 10px;
 	padding: 3px 5px;
-	margin: 0 2px;
+	margin: 0px 0px;
 }
 
 .monaco-keybinding > .monaco-keybinding-key:first-child {

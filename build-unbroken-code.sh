@@ -252,7 +252,7 @@ if $NEW_VERSION; then
 fi
 
 # 1) Load NVM (handles common install locations)
-if [ $BUILD_WINDOWS ]; then
+if $BUILD_WINDOWS ; then
 	nvm install `cat .nvmrc`
 	nvm use `cat .nvmrc`
 else
@@ -307,16 +307,15 @@ function Build_Windows()
 	export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
 
 	if ! $SKIP_GULP_BUILD; then
-		# Build Windows x64
-		echo "Building Windows x64..."
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu=x64
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-win32-x64
-
 		# Build Windows arm64
 		echo "Building Windows arm64..."
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu=arm64
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64
 
+		# Build Windows x64
+		echo "Building Windows x64..."
+		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu=x64
+		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-win32-x64
 	fi
 
 	# Download Explorer dlls for Windows 11 integration (appx)
@@ -424,11 +423,11 @@ function Build_macOS()
 		# Set environment variable to build directly to .dist directory
 		export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
 
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
-
 		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu x64
 		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-darwin-x64
+
+		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
+		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
 
 		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
 		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"

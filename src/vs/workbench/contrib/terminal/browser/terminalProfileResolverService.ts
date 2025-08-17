@@ -233,6 +233,19 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		// this when it is NOT a local terminal in a remote window where the front and back end OS
 		// differs (eg. Windows -> WSL, Mac -> Linux)
 		if (options.os === OS) {
+			// On Windows, prefer Git Bash if available
+			if (options.os === OperatingSystem.Windows) {
+				const gitBashProfile = this._terminalProfileService.availableProfiles.find(e => e.profileName === 'Git Bash');
+				if (gitBashProfile) {
+					if (options.allowAutomationShell) {
+						const clonedProfile = deepClone(gitBashProfile);
+						clonedProfile.icon = Codicon.tools;
+						return clonedProfile;
+					}
+					return gitBashProfile;
+				}
+			}
+
 			let existingProfile = this._terminalProfileService.availableProfiles.find(e => path.parse(e.path).name === path.parse(executable).name);
 			if (existingProfile) {
 				if (options.allowAutomationShell) {

@@ -30,6 +30,7 @@ This is the Visual Studio Code (VS Code) open-source repository. VS Code is buil
 - `npm run monaco-compile-check` - Check Monaco editor compilation
 - `npm run valid-layers-check` - Validate architectural layers
 - **Checking for TypeScript errors**: Use the MCP diagnostics tool (`mcp__ide__getDiagnostics`) to check for compile errors instead of running `npm run compile`
+- **IMPORTANT**: Do not run compilation commands like `npm run compile` - the user runs watch scripts. Instead, ask if there are compilation errors or use the MCP diagnostics tool.
 
 ### Running Specific Tests
 - To run a single test file: `npm run test-node -- --grep "test name pattern"`

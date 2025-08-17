@@ -388,7 +388,7 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 
 			result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
 				.pipe(replace('@@NAME@@', product.nameShort))
-				.pipe(rename(function (f) { f.basename = product.applicationName; })));
+				.pipe(rename(function (f) { f.basename = 'code'; })));
 
 			result = es.merge(result, gulp.src('resources/win32/bin/code.sh', { base: 'resources/win32' })
 				.pipe(replace('@@NAME@@', product.nameShort))
@@ -398,7 +398,7 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 				.pipe(replace('@@QUALITY@@', quality))
-				.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
+				.pipe(rename(function (f) { f.basename = 'code'; f.extname = ''; })));
 
 			result = es.merge(result, gulp.src('resources/win32/VisualElementsManifest.xml', { base: 'resources/win32' })
 				.pipe(rename(product.nameShort + '.VisualElementsManifest.xml')));

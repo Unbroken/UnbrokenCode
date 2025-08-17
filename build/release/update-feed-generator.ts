@@ -349,12 +349,12 @@ async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed): Promise<void
 	}
 
 	// 2. Linux/Windows feeds (IUpdate format) - prepare for future
-	const otherPlatforms = ['linux-x64', 'linux-arm64', 'linux-armhf', 'win32-x64', 'win32-arm64'];
+	const otherPlatforms = ['linux-x64', 'linux-arm64', 'linux-armhf'];
 	for (const platform of otherPlatforms) {
 		if (feed.latest[platform]) {
-			// VS Code IUpdate format for Linux/Windows
+			// VS Code IUpdate format for Linux
 			const iUpdateFeed: UpdateFeedEntry = {
-				version: feed.latest[platform].commit || feed.latest[platform].version, // Commit hash for Linux/Windows
+				version: feed.latest[platform].commit || feed.latest[platform].version, // Commit hash for Linux
 				productVersion: feed.latest[platform].version,
 				timestamp: feed.latest[platform].timestamp,
 				url: feed.latest[platform].url,
@@ -403,6 +403,171 @@ async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed): Promise<void
 			});
 
 			console.log(`✓ Uploaded ${platform} feed: ${platformFileName}`);
+		}
+	}
+
+	// 3. Windows feeds - need different feeds for different installation types
+	const windowsArchs = ['x64', 'arm64'];
+	for (const arch of windowsArchs) {
+		const winPlatform = `win32-${arch}`;
+		
+		// Create feed for system installer (default)
+		const systemSetupKey = `${winPlatform}-system-setup`;
+		if (feed.latest[systemSetupKey]) {
+			const systemFeed: UpdateFeedEntry = {
+				version: feed.latest[systemSetupKey].commit || feed.latest[systemSetupKey].version,
+				productVersion: feed.latest[systemSetupKey].version,
+				timestamp: feed.latest[systemSetupKey].timestamp,
+				url: feed.latest[systemSetupKey].url,
+				sha256hash: feed.latest[systemSetupKey].sha256hash,
+				size: feed.latest[systemSetupKey].size,
+				supportsFastUpdate: false,
+				quality: feed.latest[systemSetupKey].quality
+			};
+
+			const systemFileName = `latest-${winPlatform}.json`;
+			const systemContent = JSON.stringify(systemFeed, null, 2);
+			const systemBuffer = Buffer.from(systemContent, 'utf8');
+
+			// Check if existing feed needs updating
+			const existingSystem = feedRelease.assets?.find((a: any) => a.name === systemFileName);
+			const needsSystemUpdate = await shouldUpdateAsset(existingSystem, systemContent);
+
+			if (!needsSystemUpdate) {
+				const existingSHA = existingSystem.digest?.substring('sha256:'.length) || 'unknown';
+				console.log(`✓ ${systemFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
+			} else {
+				// Delete existing if it exists
+				if (existingSystem) {
+					console.log(`~ ${systemFileName} changed, updating...`);
+					await octokit.repos.deleteReleaseAsset({
+						owner: REPO_OWNER,
+						repo: REPO_NAME,
+						asset_id: existingSystem.id
+					});
+				}
+
+				// Upload new
+				await octokit.repos.uploadReleaseAsset({
+					owner: REPO_OWNER,
+					repo: REPO_NAME,
+					release_id: feedRelease.id,
+					name: systemFileName,
+					data: systemBuffer as any,
+					headers: {
+						'content-type': 'application/json',
+						'content-length': systemBuffer.length
+					}
+				});
+
+				console.log(`✓ Uploaded Windows system feed: ${systemFileName}`);
+			}
+		}
+
+		// Create feed for user installer
+		const userSetupKey = `${winPlatform}-user-setup`;
+		if (feed.latest[userSetupKey]) {
+			const userFeed: UpdateFeedEntry = {
+				version: feed.latest[userSetupKey].commit || feed.latest[userSetupKey].version,
+				productVersion: feed.latest[userSetupKey].version,
+				timestamp: feed.latest[userSetupKey].timestamp,
+				url: feed.latest[userSetupKey].url,
+				sha256hash: feed.latest[userSetupKey].sha256hash,
+				size: feed.latest[userSetupKey].size,
+				supportsFastUpdate: false,
+				quality: feed.latest[userSetupKey].quality
+			};
+
+			const userFileName = `latest-${winPlatform}-user.json`;
+			const userContent = JSON.stringify(userFeed, null, 2);
+			const userBuffer = Buffer.from(userContent, 'utf8');
+
+			// Check if existing feed needs updating
+			const existingUser = feedRelease.assets?.find((a: any) => a.name === userFileName);
+			const needsUserUpdate = await shouldUpdateAsset(existingUser, userContent);
+
+			if (!needsUserUpdate) {
+				const existingSHA = existingUser.digest?.substring('sha256:'.length) || 'unknown';
+				console.log(`✓ ${userFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
+			} else {
+				// Delete existing if it exists
+				if (existingUser) {
+					console.log(`~ ${userFileName} changed, updating...`);
+					await octokit.repos.deleteReleaseAsset({
+						owner: REPO_OWNER,
+						repo: REPO_NAME,
+						asset_id: existingUser.id
+					});
+				}
+
+				// Upload new
+				await octokit.repos.uploadReleaseAsset({
+					owner: REPO_OWNER,
+					repo: REPO_NAME,
+					release_id: feedRelease.id,
+					name: userFileName,
+					data: userBuffer as any,
+					headers: {
+						'content-type': 'application/json',
+						'content-length': userBuffer.length
+					}
+				});
+
+				console.log(`✓ Uploaded Windows user feed: ${userFileName}`);
+			}
+		}
+
+		// Create feed for archive/ZIP (portable installation)
+		const archiveKey = `${winPlatform}-archive`;
+		if (feed.latest[archiveKey]) {
+			const archiveFeed: UpdateFeedEntry = {
+				version: feed.latest[archiveKey].commit || feed.latest[archiveKey].version,
+				productVersion: feed.latest[archiveKey].version,
+				timestamp: feed.latest[archiveKey].timestamp,
+				url: feed.latest[archiveKey].url,
+				sha256hash: feed.latest[archiveKey].sha256hash,
+				size: feed.latest[archiveKey].size,
+				supportsFastUpdate: true,
+				quality: feed.latest[archiveKey].quality
+			};
+
+			const archiveFileName = `latest-${winPlatform}-archive.json`;
+			const archiveContent = JSON.stringify(archiveFeed, null, 2);
+			const archiveBuffer = Buffer.from(archiveContent, 'utf8');
+
+			// Check if existing feed needs updating
+			const existingArchive = feedRelease.assets?.find((a: any) => a.name === archiveFileName);
+			const needsArchiveUpdate = await shouldUpdateAsset(existingArchive, archiveContent);
+
+			if (!needsArchiveUpdate) {
+				const existingSHA = existingArchive.digest?.substring('sha256:'.length) || 'unknown';
+				console.log(`✓ ${archiveFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
+			} else {
+				// Delete existing if it exists
+				if (existingArchive) {
+					console.log(`~ ${archiveFileName} changed, updating...`);
+					await octokit.repos.deleteReleaseAsset({
+						owner: REPO_OWNER,
+						repo: REPO_NAME,
+						asset_id: existingArchive.id
+					});
+				}
+
+				// Upload new
+				await octokit.repos.uploadReleaseAsset({
+					owner: REPO_OWNER,
+					repo: REPO_NAME,
+					release_id: feedRelease.id,
+					name: archiveFileName,
+					data: archiveBuffer as any,
+					headers: {
+						'content-type': 'application/json',
+						'content-length': archiveBuffer.length
+					}
+				});
+
+				console.log(`✓ Uploaded Windows archive feed: ${archiveFileName}`);
+			}
 		}
 	}
 }

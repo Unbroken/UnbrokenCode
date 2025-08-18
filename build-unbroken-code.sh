@@ -431,6 +431,9 @@ function Build_Windows()
 
 	# Create .dist directory for Windows builds
 	DIST_DIR="$PWD/.dist"
+	if ! $SKIP_GULP_BUILD; then
+		rm -rf "$DIST_DIR"
+	fi
 	mkdir -p "$DIST_DIR"
 	echo "Using distribution directory: $DIST_DIR"
 
@@ -632,6 +635,9 @@ function Build_Linux()
 
 	# Create .dist directory for Linux builds
 	DIST_DIR="$PWD/.dist"
+	if ! $SKIP_GULP_BUILD; then
+		rm -rf "$DIST_DIR"
+	fi
 	mkdir -p "$DIST_DIR"
 	echo "Using distribution directory: $DIST_DIR"
 
@@ -818,6 +824,9 @@ function Build_macOS()
 
 	# Create .dist directory in current directory
 	DIST_DIR="$PWD/.dist"
+	if ! $SKIP_GULP_BUILD; then
+		rm -rf "$DIST_DIR"
+	fi
 	mkdir -p "$DIST_DIR"
 	echo "Using distribution directory: $DIST_DIR"
 

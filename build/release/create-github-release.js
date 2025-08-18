@@ -61,9 +61,6 @@ function getProductInfo() {
     const productPath = path.join(__dirname, '../../product.json');
     return JSON.parse(fs.readFileSync(productPath, 'utf8'));
 }
-function getCurrentCommit() {
-    return (0, child_process_1.execSync)('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-}
 function getBuiltCommit() {
     // Get commit from all built product.json files and ensure they match
     const distDir = path.join(__dirname, '../../.dist');
@@ -389,6 +386,14 @@ function getFileHash(filePath) {
 function getFileSize(filePath) {
     return fs.statSync(filePath).size;
 }
+function sortAssetKeys(assets) {
+    const sorted = {};
+    const keys = Object.keys(assets).sort();
+    for (const key of keys) {
+        sorted[key] = assets[key];
+    }
+    return sorted;
+}
 function createDMG(appPath, dmgPath, volumeName) {
     // Generate background image if it doesn't exist
     const scriptDir = __dirname;
@@ -697,7 +702,6 @@ async function main() {
     const regenerateDMG = process.argv.includes('--regenerate-dmg');
     const distDir = path.join(__dirname, '../../.dist');
     const product = getProductInfo();
-    const commit = getCurrentCommit();
     // Get version from built product.json - this ensures we're releasing what was actually built
     const architectures = ['arm64', 'x64', 'universal'];
     const foundVersions = [];
@@ -774,9 +778,11 @@ async function main() {
     }
     const version = foundVersions[0].version;
     console.log(`\nAll architectures have consistent version: ${version}`);
+    // Get the commit from built product.json - this is what was actually built
+    const builtCommit = getBuiltCommit();
     const tagName = `release/${version}`;
     console.log(`Creating GitHub release for ${product.nameLong} ${version}`);
-    console.log(`Commit: ${commit}`);
+    console.log(`Built commit: ${builtCommit}`);
     // Initialize GitHub API client
     const token = getGitHubToken();
     const octokit = new rest_1.Octokit({ auth: token });
@@ -1075,7 +1081,7 @@ async function main() {
     let updateManifest = {
         version: version,
         productVersion: version,
-        commit: commit,
+        commit: builtCommit,
         timestamp: buildTimestamp,
         quality: 'stable',
         assets: {}
@@ -1103,7 +1109,7 @@ async function main() {
             ...existingManifest,
             version: version,
             productVersion: version,
-            commit: commit,
+            commit: builtCommit,
             timestamp: buildTimestamp,
             assets: { ...existingManifest.assets }
         };
@@ -1238,6 +1244,8 @@ async function main() {
             };
         }
     }
+    // Sort the assets keys for deterministic output (ensures consistent SHA)
+    updateManifest.assets = sortAssetKeys(updateManifest.assets);
     // Save update manifest
     const manifestPath = path.join(distDir, 'updates.json');
     fs.writeFileSync(manifestPath, JSON.stringify(updateManifest, null, 2));
@@ -1246,12 +1254,11 @@ async function main() {
         path: manifestPath,
         contentType: 'application/json'
     });
-    // Generate release notes
-    const builtCommit = getBuiltCommit();
+    // Generate release notes  
     const releaseNotes = await generateReleaseNotes(builtCommit, tagName);
     // Create release body
     const releaseBodyParts = [
-        `Commit: \`${commit}\``
+        `Commit: \`${builtCommit}\``
     ];
     // Add release notes if any were found
     if (releaseNotes.length > 0) {

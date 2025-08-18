@@ -44,10 +44,6 @@ function getProductInfo(): any {
 }
 
 
-function getCurrentCommit(): string {
-	return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-}
-
 function getBuiltCommit(): string {
 	// Get commit from all built product.json files and ensure they match
 	const distDir = path.join(__dirname, '../../.dist');
@@ -407,6 +403,17 @@ function getFileSize(filePath: string): number {
 	return fs.statSync(filePath).size;
 }
 
+function sortAssetKeys(assets: Record<string, any>): Record<string, any> {
+	const sorted: Record<string, any> = {};
+	const keys = Object.keys(assets).sort();
+	
+	for (const key of keys) {
+		sorted[key] = assets[key];
+	}
+	
+	return sorted;
+}
+
 function createDMG(appPath: string, dmgPath: string, volumeName: string): void {
 	// Generate background image if it doesn't exist
 	const scriptDir = __dirname;
@@ -743,7 +750,6 @@ async function main() {
 
 	const distDir = path.join(__dirname, '../../.dist');
 	const product = getProductInfo();
-	const commit = getCurrentCommit();
 
 	// Get version from built product.json - this ensures we're releasing what was actually built
 	const architectures = ['arm64', 'x64', 'universal'];
@@ -825,10 +831,13 @@ async function main() {
 	const version = foundVersions[0].version;
 	console.log(`\nAll architectures have consistent version: ${version}`);
 
+	// Get the commit from built product.json - this is what was actually built
+	const builtCommit = getBuiltCommit();
+
 	const tagName = `release/${version}`;
 
 	console.log(`Creating GitHub release for ${product.nameLong} ${version}`);
-	console.log(`Commit: ${commit}`);
+	console.log(`Built commit: ${builtCommit}`);
 
 	// Initialize GitHub API client
 	const token = getGitHubToken();
@@ -1166,7 +1175,7 @@ async function main() {
 	let updateManifest: any = {
 		version: version,
 		productVersion: version,
-		commit: commit,
+		commit: builtCommit,
 		timestamp: buildTimestamp,
 		quality: 'stable',
 		assets: {}
@@ -1199,7 +1208,7 @@ async function main() {
 			...existingManifest,
 			version: version,
 			productVersion: version,
-			commit: commit,
+			commit: builtCommit,
 			timestamp: buildTimestamp,
 			assets: { ...existingManifest.assets }
 		};
@@ -1345,6 +1354,9 @@ async function main() {
 		}
 	}
 
+	// Sort the assets keys for deterministic output (ensures consistent SHA)
+	updateManifest.assets = sortAssetKeys(updateManifest.assets);
+	
 	// Save update manifest
 	const manifestPath = path.join(distDir, 'updates.json');
 	fs.writeFileSync(manifestPath, JSON.stringify(updateManifest, null, 2));
@@ -1355,13 +1367,12 @@ async function main() {
 		contentType: 'application/json'
 	});
 
-	// Generate release notes
-	const builtCommit = getBuiltCommit();
+	// Generate release notes  
 	const releaseNotes = await generateReleaseNotes(builtCommit, tagName);
 
 	// Create release body
 	const releaseBodyParts = [
-		`Commit: \`${commit}\``
+		`Commit: \`${builtCommit}\``
 	];
 
 	// Add release notes if any were found

@@ -565,6 +565,7 @@ const esbuildMediaScripts = [
 	'notebook-renderers/esbuild.mjs',
 	'ipynb/esbuild.mjs',
 	'simple-browser/esbuild-preview.mjs',
+	'malterlib/esbuild.mjs',
 ];
 
 export async function webpackExtensions(taskName: string, isWatch: boolean, webpackConfigLocations: { configPath: string; outputRoot?: string }[]) {
@@ -632,11 +633,13 @@ export async function webpackExtensions(taskName: string, isWatch: boolean, webp
 }
 
 async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { script: string; outputRoot?: string }[]) {
-	function reporter(stdError: string, script: string) {
+	function reporter(stdError: string, script: string, isIncremental: boolean,) {
 		const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-		fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		if (!isIncremental) {
+			fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		}
 		for (const match of matches || []) {
-			fancyLog.error(match);
+			fancyLog.error(ansiColors.red(match));
 		}
 	}
 
@@ -653,12 +656,16 @@ async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { 
 				if (error) {
 					return reject(error);
 				}
-				reporter(stderr, script);
+				reporter(stderr, script, false);
 				return resolve();
 			});
 
 			proc.stdout!.on('data', (data) => {
 				fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
+			});
+
+			proc.stderr!.on('data', (data) => {
+				reporter(data, script, true);
 			});
 		});
 	});

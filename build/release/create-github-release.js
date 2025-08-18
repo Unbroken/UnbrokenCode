@@ -892,7 +892,7 @@ async function main() {
                 const zipTask = new Promise((resolve, reject) => {
                     const powershell = (0, child_process_1.spawn)('powershell', [
                         '-Command',
-                        `Compress-Archive -Path '${distDir}/VSCode-win32-${arch}' -DestinationPath '${zipPath}' -Force`
+                        `Compress-Archive -Path '${distDir}/VSCode-win32-${arch}/*' -DestinationPath '${zipPath}' -Force`
                     ], {
                         stdio: 'inherit'
                     });
@@ -1121,6 +1121,17 @@ async function main() {
                 supportsFastUpdate: true
             };
         }
+        // Add DMG file for macOS
+        const dmgName = `UnbrokenCode-darwin-${arch}-${version}.dmg`;
+        const dmgPath = path.join(distDir, dmgName);
+        if (fs.existsSync(dmgPath)) {
+            updateManifest.assets[`darwin-${arch}-dmg`] = {
+                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${dmgName}`,
+                sha256hash: getFileHash(dmgPath),
+                size: getFileSize(dmgPath),
+                supportsFastUpdate: false
+            };
+        }
         // Add CLI package for macOS
         const cliPackageName = `unbroken_code_cli_darwin_${arch}_cli.zip`;
         const cliPackagePath = path.join(distDir, cliPackageName);
@@ -1271,9 +1282,10 @@ async function main() {
         const manifestAssetKeys = Object.keys(updateManifest.assets);
         // Extract filenames from update manifest URLs
         const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-        const arm64Asset = manifestAssetKeys.find(key => key === 'darwin-arm64');
-        const x64Asset = manifestAssetKeys.find(key => key === 'darwin-x64');
-        const universalAsset = manifestAssetKeys.find(key => key === 'darwin-universal');
+        // Look for DMG files first (preferred for manual download), fallback to ZIP
+        const arm64Asset = manifestAssetKeys.find(key => key === 'darwin-arm64-dmg') || manifestAssetKeys.find(key => key === 'darwin-arm64');
+        const x64Asset = manifestAssetKeys.find(key => key === 'darwin-x64-dmg') || manifestAssetKeys.find(key => key === 'darwin-x64');
+        const universalAsset = manifestAssetKeys.find(key => key === 'darwin-universal-dmg') || manifestAssetKeys.find(key => key === 'darwin-universal');
         if (arm64Asset) {
             const filename = getFilenameFromUrl(updateManifest.assets[arm64Asset].url);
             const cliLink = getCliDownloadLink('darwin', 'arm64');

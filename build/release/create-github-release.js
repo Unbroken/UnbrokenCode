@@ -114,15 +114,15 @@ function getBuiltCommit() {
 function getReleaseTagsFromGit() {
     try {
         // Fetch tags from origin to ensure we have the latest
-        (0, child_process_1.execSync)('git fetch origin --tags --prune-tags', { stdio: 'pipe' });
+        (0, child_process_1.execSync)('git fetch origin --tags --prune --prune-tags --force', { stdio: 'pipe' });
         const output = (0, child_process_1.execSync)('git tag -l "release/*"', { encoding: 'utf8' }).trim();
         const tags = output ? output.split('\n') : [];
         debugLog('Found release tags:', tags);
         return tags;
     }
     catch (error) {
-        console.warn('Warning: Could not get release tags from git');
-        return [];
+        console.warn(`Warning: Could not get release tags from git: ${error}`);
+        throw error;
     }
 }
 function sortReleaseTagsByVersion(tags) {
@@ -1254,7 +1254,7 @@ async function main() {
         path: manifestPath,
         contentType: 'application/json'
     });
-    // Generate release notes  
+    // Generate release notes
     const releaseNotes = await generateReleaseNotes(builtCommit, tagName);
     // Create release body
     const releaseBodyParts = [
@@ -1264,205 +1264,112 @@ async function main() {
     if (releaseNotes.length > 0) {
         releaseBodyParts.push('', '## What\'s New', '', ...releaseNotes.map(note => `- ${note}`));
     }
-    // Check which platforms are available in the final merged manifest (for install instructions)
-    const hasManifestDarwinBuilds = Object.keys(updateManifest.assets).some(key => key.startsWith('darwin-'));
-    const hasManifestWindowsBuilds = Object.keys(updateManifest.assets).some(key => key.startsWith('win32-'));
-    const hasManifestLinuxBuilds = Object.keys(updateManifest.assets).some(key => key.startsWith('linux-'));
     // Generate download links for available assets
     const generateDownloadLink = (filename) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(tagName)}/${filename}`;
-    // Helper function to get CLI download link for a given platform and architecture
-    const getCliDownloadLink = (platform, arch) => {
-        const manifestAssetKeys = Object.keys(updateManifest.assets);
-        const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-        const cliAssetKey = manifestAssetKeys.find(key => key === `${platform}-${arch}-cli`);
-        if (cliAssetKey) {
-            const filename = getFilenameFromUrl(updateManifest.assets[cliAssetKey].url);
-            return ` [CLI](${generateDownloadLink(filename)})`;
+    // Helper function to get file extension from filename
+    const getFileExtension = (filename) => {
+        // Extract just the extension part for display
+        if (filename.includes('.dmg')) {
+            return 'dmg';
+        }
+        if (filename.includes('.zip')) {
+            return 'zip';
+        }
+        if (filename.includes('.tar.gz')) {
+            return 'tar.gz';
+        }
+        if (filename.includes('.deb')) {
+            return 'deb';
+        }
+        if (filename.includes('.rpm')) {
+            return 'rpm';
+        }
+        if (filename.includes('.exe')) {
+            return 'exe';
         }
         return '';
     };
+    // Helper function to create download link with just extension as text
+    const createDownloadCell = (filename) => {
+        if (!filename) {
+            return '';
+        }
+        const extension = getFileExtension(filename);
+        return `[${extension}](${generateDownloadLink(filename)})`;
+    };
+    // Helper function to create multiple download links in one cell
+    const createMultiDownloadCell = (filenames) => {
+        const links = filenames
+            .filter(f => f !== null)
+            .map(f => createDownloadCell(f))
+            .filter(link => link !== '');
+        return links.join(' ');
+    };
     // Add installation instructions based on available platforms
-    releaseBodyParts.push('', '---', '### Installation', '');
-    if (hasManifestDarwinBuilds) {
-        const macOSDownloads = [];
-        // Find available macOS assets from update manifest
-        const manifestAssetKeys = Object.keys(updateManifest.assets);
-        // Extract filenames from update manifest URLs
-        const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-        // Look for DMG files first (preferred for manual download), fallback to ZIP
-        const arm64Asset = manifestAssetKeys.find(key => key === 'darwin-arm64-dmg') || manifestAssetKeys.find(key => key === 'darwin-arm64');
-        const x64Asset = manifestAssetKeys.find(key => key === 'darwin-x64-dmg') || manifestAssetKeys.find(key => key === 'darwin-x64');
-        const universalAsset = manifestAssetKeys.find(key => key === 'darwin-universal-dmg') || manifestAssetKeys.find(key => key === 'darwin-universal');
-        if (arm64Asset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[arm64Asset].url);
-            const cliLink = getCliDownloadLink('darwin', 'arm64');
-            macOSDownloads.push(`- **Apple Silicon**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
+    releaseBodyParts.push('', '---', '## Downloads', '');
+    // Find available assets from update manifest
+    const getFilenameFromUrl = (url) => url.split('/').pop() || '';
+    // Helper to get asset filename by key
+    const getAssetFilename = (key) => {
+        const asset = updateManifest.assets[key];
+        if (!asset) {
+            return null;
         }
-        if (x64Asset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[x64Asset].url);
-            const cliLink = getCliDownloadLink('darwin', 'x64');
-            macOSDownloads.push(`- **Intel**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        if (universalAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[universalAsset].url);
-            const cliLink = getCliDownloadLink('darwin', 'universal');
-            macOSDownloads.push(`- **Universal** (works on both): [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        releaseBodyParts.push(
+        return getFilenameFromUrl(asset.url);
+    };
+    // Create download table
+    const tableRows = [];
+    // Table header
+    tableRows.push('| Platform | Universal | x64 | arm64 | CLI Universal | CLI x64 | CLI arm64 |');
+    tableRows.push('|----------|-----------|-----|-------|---------------|---------|-----------|');
+    // macOS row - include both dmg and zip for app downloads, plus universal builds
+    const macosAppX64Dmg = getAssetFilename('darwin-x64-dmg');
+    const macosAppX64Zip = getAssetFilename('darwin-x64');
+    const macosAppArm64Dmg = getAssetFilename('darwin-arm64-dmg');
+    const macosAppArm64Zip = getAssetFilename('darwin-arm64');
+    const macosAppUniversalDmg = getAssetFilename('darwin-universal-dmg');
+    const macosAppUniversalZip = getAssetFilename('darwin-universal');
+    const macosCliX64 = getAssetFilename('darwin-x64-cli');
+    const macosCliArm64 = getAssetFilename('darwin-arm64-cli');
+    const macosCliUniversal = getAssetFilename('darwin-universal-cli');
+    if (macosAppX64Dmg || macosAppX64Zip || macosAppArm64Dmg || macosAppArm64Zip || macosAppUniversalDmg || macosAppUniversalZip || macosCliX64 || macosCliArm64 || macosCliUniversal) {
         // allow-any-unicode-next-line
-        '## 🖥️ macOS Installation', '', 'Download the DMG file for your architecture:', ...macOSDownloads, '', 'Open the DMG and drag Unbroken Code to your Applications folder.', '', 
+        tableRows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
+    }
+    // Windows row - include exe and zip for app downloads (no universal for Windows)
+    const winAppX64Exe = getAssetFilename('win32-x64-user-setup');
+    const winAppX64Zip = getAssetFilename('win32-x64');
+    const winAppArm64Exe = getAssetFilename('win32-arm64-user-setup');
+    const winAppArm64Zip = getAssetFilename('win32-arm64');
+    const winCliX64 = getAssetFilename('win32-x64-cli');
+    const winCliArm64 = getAssetFilename('win32-arm64-cli');
+    if (winAppX64Exe || winAppX64Zip || winAppArm64Exe || winAppArm64Zip || winCliX64 || winCliArm64) {
         // allow-any-unicode-next-line
-        '### 💡 Recommended: Disable Font Smoothing for Pixel-Perfect Rendering', 'For the best experience with Unbroken Code\'s crisp font rendering, disable font smoothing:', '', '```bash', 'defaults -currentHost write -g AppleFontSmoothing -int 0', '```', '', 'To re-enable: `defaults -currentHost delete -g AppleFontSmoothing`', '', '**Why?** Apple\'s font smoothing makes text appear bold and blurry. [Learn more](https://tonsky.me/blog/monitors/#turn-off-font-smoothing)', '');
+        tableRows.push(`| **💻 Windows** | | ${createMultiDownloadCell([winAppX64Exe, winAppX64Zip])} | ${createMultiDownloadCell([winAppArm64Exe, winAppArm64Zip])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
     }
-    if (hasManifestWindowsBuilds) {
-        const windowsZips = [];
-        // Find available Windows assets from update manifest
-        const manifestAssetKeys = Object.keys(updateManifest.assets);
-        // Extract filenames from update manifest URLs
-        const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-        // Find ZIP assets
-        const x64ZipAsset = manifestAssetKeys.find(key => key === 'win32-x64');
-        const arm64ZipAsset = manifestAssetKeys.find(key => key === 'win32-arm64');
-        // Find setup assets
-        const x64UserSetupAsset = manifestAssetKeys.find(key => key === 'win32-x64-user-setup');
-        const x64SystemSetupAsset = manifestAssetKeys.find(key => key === 'win32-x64-system-setup');
-        const arm64UserSetupAsset = manifestAssetKeys.find(key => key === 'win32-arm64-user-setup');
-        const arm64SystemSetupAsset = manifestAssetKeys.find(key => key === 'win32-arm64-system-setup');
-        // User installers
-        const userInstallers = [];
-        if (x64UserSetupAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[x64UserSetupAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'x64');
-            userInstallers.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        if (arm64UserSetupAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[arm64UserSetupAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'arm64');
-            userInstallers.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        // System installers
-        const systemInstallers = [];
-        if (x64SystemSetupAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[x64SystemSetupAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'x64');
-            systemInstallers.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        if (arm64SystemSetupAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[arm64SystemSetupAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'arm64');
-            systemInstallers.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        // Portable ZIPs
-        if (x64ZipAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[x64ZipAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'x64');
-            windowsZips.push(`- **x64 Portable**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        if (arm64ZipAsset) {
-            const filename = getFilenameFromUrl(updateManifest.assets[arm64ZipAsset].url);
-            const cliLink = getCliDownloadLink('win32', 'arm64');
-            windowsZips.push(`- **ARM64 Portable**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-        }
-        const installSections = [
-            '',
-            // allow-any-unicode-next-line
-            '## 💻 Windows Installation',
-            '',
-            'Choose your installation method:'
-        ];
-        // Add user installer section if available
-        if (userInstallers.length > 0) {
-            installSections.push('', 
-            // allow-any-unicode-next-line
-            '### 👤 User Install (Recommended)', 'No admin privileges required. Installs only for the current user.', ...userInstallers);
-        }
-        // Add system installer section if available
-        if (systemInstallers.length > 0) {
-            installSections.push('', 
-            // allow-any-unicode-next-line
-            '### 🔧 System Install', 'Requires administrator privileges. Installs for all users on the system.', ...systemInstallers);
-        }
-        // Add portable section if available
-        if (windowsZips.length > 0) {
-            installSections.push('', 
-            // allow-any-unicode-next-line
-            '### 📁 Portable ZIP', 'No installation required. Extract and run directly.', ...windowsZips, '', 'Extract the ZIP and run `Code.exe` from the extracted folder.');
-        }
-        installSections.push('');
-        releaseBodyParts.push(...installSections);
+    // Linux row - include deb, rpm, and tar.gz for app downloads (no universal for Linux)
+    const linuxAppX64Deb = getAssetFilename('linux-x64-deb');
+    const linuxAppX64Rpm = getAssetFilename('linux-x64-rpm');
+    const linuxAppX64Tar = getAssetFilename('linux-x64');
+    const linuxAppArm64Deb = getAssetFilename('linux-arm64-deb');
+    const linuxAppArm64Rpm = getAssetFilename('linux-arm64-rpm');
+    const linuxAppArm64Tar = getAssetFilename('linux-arm64');
+    const linuxCliX64 = getAssetFilename('linux-x64-cli');
+    const linuxCliArm64 = getAssetFilename('linux-arm64-cli');
+    if (linuxAppX64Deb || linuxAppX64Rpm || linuxAppX64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxAppArm64Tar || linuxCliX64 || linuxCliArm64) {
+        // allow-any-unicode-next-line
+        tableRows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
     }
-    if (hasManifestLinuxBuilds) {
-        const linuxSections = [
-            '',
-            // allow-any-unicode-next-line
-            '## 🐧 Linux Installation',
-            '',
-            'Choose your installation method:'
-        ];
-        // Find available Linux assets from update manifest
-        const manifestAssetKeys = Object.keys(updateManifest.assets);
-        // Extract filenames from update manifest URLs
-        const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-        // Check for .deb packages
-        const x64DebAsset = manifestAssetKeys.find(key => key === 'linux-x64-deb');
-        const arm64DebAsset = manifestAssetKeys.find(key => key === 'linux-arm64-deb');
-        if (x64DebAsset || arm64DebAsset) {
-            linuxSections.push('', 
-            // allow-any-unicode-next-line
-            '### 📦 Debian/Ubuntu (.deb)', 'For Debian, Ubuntu, and derivatives:');
-            if (x64DebAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[x64DebAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'x64');
-                linuxSections.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            if (arm64DebAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[arm64DebAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'arm64');
-                linuxSections.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            linuxSections.push('', 'Install with: `sudo dpkg -i UnbrokenCode-linux-*.deb`');
-        }
-        // Check for .rpm packages
-        const x64RpmAsset = manifestAssetKeys.find(key => key === 'linux-x64-rpm');
-        const arm64RpmAsset = manifestAssetKeys.find(key => key === 'linux-arm64-rpm');
-        if (x64RpmAsset || arm64RpmAsset) {
-            linuxSections.push('', 
-            // allow-any-unicode-next-line
-            '### 📦 RedHat/Fedora (.rpm)', 'For RedHat, Fedora, SUSE, and derivatives:');
-            if (x64RpmAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[x64RpmAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'x64');
-                linuxSections.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            if (arm64RpmAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[arm64RpmAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'arm64');
-                linuxSections.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            linuxSections.push('', 'Install with: `sudo rpm -i UnbrokenCode-linux-*.rpm`');
-        }
-        // Check for tar.gz archives
-        const x64TarAsset = manifestAssetKeys.find(key => key === 'linux-x64');
-        const arm64TarAsset = manifestAssetKeys.find(key => key === 'linux-arm64');
-        if (x64TarAsset || arm64TarAsset) {
-            linuxSections.push('', 
-            // allow-any-unicode-next-line
-            '### 📁 Universal Archive (.tar.gz)', 'For any Linux distribution:');
-            if (x64TarAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[x64TarAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'x64');
-                linuxSections.push(`- **x64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            if (arm64TarAsset) {
-                const filename = getFilenameFromUrl(updateManifest.assets[arm64TarAsset].url);
-                const cliLink = getCliDownloadLink('linux', 'arm64');
-                linuxSections.push(`- **ARM64**: [${filename}](${generateDownloadLink(filename)})${cliLink}`);
-            }
-            linuxSections.push('', 'Extract with: `tar -xzf UnbrokenCode-linux-*.tar.gz`', 'Run with: `./UnbrokenCode-linux-*/bin/code`');
-        }
-        linuxSections.push('');
-        releaseBodyParts.push(...linuxSections);
-    }
+    releaseBodyParts.push(...tableRows);
+    releaseBodyParts.push('');
+    // Add simplified installation instructions
+    releaseBodyParts.push('## Installation Instructions', '', 
+    // allow-any-unicode-next-line
+    '### 🖥️ macOS', '- **App**: Download dmg for easy installation or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', 
+    // allow-any-unicode-next-line
+    '### 💻 Windows', '- **App**: Download exe for installer or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', 
+    // allow-any-unicode-next-line
+    '### 🐧 Linux', '- **Debian/Ubuntu**: Download deb and run `sudo dpkg -i UnbrokenCode-*.deb`', '- **RedHat/Fedora**: Download rpm and run `sudo rpm -i UnbrokenCode-*.rpm`', '- **Other**: Download tar.gz and extract', '- **CLI**: Download CLI package and add to PATH', '');
     releaseBodyParts.push(
     // allow-any-unicode-next-line
     '## 🔄 Auto-Update', 'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.');

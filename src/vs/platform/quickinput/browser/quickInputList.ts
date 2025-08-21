@@ -418,7 +418,7 @@ class QuickPickItemElementRenderer extends BaseQuickInputListRenderer<QuickPickI
 
 		let checkbox = data.checkbox.value;
 		if (!checkbox) {
-			checkbox = new Checkbox(element.saneLabel, element.checked, { ...defaultCheckboxStyles, size: 15 });
+			checkbox = new Checkbox(element.saneLabel, element.checked, { ...defaultCheckboxStyles, size: 12 });
 			data.checkbox.value = checkbox;
 			data.outerLabel.prepend(checkbox.domNode);
 		} else {

@@ -176,7 +176,11 @@ function watchTask(out, build, srcPath = 'src') {
     const task = () => {
         const compile = createCompile(srcPath, { build, emitError: false, transpileOnly: false, preserveEnglish: false });
         const src = gulp_1.default.src(`${srcPath}/**`, { base: srcPath });
-        const watchSrc = watch(`${srcPath}/**`, { base: srcPath, readDelay: 200 });
+        const watchSrc = watch(`${srcPath}/**`, {
+            base: srcPath,
+            readDelay: 200,
+            ignored: '**/*.tmp.*'
+        });
         const generator = new MonacoGenerator(true);
         generator.execute();
         return watchSrc

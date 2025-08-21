@@ -38,8 +38,9 @@ import type { TerminalEditorInput } from './terminalEditorInput.js';
 export const ITerminalService = createDecorator<ITerminalService>('terminalService');
 export const ITerminalConfigurationService = createDecorator<ITerminalConfigurationService>('terminalConfigurationService');
 export const ITerminalEditorService = createDecorator<ITerminalEditorService>('terminalEditorService');
-export const ITerminalGroupService = createDecorator<ITerminalGroupService>('terminalGroupService');
+export const IDefaultTerminalGroupService = createDecorator<IDefaultTerminalGroupService>('defaultTerminalGroupService');
 export const ITerminalInstanceService = createDecorator<ITerminalInstanceService>('terminalInstanceService');
+export const ITerminalGroupServices = createDecorator<ITerminalGroupServices>('terminalGroupServices');
 
 /**
  * A terminal contribution that gets created whenever a terminal is created. A contribution has
@@ -86,7 +87,7 @@ export interface ITerminalInstanceService {
 	 * @param launchConfig The shell launch config.
 	 * @param target The target of the terminal.
 	 */
-	createInstance(launchConfig: IShellLaunchConfig, target: TerminalLocation, editorOptions?: TerminalEditorLocation): ITerminalInstance;
+	createInstance(launchConfig: IShellLaunchConfig, target: TerminalLocation, terminalGroupService: ITerminalGroupService | null, editorOptions?: TerminalEditorLocation): ITerminalInstance;
 
 	/**
 	 * Gets the registered backend for a remote authority (undefined = local). This is a convenience
@@ -466,6 +467,11 @@ export interface ICreateTerminalOptions {
 	 * when the workbench is not yet loaded.
 	 */
 	skipContributedProfileCheck?: boolean;
+
+	/**
+	 * The target group service to create the terminal in.
+	 */
+	terminalGroupService?: ITerminalGroupService;
 }
 
 export interface TerminalEditorLocation {
@@ -533,6 +539,14 @@ export interface ITerminalGroupService extends ITerminalInstanceHost {
 	focusTabs(): void;
 	focusHover(): void;
 	updateVisibility(): void;
+}
+
+export interface IDefaultTerminalGroupService extends ITerminalGroupService {
+}
+
+export interface ITerminalGroupServices {
+	lastSelectedGroupService: ITerminalGroupService | undefined;
+	terminalGroupServices: ITerminalGroupService[];
 }
 
 /**
@@ -636,6 +650,7 @@ export interface ITerminalInstance extends IBaseTerminalInstance {
 	readonly shellIntegrationInjectionFailureReason: ShellIntegrationInjectionFailureReason | undefined;
 	readonly injectedArgs: string[] | undefined;
 	readonly extEnvironmentVariableCollection: IMergedEnvironmentVariableCollection | undefined;
+	terminalGroupService: ITerminalGroupService | undefined;
 
 	/**
 	 * The underlying disposable store, allowing objects who share the same lifecycle as the

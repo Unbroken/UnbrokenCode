@@ -28,7 +28,7 @@ import { IUntitledTextResourceEditorInput } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { accessibleViewInCodeBlock } from '../../../accessibility/browser/accessibilityConfiguration.js';
 import { reviewEdits } from '../../../inlineChat/browser/inlineChatController.js';
-import { ITerminalEditorService, ITerminalGroupService, ITerminalService } from '../../../terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupServices, ITerminalService } from '../../../terminal/browser/terminal.js';
 import { ChatContextKeys } from '../../common/chatContextKeys.js';
 import { ChatCopyKind, IChatService } from '../../common/chatService.js';
 import { IChatRequestViewModel, IChatResponseViewModel, isRequestVM, isResponseVM } from '../../common/chatViewModel.js';
@@ -417,7 +417,7 @@ export function registerChatCodeBlockActions() {
 			const terminalService = accessor.get(ITerminalService);
 			const editorService = accessor.get(IEditorService);
 			const terminalEditorService = accessor.get(ITerminalEditorService);
-			const terminalGroupService = accessor.get(ITerminalGroupService);
+			const terminalGroupServices = accessor.get(ITerminalGroupServices);
 
 			let terminal = await terminalService.getActiveOrCreateInstance();
 
@@ -431,7 +431,7 @@ export function registerChatCodeBlockActions() {
 				const existingEditors = editorService.findEditors(terminal.resource);
 				terminalEditorService.openEditor(terminal, { viewColumn: existingEditors?.[0].groupId });
 			} else {
-				terminalGroupService.showPanel(true);
+				terminal.terminalGroupService?.showPanel(true);
 			}
 
 			terminal.runCommand(context.code, false);

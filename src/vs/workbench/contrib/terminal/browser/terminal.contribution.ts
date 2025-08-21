@@ -29,7 +29,7 @@ import './media/terminalVoice.css';
 import './media/widgets.css';
 import './media/xterm.css';
 import { RemoteTerminalBackendContribution } from './remoteTerminalBackend.js';
-import { ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalInstanceService, ITerminalService, TerminalDataTransfers, terminalEditorId } from './terminal.js';
+import { ITerminalConfigurationService, ITerminalEditorService, IDefaultTerminalGroupService, ITerminalInstanceService, ITerminalService, TerminalDataTransfers, terminalEditorId, ITerminalGroupServices } from './terminal.js';
 import { registerTerminalActions } from './terminalActions.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { TerminalConfigurationService } from './terminalConfigurationService.js';
@@ -38,6 +38,7 @@ import { TerminalEditorInput } from './terminalEditorInput.js';
 import { TerminalInputSerializer } from './terminalEditorSerializer.js';
 import { TerminalEditorService } from './terminalEditorService.js';
 import { DefaultTerminalGroupService } from './terminalGroupService.js';
+import { TerminalGroupServices } from './terminalGroupServices.js';
 import { terminalViewIcon } from './terminalIcons.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
@@ -46,17 +47,17 @@ import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalTelemetryContribution } from './terminalTelemetry.js';
 import { TerminalViewPane } from './terminalView.js';
-import { TerminalView2Pane } from './terminalView2.js';
-import { TerminalView3Pane } from './terminalView3.js';
 
 // Register services
 registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Delayed);
 registerSingleton(ITerminalConfigurationService, TerminalConfigurationService, InstantiationType.Delayed);
 registerSingleton(ITerminalService, TerminalService, InstantiationType.Delayed);
 registerSingleton(ITerminalEditorService, TerminalEditorService, InstantiationType.Delayed);
-registerSingleton(ITerminalGroupService, DefaultTerminalGroupService, InstantiationType.Delayed);
+registerSingleton(IDefaultTerminalGroupService, DefaultTerminalGroupService, InstantiationType.Delayed);
 registerSingleton(ITerminalInstanceService, TerminalInstanceService, InstantiationType.Delayed);
 registerSingleton(ITerminalProfileService, TerminalProfileService, InstantiationType.Delayed);
+registerSingleton(ITerminalGroupServices, TerminalGroupServices, InstantiationType.Delayed);
+
 
 // Register workbench contributions
 // This contribution blocks startup as it's critical to enable the web embedder window.createTerminal API

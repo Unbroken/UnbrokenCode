@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ITerminalInstance, ITerminalInstanceService } from './terminal.js';
+import { ITerminalGroupServices, ITerminalInstance, ITerminalInstanceService, ITerminalGroupService } from './terminal.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IShellLaunchConfig, ITerminalBackend, ITerminalBackendRegistry, ITerminalProfile, TerminalExtensions, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
@@ -31,6 +31,7 @@ export class TerminalInstanceService extends Disposable implements ITerminalInst
 	constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
+		@ITerminalGroupServices private readonly _terminalGroupServices: ITerminalGroupServices,
 		@IWorkbenchEnvironmentService environmentService: IWorkbenchEnvironmentService,
 	) {
 		super();
@@ -42,11 +43,11 @@ export class TerminalInstanceService extends Disposable implements ITerminalInst
 		}
 	}
 
-	createInstance(profile: ITerminalProfile, target: TerminalLocation): ITerminalInstance;
-	createInstance(shellLaunchConfig: IShellLaunchConfig, target: TerminalLocation): ITerminalInstance;
-	createInstance(config: IShellLaunchConfig | ITerminalProfile, target: TerminalLocation): ITerminalInstance {
+	createInstance(profile: ITerminalProfile, target: TerminalLocation, terminalGroupService: ITerminalGroupService | null): ITerminalInstance;
+	createInstance(shellLaunchConfig: IShellLaunchConfig, target: TerminalLocation, terminalGroupService: ITerminalGroupService | null): ITerminalInstance;
+	createInstance(config: IShellLaunchConfig | ITerminalProfile, target: TerminalLocation, terminalGroupService: ITerminalGroupService | null): ITerminalInstance {
 		const shellLaunchConfig = this.convertProfileToShellLaunchConfig(config);
-		const instance = this._instantiationService.createInstance(TerminalInstance, this._terminalShellTypeContextKey, shellLaunchConfig);
+		const instance = this._instantiationService.createInstance(TerminalInstance, this._terminalShellTypeContextKey, shellLaunchConfig, terminalGroupService || this._terminalGroupServices.lastSelectedGroupService);
 		instance.target = target;
 		this._onDidCreateInstance.fire(instance);
 		return instance;

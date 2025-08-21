@@ -251,7 +251,10 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 
 	private _activatedTaskProviders: Set<string> = new Set();
 
+	private readonly _terminalGroupService: ITerminalGroupService;
+
 	constructor(
+		_terminalGroupService: ITerminalGroupService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IMarkerService protected readonly _markerService: IMarkerService,
 		@IOutputService protected readonly _outputService: IOutputService,
@@ -268,7 +271,6 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		@IQuickInputService private readonly _quickInputService: IQuickInputService,
 		@IConfigurationResolverService protected readonly _configurationResolverService: IConfigurationResolverService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IStorageService private readonly _storageService: IStorageService,
 		@IProgressService private readonly _progressService: IProgressService,
 		@IOpenerService private readonly _openerService: IOpenerService,
@@ -292,6 +294,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		@IChatAgentService private readonly _chatAgentService: IChatAgentService
 	) {
 		super();
+		this._terminalGroupService = _terminalGroupService;
 		this._whenTaskSystemReady = Event.toPromise(this.onDidChangeTaskSystemInfo);
 		this._workspaceTasksPromise = undefined;
 		this._taskSystem = undefined;

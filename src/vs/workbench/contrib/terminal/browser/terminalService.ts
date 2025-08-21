@@ -80,6 +80,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 	private _nativeDelegate?: ITerminalServiceNativeDelegate;
 	private _shutdownWindowCount?: number;
 
+	private readonly _terminalGroupService: ITerminalGroupService;
+
 	private _editable: { instance: ITerminalInstance; data: IEditableData } | undefined;
 
 	get isProcessSupportRegistered(): boolean { return !!this._processSupportContextKey.get(); }
@@ -169,6 +171,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	@memoize get onAnyInstanceShellTypeChanged() { return this._register(this.createOnInstanceEvent(e => Event.map(e.onDidChangeShellType, () => e))).event; }
 	@memoize get onAnyInstanceAddedCapabilityType() { return this._register(this.createOnInstanceEvent(e => e.capabilities.onDidAddCapabilityType)).event; }
 	constructor(
+		_terminalGroupService: ITerminalGroupService,
 		@IContextKeyService private _contextKeyService: IContextKeyService,
 		@ILifecycleService private readonly _lifecycleService: ILifecycleService,
 		@ITerminalLogService private readonly _logService: ITerminalLogService,
@@ -181,7 +184,6 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
 		@ITerminalEditorService private readonly _terminalEditorService: ITerminalEditorService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@ITerminalInstanceService private readonly _terminalInstanceService: ITerminalInstanceService,
 		@IEditorGroupsService private readonly _editorGroupsService: IEditorGroupsService,
 		@ITerminalProfileService private readonly _terminalProfileService: ITerminalProfileService,
@@ -193,6 +195,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@ITimerService private readonly _timerService: ITimerService
 	) {
 		super();
+
+		this._terminalGroupService = _terminalGroupService;
 
 		// the below avoids having to poll routinely.
 		// we update detected profiles when an instance is created so that,

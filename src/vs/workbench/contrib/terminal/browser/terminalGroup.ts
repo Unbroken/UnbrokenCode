@@ -8,7 +8,7 @@ import { IDisposable, Disposable, DisposableStore, dispose, toDisposable } from 
 import { SplitView, Orientation, IView, Sizing } from '../../../../base/browser/ui/splitview/splitview.js';
 import { isHorizontal, IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ITerminalInstance, Direction, ITerminalGroup, ITerminalInstanceService, ITerminalConfigurationService } from './terminal.js';
+import { ITerminalInstance, Direction, ITerminalGroup, ITerminalInstanceService, ITerminalConfigurationService, ITerminalGroupService } from './terminal.js';
 import { ViewContainerLocation, IViewDescriptorService } from '../../../common/views.js';
 import { IShellLaunchConfig, ITerminalTabLayoutInfoById, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { TerminalStatus } from './terminalStatusList.js';
@@ -255,6 +255,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 
 	private _initialRelativeSizes: number[] | undefined;
 	private _visible: boolean = false;
+	private _terminalGroupService: ITerminalGroupService;
 
 	private readonly _onDidDisposeInstance: Emitter<ITerminalInstance> = this._register(new Emitter<ITerminalInstance>());
 	readonly onDidDisposeInstance = this._onDidDisposeInstance.event;
@@ -275,6 +276,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		private _container: HTMLElement | undefined,
 		shellLaunchConfigOrInstance: IShellLaunchConfig | ITerminalInstance | undefined,
 		private readonly _terminalViewId: string,
+		terminalGroupService: ITerminalGroupService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
 		@ITerminalInstanceService private readonly _terminalInstanceService: ITerminalInstanceService,
 		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
@@ -282,6 +284,8 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		@IInstantiationService private readonly _instantiationService: IInstantiationService
 	) {
 		super();
+		this._terminalGroupService = terminalGroupService;
+
 		if (shellLaunchConfigOrInstance) {
 			this.addInstance(shellLaunchConfigOrInstance);
 		}
@@ -305,7 +309,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		if ('instanceId' in shellLaunchConfigOrInstance) {
 			instance = shellLaunchConfigOrInstance;
 		} else {
-			instance = this._terminalInstanceService.createInstance(shellLaunchConfigOrInstance, TerminalLocation.Panel);
+			instance = this._terminalInstanceService.createInstance(shellLaunchConfigOrInstance, TerminalLocation.Panel, this._terminalGroupService);
 		}
 		if (this._terminalInstances.length === 0) {
 			this._terminalInstances.push(instance);

@@ -8,7 +8,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
-import { ITerminalEditorService, ITerminalGroupService, ITerminalInstanceService, ITerminalService, terminalEditorId } from './terminal.js';
+import { ITerminalEditorService, ITerminalInstanceService, ITerminalService, terminalEditorId } from './terminal.js';
 import { parseTerminalUri } from './terminalUri.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { IEditorResolverService, RegisteredEditorPriority } from '../../../services/editor/common/editorResolverService.js';
@@ -32,7 +32,6 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@ITerminalService terminalService: ITerminalService,
 		@ITerminalEditorService terminalEditorService: ITerminalEditorService,
-		@ITerminalGroupService terminalGroupService: ITerminalGroupService,
 		@ITerminalInstanceService terminalInstanceService: ITerminalInstanceService
 	) {
 		super();
@@ -45,7 +44,6 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 			lifecycleService,
 			terminalService,
 			terminalEditorService,
-			terminalGroupService,
 			terminalInstanceService
 		);
 	}
@@ -58,7 +56,6 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		lifecycleService: ILifecycleService,
 		terminalService: ITerminalService,
 		terminalEditorService: ITerminalEditorService,
-		terminalGroupService: ITerminalGroupService,
 		terminalInstanceService: ITerminalInstanceService
 	) {
 		// IMPORTANT: This listener needs to be set up before the workbench is ready to support
@@ -91,7 +88,7 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 				createEditorInput: async ({ resource, options }) => {
 					let instance = terminalService.getInstanceFromResource(resource);
 					if (instance) {
-						const sourceGroup = terminalGroupService.getGroupForInstance(instance);
+						const sourceGroup = instance.terminalGroupService?.getGroupForInstance(instance);
 						sourceGroup?.removeInstance(instance);
 					} else { // Terminal from a different window
 						const terminalIdentifier = parseTerminalUri(resource);

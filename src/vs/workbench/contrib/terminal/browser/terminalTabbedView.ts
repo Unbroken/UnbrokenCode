@@ -22,6 +22,7 @@ import { TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { getInstanceHoverInfo } from './terminalTooltip.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 
 const $ = dom.$;
 
@@ -64,11 +65,13 @@ export class TerminalTabbedView extends Disposable {
 
 	private _panelOrientation: Orientation | undefined;
 
+	private readonly _terminalGroupService: ITerminalGroupService;
+
 	constructor(
 		parentElement: HTMLElement,
+		_terminalGroupService: ITerminalGroupService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
@@ -78,6 +81,8 @@ export class TerminalTabbedView extends Disposable {
 		@IHoverService private readonly _hoverService: IHoverService,
 	) {
 		super();
+
+		this._terminalGroupService = _terminalGroupService;
 
 		this._tabContainer = $('.tabs-container');
 		const tabListContainer = $('.tabs-list-container');
@@ -89,7 +94,7 @@ export class TerminalTabbedView extends Disposable {
 		this._tabsListMenu = this._register(menuService.createMenu(MenuId.TerminalTabContext, contextKeyService));
 		this._tabsListEmptyMenu = this._register(menuService.createMenu(MenuId.TerminalTabEmptyAreaContext, contextKeyService));
 
-		this._tabList = this._register(this._instantiationService.createInstance(TerminalTabList, this._tabListElement, this._register(new DisposableStore())));
+		this._tabList = this._register(this._instantiationService.createInstance(TerminalTabList, this._tabListElement, this._register(new DisposableStore()), this._terminalGroupService));
 
 		const terminalOuterContainer = $('.terminal-outer-container');
 		this._terminalContainer = $('.terminal-groups-container');

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { KeybindingsRegistry, KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { ITerminalGroupService } from './terminal.js';
+import { IDefaultTerminalGroupService, ITerminalGroupServices } from './terminal.js';
 
 export function setupTerminalCommands(): void {
 	registerOpenTerminalAtIndexCommands();
@@ -21,8 +21,11 @@ function registerOpenTerminalAtIndexCommands(): void {
 			when: undefined,
 			primary: 0,
 			handler: accessor => {
-				accessor.get(ITerminalGroupService).setActiveInstanceByIndex(terminalIndex);
-				return accessor.get(ITerminalGroupService).showPanel(true);
+				const groupServices = accessor.get(ITerminalGroupServices);
+				const terminlGroupService = groupServices.lastSelectedGroupService ?? accessor.get(IDefaultTerminalGroupService);
+
+				terminlGroupService.setActiveInstanceByIndex(terminalIndex);
+				return terminlGroupService.showPanel(true);
 			}
 		});
 	}

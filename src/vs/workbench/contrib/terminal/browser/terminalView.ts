@@ -53,10 +53,7 @@ import { InstanceContext, TerminalContextActionRunner } from './terminalContextM
 import { MicrotaskDelay } from '../../../../base/common/symbols.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { hasNativeContextMenu } from '../../../../platform/window/common/window.js';
-
-export interface ITerminalViewPaneOptions extends IViewPaneOptions {
-	terminalGroupService?: ITerminalGroupService;
-}
+import { TerminalGroupService } from './terminalGroupService.js';
 
 export class TerminalViewPane extends ViewPane {
 	private _parentDomElement: HTMLElement | undefined;
@@ -78,7 +75,7 @@ export class TerminalViewPane extends ViewPane {
 	private readonly _actionDisposables: DisposableMap<TerminalCommandId> = this._register(new DisposableMap());
 
 	constructor(
-		options: ITerminalViewPaneOptions,
+		options: IViewPaneOptions,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
@@ -87,7 +84,6 @@ export class TerminalViewPane extends ViewPane {
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
-		@ITerminalGroupService defaultTerminalGroupService: ITerminalGroupService,
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@INotificationService private readonly _notificationService: INotificationService,
@@ -99,10 +95,10 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalInstanceService private readonly _terminalInstanceService: ITerminalInstanceService,
 	) {
 		super(options, keybindingService, contextMenuService, _configurationService, _contextKeyService, viewDescriptorService, _instantiationService, openerService, themeService, hoverService);
-		
+
 		// Use the provided terminal group service from options, or fall back to the injected one
-		this._terminalGroupService = options.terminalGroupService || defaultTerminalGroupService;
-		
+		this._terminalGroupService = this._instantiationService.createInstance(TerminalGroupService, this.id);
+
 		this._register(this._terminalService.onDidRegisterProcessSupport(() => {
 			this._onDidChangeViewWelcomeState.fire();
 		}));
@@ -147,9 +143,11 @@ export class TerminalViewPane extends ViewPane {
 		});
 	}
 
-	private _updateForShellIntegration(container: HTMLElement) {
-		container.classList.toggle('shell-integration', this._gutterDecorationsEnabled());
-	}
+	public override get
+
+		private _updateForShellIntegration(container: HTMLElement) {
+			container.classList.toggle('shell-integration', this._gutterDecorationsEnabled());
+		}
 
 	private _gutterDecorationsEnabled(): boolean {
 		const decorationsEnabled = this._configurationService.getValue(TerminalSettingId.ShellIntegrationDecorationsEnabled);
@@ -253,7 +251,19 @@ export class TerminalViewPane extends ViewPane {
 		if (!this._parentDomElement) {
 			return;
 		}
-		this._terminalTabbedView = this._register(this.instantiationService.createInstance(TerminalTabbedView, this._parentDomElement));
+		this._terminalTabbedView = this._instantiationService.invokeFunction(accessor => this._register(new TerminalTabbedView(
+			this._parentDomElement!,
+			this._terminalGroupService,
+			accessor.get(ITerminalService),
+			accessor.get(ITerminalConfigurationService),
+			accessor.get(IInstantiationService),
+			accessor.get(IContextMenuService),
+			accessor.get(IConfigurationService),
+			accessor.get(IMenuService),
+			accessor.get(IStorageService),
+			accessor.get(IContextKeyService),
+			accessor.get(IHoverService),
+		)));
 	}
 
 	// eslint-disable-next-line @typescript-eslint/naming-convention
@@ -340,7 +350,7 @@ export class TerminalViewPane extends ViewPane {
 		// Set the last active terminal view ID context
 		const viewId = this._terminalGroupService.terminalViewId;
 		this._lastActiveViewId.set(viewId);
-		
+
 		if (this._terminalService.connectionState === TerminalConnectionState.Connected) {
 			if (this._terminalGroupService.instances.length === 0 && !this._isTerminalBeingCreated) {
 				this._isTerminalBeingCreated = true;
@@ -390,20 +400,20 @@ export class TerminalViewPane extends ViewPane {
 			shellLaunchConfig = config;
 		}
 		const convertedConfig = this._terminalInstanceService.convertProfileToShellLaunchConfig(shellLaunchConfig);
-		const instance = this._instantiationService.createInstance(TerminalInstance, 
+		const instance = this._instantiationService.createInstance(TerminalInstance,
 			TerminalContextKeys.shellType.bindTo(this._contextKeyService),
 			convertedConfig
 		);
 		instance.target = TerminalLocation.Panel;
-		
+
 		// Add to this view's group service
 		const group = this._terminalGroupService.createGroup();
 		group.addInstance(instance);
 		this._terminalGroupService.setActiveInstance(instance);
-		
+
 		// Fire the creation event
 		(this._terminalInstanceService as any)._onDidCreateInstance.fire(instance);
-		
+
 		return instance;
 	}
 
@@ -426,15 +436,18 @@ export class TerminalViewPane extends ViewPane {
 }
 
 class SwitchTerminalActionViewItem extends SelectActionViewItem {
+	private readonly _terminalGroupService: ITerminalGroupService;
+
 	constructor(
 		action: IAction,
+		_terminalGroupService: ITerminalGroupService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IContextViewService contextViewService: IContextViewService,
 		@ITerminalProfileService terminalProfileService: ITerminalProfileService,
 		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super(null, action, getTerminalSelectOpenItems(_terminalService, _terminalGroupService), _terminalGroupService.activeGroupIndex, contextViewService, defaultSelectBoxStyles, { ariaLabel: nls.localize('terminals', 'Open Terminals.'), optionsAsChildren: true, useCustomDrawn: !hasNativeContextMenu(configurationService) });
+		this._terminalGroupService = _terminalGroupService;
 		this._register(_terminalService.onDidChangeInstances(() => this._updateItems(), this));
 		this._register(_terminalService.onDidChangeActiveGroup(() => this._updateItems(), this));
 		this._register(_terminalService.onDidChangeActiveInstance(() => this._updateItems(), this));
@@ -476,9 +489,11 @@ class SingleTerminalTabActionViewItem extends MenuEntryActionViewItem {
 	private _altCommand: string | undefined;
 	private _class: string | undefined;
 	private readonly _elementDisposables: IDisposable[] = [];
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
 		action: MenuItemAction,
+		_terminalGroupService: ITerminalGroupService,
 		private readonly _actions: IAction[],
 		@IKeybindingService keybindingService: IKeybindingService,
 		@INotificationService notificationService: INotificationService,
@@ -486,7 +501,6 @@ class SingleTerminalTabActionViewItem extends MenuEntryActionViewItem {
 		@IThemeService themeService: IThemeService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ITerminalConfigurationService private readonly _terminaConfigurationService: ITerminalConfigurationService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@ICommandService private readonly _commandService: ICommandService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
@@ -496,6 +510,8 @@ class SingleTerminalTabActionViewItem extends MenuEntryActionViewItem {
 			draggable: true,
 			hoverDelegate: _instantiationService.createInstance(SingleTabHoverDelegate)
 		}, keybindingService, notificationService, contextKeyService, themeService, contextMenuService, _accessibilityService);
+
+		this._terminalGroupService = _terminalGroupService;
 
 		// Register listeners to update the tab
 		this._register(Event.debounce<ITerminalInstance | undefined, Set<ITerminalInstance>>(Event.any(
@@ -729,13 +745,15 @@ class SingleTabHoverDelegate implements IHoverDelegate {
 	private _lastHoverHideTime: number = 0;
 
 	readonly placement = 'element';
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
+		_terminalGroupService: ITerminalGroupService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IStorageService private readonly _storageService: IStorageService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 	) {
+		this._terminalGroupService = _terminalGroupService;
 	}
 
 	get delay(): number {

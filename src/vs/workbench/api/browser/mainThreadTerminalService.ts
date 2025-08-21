@@ -45,6 +45,7 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 	private readonly _quickFixProviders = new Map<string, IDisposable>();
 	private readonly _dataEventTracker = new MutableDisposable<TerminalDataEventTracker>();
 	private readonly _sendCommandEventListener = new MutableDisposable();
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	/**
 	 * A single shared terminal link provider for the exthost. When an ext registers a link
@@ -58,6 +59,7 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 
 	constructor(
 		_extHostContext: IExtHostContext,
+		_terminalGroupService: ITerminalGroupService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ITerminalLinkProviderService private readonly _terminalLinkProviderService: ITerminalLinkProviderService,
 		@ITerminalQuickFixService private readonly _terminalQuickFixService: ITerminalQuickFixService,
@@ -66,13 +68,13 @@ export class MainThreadTerminalService implements MainThreadTerminalServiceShape
 		@ILogService private readonly _logService: ILogService,
 		@ITerminalProfileResolverService private readonly _terminalProfileResolverService: ITerminalProfileResolverService,
 		@IRemoteAgentService remoteAgentService: IRemoteAgentService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@ITerminalEditorService private readonly _terminalEditorService: ITerminalEditorService,
 		@ITerminalProfileService private readonly _terminalProfileService: ITerminalProfileService,
 		@ITerminalCompletionService private readonly _terminalCompletionService: ITerminalCompletionService,
 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
 	) {
 		this._proxy = _extHostContext.getProxy(ExtHostContext.ExtHostTerminalService);
+		this._terminalGroupService = _terminalGroupService;
 
 		// ITerminalService listeners
 		this._store.add(_terminalService.onDidCreateInstance((instance) => {

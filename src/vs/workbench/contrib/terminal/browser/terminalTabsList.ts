@@ -72,15 +72,16 @@ export class TerminalTabList extends WorkbenchList<ITerminalInstance> {
 	private _decorationsProvider: TabDecorationsProvider | undefined;
 	private _terminalTabsSingleSelectedContextKey: IContextKey<boolean>;
 	private _isSplitContextKey: IContextKey<boolean>;
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
 		container: HTMLElement,
 		disposableStore: DisposableStore,
+		terminalGroupService: ITerminalGroupService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IListService listService: IListService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IDecorationsService decorationsService: IDecorationsService,
 		@IThemeService private readonly _themeService: IThemeService,
@@ -105,7 +106,7 @@ export class TerminalTabList extends WorkbenchList<ITerminalInstance> {
 				smoothScrolling: _configurationService.getValue<boolean>('workbench.list.smoothScrolling'),
 				multipleSelectionSupport: true,
 				paddingBottom: TerminalTabsListSizes.TabHeight,
-				dnd: instantiationService.createInstance(TerminalTabsDragAndDrop),
+				dnd: instantiationService.createInstance(TerminalTabsDragAndDrop, _terminalGroupService),
 				openOnSingleClick: true
 			},
 			contextKeyService,
@@ -113,6 +114,8 @@ export class TerminalTabList extends WorkbenchList<ITerminalInstance> {
 			_configurationService,
 			instantiationService,
 		);
+
+		this._terminalGroupService = terminalGroupService;
 
 		const instanceDisposables: IDisposable[] = [
 			this._terminalGroupService.onDidChangeInstances(() => this.refresh()),
@@ -249,15 +252,16 @@ export class TerminalTabList extends WorkbenchList<ITerminalInstance> {
 
 class TerminalTabsRenderer extends Disposable implements IListRenderer<ITerminalInstance, ITerminalTabEntryTemplate> {
 	templateId = 'terminal.tabs';
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
 		private readonly _container: HTMLElement,
 		private readonly _labels: ResourceLabels,
 		private readonly _getSelection: () => ITerminalInstance[],
+		_terminalGroupService: ITerminalGroupService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IHoverService private readonly _hoverService: IHoverService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@IListService private readonly _listService: IListService,
@@ -267,6 +271,8 @@ class TerminalTabsRenderer extends Disposable implements IListRenderer<ITerminal
 		@ICommandService private readonly _commandService: ICommandService,
 	) {
 		super();
+
+		this._terminalGroupService = _terminalGroupService;
 	}
 
 	renderTemplate(container: HTMLElement): ITerminalTabEntryTemplate {
@@ -554,9 +560,13 @@ interface ITerminalTabEntryTemplate {
 
 
 class TerminalTabsAccessibilityProvider implements IListAccessibilityProvider<ITerminalInstance> {
+	private readonly _terminalGroupService: ITerminalGroupService;
+
 	constructor(
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
-	) { }
+		_terminalGroupService: ITerminalGroupService,
+	) {
+		this._terminalGroupService = _terminalGroupService;
+	}
 
 	getWidgetAriaLabel(): string {
 		return localize('terminal.tabs', "Terminal tabs");
@@ -593,13 +603,15 @@ class TerminalTabsDragAndDrop extends Disposable implements IListDragAndDrop<ITe
 	private _autoFocusInstance: ITerminalInstance | undefined;
 	private _autoFocusDisposable: IDisposable = Disposable.None;
 	private _primaryBackend: ITerminalBackend | undefined;
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
+		_terminalGroupService: ITerminalGroupService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IListService private readonly _listService: IListService,
 	) {
 		super();
+		this._terminalGroupService = _terminalGroupService;
 		this._primaryBackend = this._terminalService.getPrimaryBackend();
 	}
 

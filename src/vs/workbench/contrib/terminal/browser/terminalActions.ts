@@ -56,7 +56,7 @@ import { accessibleViewCurrentProviderId, accessibleViewIsShown, accessibleViewO
 import { IRemoteTerminalAttachTarget, ITerminalProfileResolverService, ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { terminalStrings } from '../common/terminalStrings.js';
-import { Direction, ICreateTerminalOptions, IDetachedTerminalInstance, ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalInstance, ITerminalInstanceService, ITerminalService, IXtermTerminal } from './terminal.js';
+import { Direction, ICreateTerminalOptions, IDetachedTerminalInstance, ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupServices, ITerminalInstance, ITerminalInstanceService, ITerminalService, IXtermTerminal } from './terminal.js';
 import { isAuxiliaryWindow } from '../../../../base/browser/window.js';
 import { InstanceContext } from './terminalContextMenu.js';
 import { getColorClass, getIconId, getUriClasses } from './terminalIcon.js';
@@ -279,7 +279,7 @@ export function registerActiveXtermAction(
 export interface ITerminalServicesCollection {
 	service: ITerminalService;
 	configService: ITerminalConfigurationService;
-	groupService: ITerminalGroupService;
+	groupServices: ITerminalGroupServices;
 	instanceService: ITerminalInstanceService;
 	editorService: ITerminalEditorService;
 	profileService: ITerminalProfileService;
@@ -290,7 +290,7 @@ function getTerminalServices(accessor: ServicesAccessor): ITerminalServicesColle
 	return {
 		service: accessor.get(ITerminalService),
 		configService: accessor.get(ITerminalConfigurationService),
-		groupService: accessor.get(ITerminalGroupService),
+		groupServices: accessor.get(ITerminalGroupServices),
 		instanceService: accessor.get(ITerminalInstanceService),
 		editorService: accessor.get(ITerminalEditorService),
 		profileService: accessor.get(ITerminalProfileService),
@@ -782,7 +782,6 @@ export function registerTerminalActions() {
 		},
 		precondition: sharedWhenClause.terminalAvailable_and_singularSelection,
 		run: async (c, accessor) => {
-			const terminalGroupService = accessor.get(ITerminalGroupService);
 			const notificationService = accessor.get(INotificationService);
 			const instances = getSelectedInstances(accessor);
 			const firstInstance = instances?.[0];
@@ -790,7 +789,7 @@ export function registerTerminalActions() {
 				return;
 			}
 
-			if (terminalGroupService.lastAccessedMenu === 'inline-tab') {
+			if (firstInstance.terminalGroupService?.lastAccessedMenu === 'inline-tab') {
 				return renameWithQuickPick(c, accessor, firstInstance);
 			}
 
@@ -1271,10 +1270,10 @@ export function registerTerminalActions() {
 		precondition: ContextKeyExpr.or(TerminalContextKeys.processSupported, TerminalContextKeys.webExtensionContributedProfile),
 		run: async (c, accessor) => {
 			const viewsService = accessor.get(IViewsService);
-			
+
 			// First, open the Terminal 2 view
 			await viewsService.openView('terminal2', true);
-			
+
 			// Get the Terminal 2 view and create a terminal in it
 			const terminalView2 = viewsService.getActiveViewWithId('terminal2') as any;
 			if (terminalView2 && terminalView2.createTerminal) {
@@ -1290,10 +1289,10 @@ export function registerTerminalActions() {
 		precondition: ContextKeyExpr.or(TerminalContextKeys.processSupported, TerminalContextKeys.webExtensionContributedProfile),
 		run: async (c, accessor) => {
 			const viewsService = accessor.get(IViewsService);
-			
+
 			// First, open the Terminal 3 view
 			await viewsService.openView('terminal3', true);
-			
+
 			// Get the Terminal 3 view and create a terminal in it
 			const terminalView3 = viewsService.getActiveViewWithId('terminal3') as any;
 			if (terminalView3 && terminalView3.createTerminal) {
@@ -1510,7 +1509,7 @@ function getSelectedInstances2(accessor: ServicesAccessor, args?: unknown): ITer
 function getSelectedInstances(accessor: ServicesAccessor, args?: unknown, args2?: unknown): ITerminalInstance[] | undefined {
 	const listService = accessor.get(IListService);
 	const terminalService = accessor.get(ITerminalService);
-	const terminalGroupService = accessor.get(ITerminalGroupService);
+	const terminalGroupServices = accessor.get(ITerminalGroupServices);
 	const result: ITerminalInstance[] = [];
 
 	// Assign list only if it's an instance of TerminalTabList (#234791)
@@ -1518,9 +1517,9 @@ function getSelectedInstances(accessor: ServicesAccessor, args?: unknown, args2?
 	// Get selected tab list instance(s)
 	const selections = list?.getSelection();
 	// Get inline tab instance if there are not tab list selections #196578
-	if (terminalGroupService.lastAccessedMenu === 'inline-tab' && !selections?.length) {
-		const instance = terminalGroupService.activeInstance;
-		return instance ? [terminalGroupService.activeInstance] : undefined;
+	if (terminalGroupServices.lastSelectedGroupService?.lastAccessedMenu === 'inline-tab' && !selections?.length) {
+		const instance = terminalGroupServices.lastSelectedGroupService.activeInstance;
+		return instance ? [instance] : undefined;
 	}
 
 	if (!list || !selections) {

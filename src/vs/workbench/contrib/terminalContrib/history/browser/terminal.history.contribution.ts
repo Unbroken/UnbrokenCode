@@ -147,7 +147,7 @@ registerActiveInstanceAction({
 		if (activeInstance?.target === TerminalLocation.Editor) {
 			await c.editorService.revealActiveEditor();
 		} else {
-			await c.groupService.showPanel(false);
+			await activeInstance.terminalGroupService?.showPanel(false);
 		}
 	}
 });
@@ -213,7 +213,7 @@ registerTerminalAction({
 		if (activeInstance?.target === TerminalLocation.Editor) {
 			await c.editorService.revealActiveEditor();
 		} else {
-			await c.groupService.showPanel(false);
+			await activeInstance.terminalGroupService?.showPanel(false);
 		}
 	}
 });

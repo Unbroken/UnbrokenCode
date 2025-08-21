@@ -7,7 +7,7 @@ import * as nls from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { URI } from '../../../../base/common/uri.js';
 import { MenuId, MenuRegistry, IMenuItem } from '../../../../platform/actions/common/actions.js';
-import { ITerminalGroupService, ITerminalService as IIntegratedTerminalService } from '../../terminal/browser/terminal.js';
+import { ITerminalService as IIntegratedTerminalService } from '../../terminal/browser/terminal.js';
 import { ResourceContextKey } from '../../../common/contextkeys.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { getMultiSelectedResources, IExplorerService } from '../../files/browser/files.js';
@@ -40,7 +40,6 @@ function registerOpenTerminalCommand(id: string, explorerKind: 'integrated' | 'e
 			const fileService = accessor.get(IFileService);
 			const integratedTerminalService = accessor.get(IIntegratedTerminalService);
 			const remoteAgentService = accessor.get(IRemoteAgentService);
-			const terminalGroupService = accessor.get(ITerminalGroupService);
 			let externalTerminalService: IExternalTerminalService | undefined = undefined;
 			try {
 				externalTerminalService = accessor.get(IExternalTerminalService);
@@ -77,7 +76,7 @@ function registerOpenTerminalCommand(id: string, explorerKind: 'integrated' | 'e
 						const instance = await integratedTerminalService.createTerminal({ config: { cwd } });
 						if (instance && instance.target !== TerminalLocation.Editor && (resources.length === 1 || !resource || cwd.path === resource.path || cwd.path === dirname(resource.path))) {
 							integratedTerminalService.setActiveInstance(instance);
-							terminalGroupService.showPanel(true);
+							instance.terminalGroupService?.showPanel(true);
 						}
 					}
 				} else if (externalTerminalService) {

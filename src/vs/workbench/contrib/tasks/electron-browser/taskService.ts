@@ -32,7 +32,7 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IOutputService } from '../../../services/output/common/output.js';
-import { ITerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
+import { ITerminalGroupService, IDefaultTerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
@@ -59,6 +59,7 @@ interface IWorkspaceFolderConfigurationResult {
 
 export class TaskService extends AbstractTaskService {
 	constructor(@IConfigurationService configurationService: IConfigurationService,
+		@IDefaultTerminalGroupService terminalGroupService: ITerminalGroupService,
 		@IMarkerService markerService: IMarkerService,
 		@IOutputService outputService: IOutputService,
 		@IPaneCompositePartService paneCompositeService: IPaneCompositePartService,
@@ -75,7 +76,6 @@ export class TaskService extends AbstractTaskService {
 		@IQuickInputService quickInputService: IQuickInputService,
 		@IConfigurationResolverService configurationResolverService: IConfigurationResolverService,
 		@ITerminalService terminalService: ITerminalService,
-		@ITerminalGroupService terminalGroupService: ITerminalGroupService,
 		@IStorageService storageService: IStorageService,
 		@IProgressService progressService: IProgressService,
 		@IOpenerService openerService: IOpenerService,
@@ -98,7 +98,8 @@ export class TaskService extends AbstractTaskService {
 		@IChatService _chatService: IChatService,
 		@IChatAgentService _chatAgentService: IChatAgentService
 	) {
-		super(configurationService,
+		super(terminalGroupService,
+			configurationService,
 			markerService,
 			outputService,
 			paneCompositeService,
@@ -114,7 +115,6 @@ export class TaskService extends AbstractTaskService {
 			quickInputService,
 			configurationResolverService,
 			terminalService,
-			terminalGroupService,
 			storageService,
 			progressService,
 			openerService,

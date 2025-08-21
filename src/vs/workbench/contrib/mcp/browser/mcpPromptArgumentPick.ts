@@ -43,9 +43,11 @@ type Action = { type: 'arg'; value: string | undefined } | { type: 'back' } | { 
 export class McpPromptArgumentPick extends Disposable {
 	private readonly quickPick: IQuickPick<PickItem, { useSeparators: true }>;
 	private _terminal?: ITerminalInstance;
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
 		private readonly prompt: IMcpPrompt,
+		_terminalGroupService: ITerminalGroupService,
 		@IQuickInputService private readonly _quickInputService: IQuickInputService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ISearchService private readonly _searchService: ISearchService,
@@ -54,10 +56,10 @@ export class McpPromptArgumentPick extends Disposable {
 		@IFileService private readonly _fileService: IFileService,
 		@IModelService private readonly _modelService: IModelService,
 		@ILanguageService private readonly _languageService: ILanguageService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 	) {
 		super();
+		this._terminalGroupService = _terminalGroupService;
 		this.quickPick = this._register(_quickInputService.createQuickPick({ useSeparators: true }));
 	}
 

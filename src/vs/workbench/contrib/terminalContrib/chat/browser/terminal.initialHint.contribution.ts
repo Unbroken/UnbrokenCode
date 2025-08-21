@@ -85,17 +85,20 @@ export class TerminalInitialHintContribution extends Disposable implements ITerm
 	}
 	private _decoration: IDecoration | undefined;
 	private _xterm: IXtermTerminal & { raw: RawXtermTerminal } | undefined;
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
 		private readonly _ctx: ITerminalContributionContext | IDetachedCompatibleTerminalContributionContext,
+		_terminalGroupService: ITerminalGroupService,
 		@IChatAgentService private readonly _chatAgentService: IChatAgentService,
 		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IStorageService private readonly _storageService: IStorageService,
 		@ITerminalEditorService private readonly _terminalEditorService: ITerminalEditorService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 	) {
 		super();
+
+		this._terminalGroupService = _terminalGroupService;
 
 		// Reset hint state when config changes
 		this._register(this._configurationService.onDidChangeConfiguration(e => {

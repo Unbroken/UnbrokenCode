@@ -39,7 +39,7 @@ export function registerRemoteContributions() {
 			}
 
 			c.service.setActiveInstance(instance);
-			return c.groupService.showPanel(true);
+			return instance.terminalGroupService?.showPanel(true);
 		}
 	});
 }

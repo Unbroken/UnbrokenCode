@@ -62,12 +62,12 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	readonly onDidChangePanelOrientation = this._onDidChangePanelOrientation.event;
 
 	constructor(
+		terminalViewId: string,
 		@IContextKeyService private _contextKeyService: IContextKeyService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IViewsService private readonly _viewsService: IViewsService,
 		@IViewDescriptorService private readonly _viewDescriptorService: IViewDescriptorService,
-		@IQuickInputService private readonly _quickInputService: IQuickInputService,
-		terminalViewId: string
+		@IQuickInputService private readonly _quickInputService: IQuickInputService
 	) {
 		super();
 		this.terminalViewId = terminalViewId;
@@ -533,6 +533,6 @@ export class DefaultTerminalGroupService extends TerminalGroupService {
 		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
 		@IQuickInputService quickInputService: IQuickInputService
 	) {
-		super(contextKeyService, instantiationService, viewsService, viewDescriptorService, quickInputService, 'terminal');
+		super('terminal', contextKeyService, instantiationService, viewsService, viewDescriptorService, quickInputService);
 	}
 }

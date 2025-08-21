@@ -23,17 +23,19 @@ let terminalPicks: Array<IPickerQuickAccessItem | IQuickPickSeparator> = [];
 export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
 
 	static PREFIX = 'term ';
+	private readonly _terminalGroupService: ITerminalGroupService;
 
 	constructor(
+		_terminalGroupService: ITerminalGroupService,
 		@ICommandService private readonly _commandService: ICommandService,
 		@IEditorService private readonly _editorService: IEditorService,
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ITerminalEditorService private readonly _terminalEditorService: ITerminalEditorService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@IThemeService private readonly _themeService: IThemeService,
 	) {
 		super(TerminalQuickAccessProvider.PREFIX, { canAcceptInBackground: true });
+		this._terminalGroupService = _terminalGroupService;
 	}
 
 	protected _getPicks(filter: string): Array<IPickerQuickAccessItem | IQuickPickSeparator> {

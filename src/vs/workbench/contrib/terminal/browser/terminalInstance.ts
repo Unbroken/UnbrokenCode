@@ -57,7 +57,7 @@ import { PANEL_BACKGROUND, SIDE_BAR_BACKGROUND } from '../../../common/theme.js'
 import { IViewDescriptorService, ViewContainerLocation } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibilityConfiguration.js';
-import { IRequestAddInstanceToGroupEvent, ITerminalConfigurationService, ITerminalContribution, ITerminalInstance, IXtermColorProvider, TerminalDataTransfers } from './terminal.js';
+import { IRequestAddInstanceToGroupEvent, ITerminalConfigurationService, ITerminalContribution, ITerminalInstance, IXtermColorProvider, TerminalDataTransfers, ITerminalGroupService } from './terminal.js';
 import { TerminalLaunchHelpAction } from './terminalActions.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
@@ -135,6 +135,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private readonly _processManager: ITerminalProcessManager;
 	private readonly _contributions: Map<string, ITerminalContribution> = new Map();
 	private readonly _resource: URI;
+	terminalGroupService: ITerminalGroupService | undefined;
 
 	/**
 	 * Resolves when xterm.js is ready, this will be undefined if the terminal instance is disposed
@@ -375,6 +376,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	constructor(
 		private readonly _terminalShellTypeContextKey: IContextKey<string>,
 		private _shellLaunchConfig: IShellLaunchConfig,
+		terminalGroupService: ITerminalGroupService | undefined,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -405,6 +407,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@IViewDescriptorService private readonly _viewDescriptorService: IViewDescriptorService,
 	) {
 		super();
+
+		this.terminalGroupService = terminalGroupService;
 
 		this._wrapperElement = document.createElement('div');
 		this._wrapperElement.classList.add('terminal-wrapper');
@@ -1389,9 +1393,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	private _refreshSelectionContextKey() {
 		// Check if any terminal view is active
-		const isActive = !!(this._viewsService.getActiveViewWithId('terminal') || 
-		                   this._viewsService.getActiveViewWithId('terminal2') || 
-		                   this._viewsService.getActiveViewWithId('terminal3'));
+		const isActive = !!(this._viewsService.getActiveViewWithId('terminal') ||
+			this._viewsService.getActiveViewWithId('terminal2') ||
+			this._viewsService.getActiveViewWithId('terminal3'));
 		let isEditorActive = false;
 		const editor = this._editorService.activeEditor;
 		if (editor) {

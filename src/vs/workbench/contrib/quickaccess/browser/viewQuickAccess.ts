@@ -9,7 +9,7 @@ import { IPickerQuickAccessItem, PickerQuickAccessProvider } from '../../../../p
 import { IViewDescriptorService, ViewContainer, ViewContainerLocation } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IOutputService } from '../../../services/output/common/output.js';
-import { ITerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
+import { ITerminalGroupServices, ITerminalService } from '../../terminal/browser/terminal.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { PaneCompositeDescriptor } from '../../../browser/panecomposite.js';
 import { matchesFuzzy } from '../../../../base/common/filters.js';
@@ -36,7 +36,7 @@ export class ViewQuickAccessProvider extends PickerQuickAccessProvider<IViewQuic
 		@IViewsService private readonly viewsService: IViewsService,
 		@IOutputService private readonly outputService: IOutputService,
 		@ITerminalService private readonly terminalService: ITerminalService,
-		@ITerminalGroupService private readonly terminalGroupService: ITerminalGroupService,
+		@ITerminalGroupServices private readonly terminalGroupServices: ITerminalGroupServices,
 		@IDebugService private readonly debugService: IDebugService,
 		@IPaneCompositePartService private readonly paneCompositeService: IPaneCompositePartService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService
@@ -169,16 +169,18 @@ export class ViewQuickAccessProvider extends PickerQuickAccessProvider<IViewQuic
 		addPaneCompositeViews(ViewContainerLocation.AuxiliaryBar);
 
 		// Terminals
-		this.terminalGroupService.groups.forEach((group, groupIndex) => {
-			group.terminalInstances.forEach((terminal, terminalIndex) => {
-				const label = localize('terminalTitle', "{0}: {1}", `${groupIndex + 1}.${terminalIndex + 1}`, terminal.title);
-				viewEntries.push({
-					label,
-					containerLabel: localize('terminals', "Terminal"),
-					accept: async () => {
-						await this.terminalGroupService.showPanel(true);
-						this.terminalService.setActiveInstance(terminal);
-					}
+		this.terminalGroupServices.terminalGroupServices.forEach((groupService, groupsIndex) => {
+			groupService.groups.forEach((group, groupIndex) => {
+				group.terminalInstances.forEach((terminal, terminalIndex) => {
+					const label = localize('terminalTitle', "{0}: {1}: {2}", `${groupsIndex}.${groupIndex + 1}.${terminalIndex + 1}`, terminal.title);
+					viewEntries.push({
+						label,
+						containerLabel: localize('terminals', "Terminal"),
+						accept: async () => {
+							await groupService.showPanel(true);
+							this.terminalService.setActiveInstance(terminal);
+						}
+					});
 				});
 			});
 		});

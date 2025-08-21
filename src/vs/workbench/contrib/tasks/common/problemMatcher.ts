@@ -98,9 +98,11 @@ export interface IAdvancedProblemPattern extends IProblemPattern {
 	// Category management
 	subProblemCategory?: number;           // Dynamic category from regex capture
 	staticSubProblemCategory?: string;     // Static category string
+	reverseSubProblemCategory?: boolean;           // Reverse the sub-problem category (e.g., "Reverse" for reverse order)
 
 	// Sub-problem control
 	introduceSubProblem?: boolean;         // Mark as sub-problem
+	introduceMainProblem?: boolean;        // Mark as main problem
 
 	// Nested patterns
 	pattern?: IAdvancedProblemPattern[];   // Nested pattern array
@@ -219,11 +221,16 @@ interface IPatternProcessingState {
 	currentLineIndex: number;
 	totalConsumedLines: number;
 	currentCategory: string;
-	subProblems: Array<{ category: string; problems: IResourceMarker[] }>;
+	currentCategoryReversed: boolean;
+	subProblems: Map<string, {
+		currentCategoryReversed: boolean;
+		problems: IResourceMarker[];
+	}>;
 	data: IProblemData;
 
 	// Functor to commit current data - changes behavior when sub-problems are introduced
-	commitCurrentData: () => void;
+	commitCurrentData: () => boolean;
+	pendingCommitCurrentData?: () => boolean;
 }
 
 export interface IHandleResult {
@@ -757,19 +764,23 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			currentLineIndex: 0,
 			totalConsumedLines: 0,
 			currentCategory: 'Other',
-			subProblems: [],
+			currentCategoryReversed: false,
+			subProblems: new Map(),
 			data: Object.create(null),
-			commitCurrentData: () => { /* Will be set below */ }
+			commitCurrentData: () => {
+				const match = this.getMarkerMatch(state.data);
+
+				if (match) {
+					mainMatch = match;
+					return true;
+				}
+
+				return false;
+			},
 		};
 		let mainMatch: IProblemMatch | null = null;
 
 		// Initialize commitCurrentData to commit the main match
-		state.commitCurrentData = () => {
-			const match = this.getMarkerMatch(state.data);
-			if (match) {
-				mainMatch = match;
-			}
-		};
 
 		const result = this.processPatterns(this.patterns, state);
 
@@ -791,12 +802,42 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 		}
 
 		// Add sub-problems to main match
-		if (state.subProblems.length > 0) {
+		if (state.subProblems.size > 0) {
 			const subProblemsArray: Array<{ category: string; problems: IResourceMarker[] }> = [];
-			for (const subProblem of state.subProblems) {
-				subProblemsArray.push(subProblem);
+			for (const [category, subProblem] of [...state.subProblems.entries()].sort((left, right) => { return Strings.compare(left[0], right[0]); })) {
+				if (subProblem.currentCategoryReversed) {
+					subProblem.problems.reverse();
+				}
+				subProblemsArray.push({ category: category.trim(), problems: subProblem.problems });
 			}
 			(mainMatch as IProblemMatch).marker.subProblems = subProblemsArray;
+		}
+
+		{
+			const state: IPatternProcessingState = {
+				lines,
+				start,
+				currentLineIndex: 0,
+				totalConsumedLines: 0,
+				currentCategory: 'Other',
+				currentCategoryReversed: false,
+				subProblems: new Map(),
+				data: Object.create(null),
+				commitCurrentData: () => {
+					const match = this.getMarkerMatch(state.data);
+
+					if (match) {
+						return true;
+					}
+
+					return false;
+				},
+			};
+
+			// Initialize commitCurrentData to commit the main match
+
+			const result2 = this.processPatterns(this.patterns, state);
+			console.log(result2.failed);
 		}
 
 		return {
@@ -920,16 +961,35 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			state.currentCategory = pattern.staticSubProblemCategory;
 		}
 
+		if (pattern.reverseSubProblemCategory) {
+			state.currentCategoryReversed = true;
+		}
+
+		if (pattern.introduceMainProblem) {
+			state.commitCurrentData();
+
+			// Switch to main problem mode and create new data object
+			state.data = Object.create(null);
+			state.data.kind = pattern.kind;
+
+			if (state.pendingCommitCurrentData) {
+				state.commitCurrentData = state.pendingCommitCurrentData;
+			}
+		}
+
 		// Handle sub-problem introduction
 		if (pattern.introduceSubProblem) {
 			// Commit current data as sub-problem
-			state.commitCurrentData();
+			if (!state.commitCurrentData() && !state.pendingCommitCurrentData) {
+				state.pendingCommitCurrentData = state.commitCurrentData;
+			}
 
 			// Switch to sub-problem mode and create new data object
 			state.data = Object.create(null);
 			state.data.kind = pattern.kind;
 
 			const currentCategory = state.currentCategory;
+			const currentCategoryReversed = state.currentCategoryReversed;
 
 			// Reassign commitCurrentData to handle sub-problems
 			state.commitCurrentData = () => {
@@ -940,20 +1000,14 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 						marker: match.marker
 					};
 
-					let categoryContainer: { category: string; problems: IResourceMarker[] };
-
-					if (state.subProblems.length === 0 || state.subProblems[state.subProblems.length - 1].category !== currentCategory) {
-						categoryContainer = {
-							category: currentCategory,
-							problems: []
-						};
-						state.subProblems.push(categoryContainer);
-					} else {
-						categoryContainer = state.subProblems[state.subProblems.length - 1];
-					}
-
+					const categoryContainer = state.subProblems.get(currentCategory) ??
+						state.subProblems.set(currentCategory, { currentCategoryReversed, problems: [] }).get(currentCategory)!;
 					categoryContainer.problems.push(resourceMarker);
+
+					return true;
 				}
+
+				return false;
 			};
 		}
 
@@ -1166,6 +1220,17 @@ export namespace Config {
 		 * Mark this pattern as introducing a sub-problem.
 		 */
 		introduceSubProblem?: boolean;
+
+		/**
+		 * Mark this pattern as introducing the main problem.
+		 */
+		introduceMainProblem?: boolean;
+
+		/**
+		 * If true, the sub-problem category is reversed. This means that
+		 * the sub-problems in the category will be reversed order.
+		 */
+		reverseSubProblemCategory?: boolean;
 
 		/**
 		 * Nested pattern array for hierarchical matching.
@@ -1716,6 +1781,14 @@ export namespace Schemas {
 		type: 'boolean',
 		description: localize('AdvancedProblemPatternSchema.introduceSubProblem', 'Mark this pattern as introducing a sub-problem.')
 	};
+	AdvancedProblemPattern.properties['introduceMainProblem'] = {
+		type: 'boolean',
+		description: localize('AdvancedProblemPatternSchema.introduceMainProblem', 'Mark this pattern as introducing the main problem.')
+	};
+	AdvancedProblemPattern.properties['reverseSubProblemCategory'] = {
+		type: 'boolean',
+		description: localize('AdvancedProblemPatternSchema.reverseSubProblemCategory', 'The next sub problem category that is introduced will have it\'s problems be reversed.')
+	};
 	AdvancedProblemPattern.properties['ignore'] = {
 		type: 'boolean',
 		description: localize('AdvancedProblemPatternSchema.ignore', 'Skip lines matching this pattern without creating problems.')
@@ -1752,6 +1825,8 @@ export namespace Schemas {
 				subProblemCategory: { type: 'integer' },
 				staticSubProblemCategory: { type: 'string' },
 				introduceSubProblem: { type: 'boolean' },
+				introduceMainProblem: { type: 'boolean' },
+				reverseSubProblemCategory: { type: 'boolean' },
 				ignore: { type: 'boolean' }
 			},
 			required: ['regexp']
@@ -2436,6 +2511,8 @@ export class ProblemMatcherParser extends Parser {
 		copyProperty(result, value, 'subProblemCategory', 'subProblemCategory');
 		copyProperty(result, value, 'staticSubProblemCategory', 'staticSubProblemCategory');
 		copyProperty(result, value, 'introduceSubProblem', 'introduceSubProblem');
+		copyProperty(result, value, 'introduceMainProblem', 'introduceMainProblem');
+		copyProperty(result, value, 'reverseSubProblemCategory', 'reverseSubProblemCategory');
 		copyProperty(result, value, 'ignore', 'ignore');
 
 		// Handle nested patterns

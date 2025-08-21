@@ -306,7 +306,7 @@ abstract class BaseCheckbox extends Widget {
 		this.domNode.style.backgroundColor = (enabled ? this.styles.checkboxBackground : this.styles.checkboxDisabledBackground) || '';
 		this.domNode.style.borderColor = (enabled ? this.styles.checkboxBorder : this.styles.checkboxDisabledBackground) || '';
 
-		const size = this.styles.size || 18;
+		const size = this.styles.size || 12;
 		this.domNode.style.width =
 			this.domNode.style.height =
 			this.domNode.style.fontSize = `${size}px`;

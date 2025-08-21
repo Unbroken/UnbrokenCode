@@ -53,7 +53,7 @@ export class QuickInputTreeRenderer<T extends IQuickTreeItem> extends Disposable
 		// Main entry container
 		const entry = dom.append(container, $('.quick-input-tree-entry'));
 
-		const checkbox = store.add(new TriStateCheckbox('', false, { ...defaultCheckboxStyles, size: 15 }));
+		const checkbox = store.add(new TriStateCheckbox('', false, { ...defaultCheckboxStyles, size: 12 }));
 		entry.appendChild(checkbox.domNode);
 
 		const checkboxLabel = dom.append(entry, $('label.quick-input-tree-label'));

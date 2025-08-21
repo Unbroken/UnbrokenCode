@@ -15,7 +15,8 @@ import { IThemeService, Themable } from '../../../../platform/theme/common/theme
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { switchTerminalActionViewItemSeparator, switchTerminalShowTabsTitle } from './terminalActions.js';
 import { INotificationService, IPromptChoice, Severity } from '../../../../platform/notification/common/notification.js';
-import { ICreateTerminalOptions, ITerminalConfigurationService, ITerminalGroupService, ITerminalInstance, ITerminalService, TerminalConnectionState, TerminalDataTransfers } from './terminal.js';
+import { ICreateTerminalOptions, ITerminalConfigurationService, ITerminalGroupService, ITerminalInstance, ITerminalInstanceService, ITerminalService, TerminalConnectionState, TerminalDataTransfers } from './terminal.js';
+import { TerminalInstance } from './terminalInstance.js';
 import { ViewPane, IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -53,10 +54,15 @@ import { MicrotaskDelay } from '../../../../base/common/symbols.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { hasNativeContextMenu } from '../../../../platform/window/common/window.js';
 
+export interface ITerminalViewPaneOptions extends IViewPaneOptions {
+	terminalGroupService?: ITerminalGroupService;
+}
+
 export class TerminalViewPane extends ViewPane {
 	private _parentDomElement: HTMLElement | undefined;
 	private _terminalTabbedView?: TerminalTabbedView;
 	get terminalTabbedView(): TerminalTabbedView | undefined { return this._terminalTabbedView; }
+	private readonly _terminalGroupService: ITerminalGroupService;
 	private _isInitialized: boolean = false;
 	/**
 	 * Tracks an active promise of terminal creation requested by this component. This helps prevent
@@ -67,11 +73,12 @@ export class TerminalViewPane extends ViewPane {
 	private readonly _dropdownMenu: IMenu;
 	private readonly _singleTabMenu: IMenu;
 	private _viewShowing: IContextKey<boolean>;
+	private _lastActiveViewId: IContextKey<string>;
 	private readonly _disposableStore = this._register(new DisposableStore());
 	private readonly _actionDisposables: DisposableMap<TerminalCommandId> = this._register(new DisposableMap());
 
 	constructor(
-		options: IViewPaneOptions,
+		options: ITerminalViewPaneOptions,
 		@IKeybindingService keybindingService: IKeybindingService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
@@ -80,7 +87,7 @@ export class TerminalViewPane extends ViewPane {
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@ITerminalService private readonly _terminalService: ITerminalService,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
-		@ITerminalGroupService private readonly _terminalGroupService: ITerminalGroupService,
+		@ITerminalGroupService defaultTerminalGroupService: ITerminalGroupService,
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
 		@INotificationService private readonly _notificationService: INotificationService,
@@ -89,8 +96,13 @@ export class TerminalViewPane extends ViewPane {
 		@IMenuService private readonly _menuService: IMenuService,
 		@ITerminalProfileService private readonly _terminalProfileService: ITerminalProfileService,
 		@ITerminalProfileResolverService private readonly _terminalProfileResolverService: ITerminalProfileResolverService,
+		@ITerminalInstanceService private readonly _terminalInstanceService: ITerminalInstanceService,
 	) {
 		super(options, keybindingService, contextMenuService, _configurationService, _contextKeyService, viewDescriptorService, _instantiationService, openerService, themeService, hoverService);
+		
+		// Use the provided terminal group service from options, or fall back to the injected one
+		this._terminalGroupService = options.terminalGroupService || defaultTerminalGroupService;
+		
 		this._register(this._terminalService.onDidRegisterProcessSupport(() => {
 			this._onDidChangeViewWelcomeState.fire();
 		}));
@@ -115,6 +127,7 @@ export class TerminalViewPane extends ViewPane {
 		this._singleTabMenu = this._register(this._menuService.createMenu(MenuId.TerminalTabContext, this._contextKeyService));
 		this._register(this._terminalProfileService.onDidChangeAvailableProfiles(profiles => this._updateTabActionBar(profiles)));
 		this._viewShowing = TerminalContextKeys.viewShowing.bindTo(this._contextKeyService);
+		this._lastActiveViewId = TerminalContextKeys.lastActiveViewId.bindTo(this._contextKeyService);
 		this._register(this.onDidChangeBodyVisibility(e => {
 			if (e) {
 				this._terminalTabbedView?.rerenderTabs();
@@ -290,7 +303,7 @@ export class TerminalViewPane extends ViewPane {
 			}
 			case TerminalCommandId.New: {
 				if (action instanceof MenuItemAction) {
-					const actions = getTerminalActionBarArgs(TerminalLocation.Panel, this._terminalProfileService.availableProfiles, this._getDefaultProfileName(), this._terminalProfileService.contributedProfiles, this._terminalService, this._dropdownMenu, this._disposableStore);
+					const actions = getTerminalActionBarArgs(TerminalLocation.Panel, this._terminalProfileService.availableProfiles, this._getDefaultProfileName(), this._terminalProfileService.contributedProfiles, this._terminalService, this._dropdownMenu, this._disposableStore, this._getCreateTerminalCallback());
 					this._newDropdown.value = this._instantiationService.createInstance(DropdownWithPrimaryActionViewItem, action, actions.dropdownAction, actions.dropdownMenuActions, actions.className, {
 						hoverDelegate: options.hoverDelegate,
 						getKeyBinding: (action: IAction) => this._keybindingService.lookupKeybinding(action.id, this._contextKeyService)
@@ -318,12 +331,16 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private _updateTabActionBar(profiles: ITerminalProfile[]): void {
-		const actions = getTerminalActionBarArgs(TerminalLocation.Panel, profiles, this._getDefaultProfileName(), this._terminalProfileService.contributedProfiles, this._terminalService, this._dropdownMenu, this._disposableStore);
+		const actions = getTerminalActionBarArgs(TerminalLocation.Panel, profiles, this._getDefaultProfileName(), this._terminalProfileService.contributedProfiles, this._terminalService, this._dropdownMenu, this._disposableStore, this._getCreateTerminalCallback());
 		this._newDropdown.value?.update(actions.dropdownAction, actions.dropdownMenuActions);
 	}
 
 	override focus() {
 		super.focus();
+		// Set the last active terminal view ID context
+		const viewId = this._terminalGroupService.terminalViewId;
+		this._lastActiveViewId.set(viewId);
+		
 		if (this._terminalService.connectionState === TerminalConnectionState.Connected) {
 			if (this._terminalGroupService.instances.length === 0 && !this._isTerminalBeingCreated) {
 				this._isTerminalBeingCreated = true;
@@ -354,6 +371,57 @@ export class TerminalViewPane extends ViewPane {
 
 	override shouldShowWelcome(): boolean {
 		return this._hasWelcomeScreen() && this._terminalService.instances.length === 0;
+	}
+
+	async createTerminal(options?: ICreateTerminalOptions): Promise<ITerminalInstance> {
+		// Create a terminal instance through the instance service
+		const config = options?.config || this._terminalProfileService.getDefaultProfile();
+		let shellLaunchConfig: any;
+		if (!config) {
+			shellLaunchConfig = {};
+		} else if ('profileName' in config) {
+			// It's a terminal profile
+			shellLaunchConfig = config;
+		} else if ('extensionIdentifier' in config) {
+			// It's an extension terminal profile - convert it
+			shellLaunchConfig = {};
+		} else {
+			// It's already a shell launch config
+			shellLaunchConfig = config;
+		}
+		const convertedConfig = this._terminalInstanceService.convertProfileToShellLaunchConfig(shellLaunchConfig);
+		const instance = this._instantiationService.createInstance(TerminalInstance, 
+			TerminalContextKeys.shellType.bindTo(this._contextKeyService),
+			convertedConfig
+		);
+		instance.target = TerminalLocation.Panel;
+		
+		// Add to this view's group service
+		const group = this._terminalGroupService.createGroup();
+		group.addInstance(instance);
+		this._terminalGroupService.setActiveInstance(instance);
+		
+		// Fire the creation event
+		(this._terminalInstanceService as any)._onDidCreateInstance.fire(instance);
+		
+		return instance;
+	}
+
+	protected _getCreateTerminalCallback(): ((options?: ICreateTerminalOptions) => Promise<ITerminalInstance>) | undefined {
+		// Check if this view has a custom terminalGroupService in options (for Terminal 2 and Terminal 3)
+		const options = (this as any).options as ITerminalViewPaneOptions | undefined;
+		if (options?.terminalGroupService) {
+			return async (terminalOptions?: ICreateTerminalOptions) => {
+				// Create terminal via service (handles process creation, etc.)
+				const instance = await this._terminalService.createTerminal(terminalOptions || {});
+				// Add it to the local group service instead of global
+				const group = this._terminalGroupService.createGroup(instance);
+				this._terminalGroupService.activeGroup = group;
+				this._terminalGroupService.setActiveInstance(instance);
+				return instance;
+			};
+		}
+		return undefined;
 	}
 }
 

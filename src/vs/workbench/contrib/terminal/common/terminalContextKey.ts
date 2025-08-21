@@ -6,7 +6,6 @@
 import { localize } from '../../../../nls.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
-import { TERMINAL_VIEW_ID } from './terminal.js';
 
 export const enum TerminalContextKeyStrings {
 	IsOpen = 'terminalIsOpen',
@@ -40,6 +39,7 @@ export const enum TerminalContextKeyStrings {
 	ShellType = 'terminalShellType',
 	InTerminalRunCommandPicker = 'inTerminalRunCommandPicker',
 	TerminalShellIntegrationEnabled = 'terminalShellIntegrationEnabled',
+	LastActiveViewId = 'terminalLastActiveViewId',
 }
 
 export namespace TerminalContextKeys {
@@ -139,8 +139,15 @@ export namespace TerminalContextKeys {
 	/** Whether shell integration is enabled in the active terminal. This only considers full VS Code shell integration. */
 	export const terminalShellIntegrationEnabled = new RawContextKey<boolean>(TerminalContextKeyStrings.TerminalShellIntegrationEnabled, false, localize('terminalShellIntegrationEnabled', "Whether shell integration is enabled in the active terminal"));
 
+	/** The ID of the last active terminal view (terminal, terminal2, or terminal3). */
+	export const lastActiveViewId = new RawContextKey<string>(TerminalContextKeyStrings.LastActiveViewId, 'terminal', localize('terminalLastActiveViewId', "The ID of the last active terminal view"));
+
 	export const shouldShowViewInlineActions = ContextKeyExpr.and(
-		ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+		ContextKeyExpr.or(
+			ContextKeyExpr.equals('view', 'terminal'),
+			ContextKeyExpr.equals('view', 'terminal2'),
+			ContextKeyExpr.equals('view', 'terminal3')
+		),
 		ContextKeyExpr.notEquals(`config.${TerminalSettingId.TabsHideCondition}`, 'never'),
 		ContextKeyExpr.or(
 			ContextKeyExpr.not(`config.${TerminalSettingId.TabsEnabled}`),

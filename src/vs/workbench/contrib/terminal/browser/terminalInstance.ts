@@ -69,7 +69,7 @@ import { TerminalWidgetManager } from './widgets/widgetManager.js';
 import { LineDataEventAddon } from './xterm/lineDataEventAddon.js';
 import { XtermTerminal, getXtermScaledDimensions } from './xterm/xtermTerminal.js';
 import { IEnvironmentVariableInfo } from '../common/environmentVariable.js';
-import { DEFAULT_COMMANDS_TO_SKIP_SHELL, ITerminalProcessManager, ITerminalProfileResolverService, ProcessState, TERMINAL_CREATION_COMMANDS, TERMINAL_VIEW_ID, TerminalCommandId } from '../common/terminal.js';
+import { DEFAULT_COMMANDS_TO_SKIP_SHELL, ITerminalProcessManager, ITerminalProfileResolverService, ProcessState, TERMINAL_CREATION_COMMANDS, TerminalCommandId } from '../common/terminal.js';
 import { TERMINAL_BACKGROUND_COLOR } from '../common/terminalColorRegistry.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { getWorkspaceForTerminal, preparePathForShell } from '../common/terminalEnvironment.js';
@@ -881,7 +881,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		this._register(this._processManager.onRestoreCommands(e => this.xterm?.shellIntegration.deserialize(e)));
 
 		this._register(this._viewDescriptorService.onDidChangeLocation(({ views }) => {
-			if (views.some(v => v.id === TERMINAL_VIEW_ID)) {
+			// Check if any of the terminal views changed location
+			if (views.some(v => v.id === 'terminal' || v.id === 'terminal2' || v.id === 'terminal3')) {
 				xterm.refresh();
 			}
 		}));
@@ -1387,7 +1388,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private _refreshSelectionContextKey() {
-		const isActive = !!this._viewsService.getActiveViewWithId(TERMINAL_VIEW_ID);
+		// Check if any terminal view is active
+		const isActive = !!(this._viewsService.getActiveViewWithId('terminal') || 
+		                   this._viewsService.getActiveViewWithId('terminal2') || 
+		                   this._viewsService.getActiveViewWithId('terminal3'));
 		let isEditorActive = false;
 		const editor = this._editorService.activeEditor;
 		if (editor) {
@@ -2522,10 +2526,15 @@ class TerminalInstanceDragAndDropController extends Disposable implements dom.ID
 
 	private _getViewOrientation(): Orientation {
 		const panelPosition = this._layoutService.getPanelPosition();
-		const terminalLocation = this._viewDescriptorService.getViewLocationById(TERMINAL_VIEW_ID);
-		return terminalLocation === ViewContainerLocation.Panel && isHorizontal(panelPosition)
-			? Orientation.HORIZONTAL
-			: Orientation.VERTICAL;
+		// Check all three terminal views to find the location
+		const viewIds = ['terminal', 'terminal2', 'terminal3'];
+		for (const viewId of viewIds) {
+			const terminalLocation = this._viewDescriptorService.getViewLocationById(viewId);
+			if (terminalLocation === ViewContainerLocation.Panel && isHorizontal(panelPosition)) {
+				return Orientation.HORIZONTAL;
+			}
+		}
+		return Orientation.VERTICAL;
 	}
 }
 
@@ -2748,9 +2757,13 @@ export class TerminalInstanceColorProvider implements IXtermColorProvider {
 		if (this._target.object === TerminalLocation.Editor) {
 			return theme.getColor(editorBackground);
 		}
-		const location = this._viewDescriptorService.getViewLocationById(TERMINAL_VIEW_ID)!;
-		if (location === ViewContainerLocation.Panel) {
-			return theme.getColor(PANEL_BACKGROUND);
+		// Check all three terminal views to determine if any is in Panel
+		const viewIds = ['terminal', 'terminal2', 'terminal3'];
+		for (const viewId of viewIds) {
+			const location = this._viewDescriptorService.getViewLocationById(viewId);
+			if (location === ViewContainerLocation.Panel) {
+				return theme.getColor(PANEL_BACKGROUND);
+			}
 		}
 		return theme.getColor(SIDE_BAR_BACKGROUND);
 	}

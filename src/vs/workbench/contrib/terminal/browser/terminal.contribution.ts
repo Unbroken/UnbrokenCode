@@ -20,7 +20,7 @@ import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContaine
 import { WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
 import { EditorExtensions, IEditorFactoryRegistry } from '../../../common/editor.js';
 import { IViewContainersRegistry, IViewsRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
-import { ITerminalProfileService, TERMINAL_VIEW_ID, TerminalCommandId } from '../common/terminal.js';
+import { ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
 import { registerColors } from '../common/terminalColorRegistry.js';
 import { registerTerminalConfiguration } from '../common/terminalConfiguration.js';
 import { terminalStrings } from '../common/terminalStrings.js';
@@ -37,7 +37,7 @@ import { TerminalEditor } from './terminalEditor.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { TerminalInputSerializer } from './terminalEditorSerializer.js';
 import { TerminalEditorService } from './terminalEditorService.js';
-import { TerminalGroupService } from './terminalGroupService.js';
+import { DefaultTerminalGroupService } from './terminalGroupService.js';
 import { terminalViewIcon } from './terminalIcons.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
 import { TerminalMainContribution } from './terminalMainContribution.js';
@@ -46,13 +46,15 @@ import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalTelemetryContribution } from './terminalTelemetry.js';
 import { TerminalViewPane } from './terminalView.js';
+import { TerminalView2Pane } from './terminalView2.js';
+import { TerminalView3Pane } from './terminalView3.js';
 
 // Register services
 registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Delayed);
 registerSingleton(ITerminalConfigurationService, TerminalConfigurationService, InstantiationType.Delayed);
 registerSingleton(ITerminalService, TerminalService, InstantiationType.Delayed);
 registerSingleton(ITerminalEditorService, TerminalEditorService, InstantiationType.Delayed);
-registerSingleton(ITerminalGroupService, TerminalGroupService, InstantiationType.Delayed);
+registerSingleton(ITerminalGroupService, DefaultTerminalGroupService, InstantiationType.Delayed);
 registerSingleton(ITerminalInstanceService, TerminalInstanceService, InstantiationType.Delayed);
 registerSingleton(ITerminalProfileService, TerminalProfileService, InstantiationType.Delayed);
 
@@ -102,16 +104,16 @@ Registry.as<IDragAndDropContributionRegistry>(DragAndDropExtensions.DragAndDropC
 
 // Register views
 const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
-	id: TERMINAL_VIEW_ID,
+	id: 'terminal',
 	title: nls.localize2('terminal', "Terminal"),
 	icon: terminalViewIcon,
-	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, [TERMINAL_VIEW_ID, { mergeViewWithContainerWhenSingleView: true }]),
-	storageId: TERMINAL_VIEW_ID,
+	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, ['terminal', { mergeViewWithContainerWhenSingleView: true }]),
+	storageId: 'terminal',
 	hideIfEmpty: true,
 	order: 3,
 }, ViewContainerLocation.Panel, { doNotRegisterOpenCommand: true, isDefault: true });
 Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([{
-	id: TERMINAL_VIEW_ID,
+	id: 'terminal',
 	name: nls.localize2('terminal', "Terminal"),
 	containerIcon: terminalViewIcon,
 	canToggleVisibility: true,
@@ -127,6 +129,54 @@ Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews
 		order: 3
 	}
 }], VIEW_CONTAINER);
+
+// Register Terminal 2 view container (Primary sidebar)
+const VIEW_CONTAINER_2 = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
+	id: 'terminal2',
+	title: nls.localize2('terminal2', "Terminal 2"),
+	icon: terminalViewIcon,
+	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, ['terminal2', { mergeViewWithContainerWhenSingleView: true }]),
+	storageId: 'terminal2',
+	hideIfEmpty: true,
+	order: 10,
+}, ViewContainerLocation.Sidebar, { doNotRegisterOpenCommand: true });
+Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([{
+	id: 'terminal2',
+	name: nls.localize2('terminal2', "Terminal 2"),
+	containerIcon: terminalViewIcon,
+	canToggleVisibility: true,
+	canMoveView: true,
+	ctorDescriptor: new SyncDescriptor(TerminalView2Pane),
+	openCommandActionDescriptor: {
+		id: TerminalCommandId.Toggle2,
+		mnemonicTitle: nls.localize({ key: 'miToggleIntegratedTerminal2', comment: ['&& denotes a mnemonic'] }, "Terminal &&2"),
+		order: 4
+	}
+}], VIEW_CONTAINER_2);
+
+// Register Terminal 3 view container (Secondary sidebar)
+const VIEW_CONTAINER_3 = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
+	id: 'terminal3',
+	title: nls.localize2('terminal3', "Terminal 3"),
+	icon: terminalViewIcon,
+	ctorDescriptor: new SyncDescriptor(ViewPaneContainer, ['terminal3', { mergeViewWithContainerWhenSingleView: true }]),
+	storageId: 'terminal3',
+	hideIfEmpty: true,
+	order: 10,
+}, ViewContainerLocation.AuxiliaryBar, { doNotRegisterOpenCommand: true });
+Registry.as<IViewsRegistry>(ViewContainerExtensions.ViewsRegistry).registerViews([{
+	id: 'terminal3',
+	name: nls.localize2('terminal3', "Terminal 3"),
+	containerIcon: terminalViewIcon,
+	canToggleVisibility: true,
+	canMoveView: true,
+	ctorDescriptor: new SyncDescriptor(TerminalView3Pane),
+	openCommandActionDescriptor: {
+		id: TerminalCommandId.Toggle3,
+		mnemonicTitle: nls.localize({ key: 'miToggleIntegratedTerminal3', comment: ['&& denotes a mnemonic'] }, "Terminal &&3"),
+		order: 5
+	}
+}], VIEW_CONTAINER_3);
 
 registerTerminalActions();
 

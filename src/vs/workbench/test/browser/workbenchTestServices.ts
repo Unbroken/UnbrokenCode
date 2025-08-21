@@ -2040,6 +2040,7 @@ export class TestTerminalEditorService implements ITerminalEditorService {
 
 export class TestTerminalGroupService implements ITerminalGroupService {
 	_serviceBrand: undefined;
+	terminalViewId: string = 'terminal';
 	activeInstance: ITerminalInstance | undefined;
 	instances: readonly ITerminalInstance[] = [];
 	groups: readonly ITerminalGroup[] = [];

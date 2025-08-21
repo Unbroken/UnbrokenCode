@@ -51,8 +51,9 @@ import { AUX_WINDOW_GROUP, SIDE_GROUP } from '../../../services/editor/common/ed
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { accessibleViewCurrentProviderId, accessibleViewIsShown, accessibleViewOnLastLine } from '../../accessibility/browser/accessibilityConfiguration.js';
-import { IRemoteTerminalAttachTarget, ITerminalProfileResolverService, ITerminalProfileService, TERMINAL_VIEW_ID, TerminalCommandId } from '../common/terminal.js';
+import { IRemoteTerminalAttachTarget, ITerminalProfileResolverService, ITerminalProfileService, TerminalCommandId } from '../common/terminal.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { Direction, ICreateTerminalOptions, IDetachedTerminalInstance, ITerminalConfigurationService, ITerminalEditorService, ITerminalGroupService, ITerminalInstance, ITerminalInstanceService, ITerminalService, IXtermTerminal } from './terminal.js';
@@ -73,12 +74,18 @@ const category = terminalStrings.actionCategory;
 // expensive this is done once per context key and shared.
 export const sharedWhenClause = (() => {
 	const terminalAvailable = ContextKeyExpr.or(TerminalContextKeys.processSupported, TerminalContextKeys.terminalHasBeenCreated);
+	const isAnyTerminalView = ContextKeyExpr.or(
+		ContextKeyExpr.equals('view', 'terminal'),
+		ContextKeyExpr.equals('view', 'terminal2'),
+		ContextKeyExpr.equals('view', 'terminal3')
+	);
 	return {
 		terminalAvailable,
 		terminalAvailable_and_opened: ContextKeyExpr.and(terminalAvailable, TerminalContextKeys.isOpen),
 		terminalAvailable_and_editorActive: ContextKeyExpr.and(terminalAvailable, TerminalContextKeys.terminalEditorActive),
 		terminalAvailable_and_singularSelection: ContextKeyExpr.and(terminalAvailable, TerminalContextKeys.tabsSingularSelection),
-		focusInAny_and_normalBuffer: ContextKeyExpr.and(TerminalContextKeys.focusInAny, TerminalContextKeys.altBufferActive.negate())
+		focusInAny_and_normalBuffer: ContextKeyExpr.and(TerminalContextKeys.focusInAny, TerminalContextKeys.altBufferActive.negate()),
+		isAnyTerminalView
 	};
 })();
 
@@ -878,7 +885,7 @@ export function registerTerminalActions() {
 				id: MenuId.ViewTitle,
 				group: 'navigation',
 				order: 4,
-				when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+				when: sharedWhenClause.isAnyTerminalView,
 				isHiddenByDefault: true
 			},
 			...[MenuId.EditorTitle, MenuId.CompactWindowEditorTitle].map(id => ({
@@ -907,7 +914,7 @@ export function registerTerminalActions() {
 				id: MenuId.ViewTitle,
 				group: 'navigation',
 				order: 5,
-				when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+				when: sharedWhenClause.isAnyTerminalView,
 				isHiddenByDefault: true
 			},
 			...[MenuId.EditorTitle, MenuId.CompactWindowEditorTitle].map(id => ({
@@ -1254,6 +1261,44 @@ export function registerTerminalActions() {
 				} else {
 					commandService.executeCommand(TerminalCommandId.Toggle);
 				}
+			}
+		}
+	});
+
+	registerTerminalAction({
+		id: TerminalCommandId.NewInTerminal2,
+		title: localize2('workbench.action.terminal.newInTerminal2', 'Create New Terminal (In Terminal 2)'),
+		precondition: ContextKeyExpr.or(TerminalContextKeys.processSupported, TerminalContextKeys.webExtensionContributedProfile),
+		run: async (c, accessor) => {
+			const viewsService = accessor.get(IViewsService);
+			
+			// First, open the Terminal 2 view
+			await viewsService.openView('terminal2', true);
+			
+			// Get the Terminal 2 view and create a terminal in it
+			const terminalView2 = viewsService.getActiveViewWithId('terminal2') as any;
+			if (terminalView2 && terminalView2.createTerminal) {
+				const instance = await terminalView2.createTerminal();
+				await instance.focusWhenReady();
+			}
+		}
+	});
+
+	registerTerminalAction({
+		id: TerminalCommandId.NewInTerminal3,
+		title: localize2('workbench.action.terminal.newInTerminal3', 'Create New Terminal (In Terminal 3)'),
+		precondition: ContextKeyExpr.or(TerminalContextKeys.processSupported, TerminalContextKeys.webExtensionContributedProfile),
+		run: async (c, accessor) => {
+			const viewsService = accessor.get(IViewsService);
+			
+			// First, open the Terminal 3 view
+			await viewsService.openView('terminal3', true);
+			
+			// Get the Terminal 3 view and create a terminal in it
+			const terminalView3 = viewsService.getActiveViewWithId('terminal3') as any;
+			if (terminalView3 && terminalView3.createTerminal) {
+				const instance = await terminalView3.createTerminal();
+				await instance.focusWhenReady();
 			}
 		}
 	});

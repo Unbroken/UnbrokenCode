@@ -44,7 +44,7 @@ import { CommandOptions, CommandString, ContributedTask, CustomTask, DependsOrde
 import { ITerminalGroupService, ITerminalInstance, ITerminalService } from '../../terminal/browser/terminal.js';
 import { VSCodeOscProperty, VSCodeOscPt, VSCodeSequence } from '../../terminal/browser/terminalEscapeSequences.js';
 import { TerminalProcessExtHostProxy } from '../../terminal/browser/terminalProcessExtHostProxy.js';
-import { ITerminalProfileResolverService, TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
+import { ITerminalProfileResolverService } from '../../terminal/common/terminal.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { IOutputService } from '../../../services/output/common/output.js';
@@ -333,7 +333,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 			return false;
 		}
 		const activeTerminalInstance = this._terminalService.activeInstance;
-		const isPanelShowingTerminal = !!this._viewsService.getActiveViewWithId(TERMINAL_VIEW_ID);
+		const isPanelShowingTerminal = !!this._viewsService.getActiveViewWithId(this._terminalGroupService.terminalViewId);
 		return isPanelShowingTerminal && (activeTerminalInstance?.instanceId === terminalData.terminal.instanceId);
 	}
 
@@ -343,7 +343,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 		if (!terminalData?.terminal) {
 			return false;
 		}
-		const isTerminalInPanel: boolean = this._viewDescriptorService.getViewLocationById(TERMINAL_VIEW_ID) === ViewContainerLocation.Panel;
+		const isTerminalInPanel: boolean = this._viewDescriptorService.getViewLocationById(this._terminalGroupService.terminalViewId) === ViewContainerLocation.Panel;
 		if (isTerminalInPanel && this.isTaskVisible(task)) {
 			if (this._previousPanelId) {
 				if (this._previousTerminalInstance) {
@@ -358,7 +358,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 		} else {
 			if (isTerminalInPanel) {
 				this._previousPanelId = this._paneCompositeService.getActivePaneComposite(ViewContainerLocation.Panel)?.getId();
-				if (this._previousPanelId === TERMINAL_VIEW_ID) {
+				if (this._previousPanelId === this._terminalGroupService.terminalViewId) {
 					this._previousTerminalInstance = this._terminalService.activeInstance ?? undefined;
 				}
 			}

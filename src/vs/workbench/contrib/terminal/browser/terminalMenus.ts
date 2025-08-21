@@ -12,8 +12,8 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IExtensionTerminalProfile, ITerminalProfile, TerminalLocation, TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
 import { ResourceContextKey } from '../../../common/contextkeys.js';
 import { TaskExecutionSupportedContext } from '../../tasks/common/taskService.js';
-import { ICreateTerminalOptions, ITerminalLocationOptions, ITerminalService } from './terminal.js';
-import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
+import { ICreateTerminalOptions, ITerminalInstance, ITerminalLocationOptions, ITerminalService } from './terminal.js';
+import { TerminalCommandId } from '../common/terminal.js';
 import { TerminalContextKeys, TerminalContextKeyStrings } from '../common/terminalContextKey.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { ACTIVE_GROUP, AUX_WINDOW_GROUP, SIDE_GROUP } from '../../../services/editor/common/editorService.js';
@@ -387,7 +387,11 @@ export function setupTerminalMenus(): void {
 					group: 'navigation',
 					order: 0,
 					when: ContextKeyExpr.and(
-						ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+						ContextKeyExpr.or(
+							ContextKeyExpr.equals('view', 'terminal'),
+							ContextKeyExpr.equals('view', 'terminal2'),
+							ContextKeyExpr.equals('view', 'terminal3')
+						),
 						ContextKeyExpr.not(`config.${TerminalSettingId.TabsEnabled}`)
 					),
 				}
@@ -408,7 +412,11 @@ export function setupTerminalMenus(): void {
 					group: 'navigation',
 					order: 0,
 					when: ContextKeyExpr.and(
-						ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+						ContextKeyExpr.or(
+							ContextKeyExpr.equals('view', 'terminal'),
+							ContextKeyExpr.equals('view', 'terminal2'),
+							ContextKeyExpr.equals('view', 'terminal3')
+						),
 						ContextKeyExpr.has(`config.${TerminalSettingId.TabsEnabled}`),
 						ContextKeyExpr.or(
 							ContextKeyExpr.and(
@@ -473,7 +481,11 @@ export function setupTerminalMenus(): void {
 					group: 'navigation',
 					order: 0,
 					when: ContextKeyExpr.and(
-						ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+						ContextKeyExpr.or(
+							ContextKeyExpr.equals('view', 'terminal'),
+							ContextKeyExpr.equals('view', 'terminal2'),
+							ContextKeyExpr.equals('view', 'terminal3')
+						),
 						ContextKeyExpr.or(TerminalContextKeys.webExtensionContributedProfile, TerminalContextKeys.processSupported)
 					)
 				}
@@ -488,7 +500,11 @@ export function setupTerminalMenus(): void {
 					},
 					group: 'navigation',
 					order: 6,
-					when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+					when: ContextKeyExpr.or(
+						ContextKeyExpr.equals('view', 'terminal'),
+						ContextKeyExpr.equals('view', 'terminal2'),
+						ContextKeyExpr.equals('view', 'terminal3')
+					),
 					isHiddenByDefault: true
 				}
 			},
@@ -502,7 +518,11 @@ export function setupTerminalMenus(): void {
 					},
 					group: 'navigation',
 					order: 7,
-					when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+					when: ContextKeyExpr.or(
+						ContextKeyExpr.equals('view', 'terminal'),
+						ContextKeyExpr.equals('view', 'terminal2'),
+						ContextKeyExpr.equals('view', 'terminal3')
+					),
 					isHiddenByDefault: true
 				}
 			},
@@ -516,7 +536,11 @@ export function setupTerminalMenus(): void {
 					},
 					group: 'navigation',
 					order: 8,
-					when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+					when: ContextKeyExpr.or(
+						ContextKeyExpr.equals('view', 'terminal'),
+						ContextKeyExpr.equals('view', 'terminal2'),
+						ContextKeyExpr.equals('view', 'terminal3')
+					),
 					isHiddenByDefault: true
 				}
 			},
@@ -729,7 +753,7 @@ export function setupTerminalMenus(): void {
 	}
 }
 
-export function getTerminalActionBarArgs(location: ITerminalLocationOptions, profiles: ITerminalProfile[], defaultProfileName: string, contributedProfiles: readonly IExtensionTerminalProfile[], terminalService: ITerminalService, dropdownMenu: IMenu, disposableStore: DisposableStore): {
+export function getTerminalActionBarArgs(location: ITerminalLocationOptions, profiles: ITerminalProfile[], defaultProfileName: string, contributedProfiles: readonly IExtensionTerminalProfile[], terminalService: ITerminalService, dropdownMenu: IMenu, disposableStore: DisposableStore, createTerminalCallback?: (options?: ICreateTerminalOptions) => Promise<ITerminalInstance>): {
 	dropdownAction: IAction;
 	dropdownMenuActions: IAction[];
 	className: string;
@@ -743,16 +767,28 @@ export function getTerminalActionBarArgs(location: ITerminalLocationOptions, pro
 		location = { viewColumn: ACTIVE_GROUP };
 	}
 
-	dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.New, terminalStrings.new, undefined, true, () => terminalService.createAndFocusTerminal())));
+	dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.New, terminalStrings.new, undefined, true, async () => {
+		if (createTerminalCallback) {
+			const instance = await createTerminalCallback();
+			instance.focus();
+		} else {
+			await terminalService.createAndFocusTerminal();
+		}
+	})));
 	dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.NewInNewWindow, terminalStrings.newInNewWindow.value, undefined, true, () => terminalService.createAndFocusTerminal({
 		location: {
 			viewColumn: AUX_WINDOW_GROUP,
 			auxiliary: { compact: true },
 		}
 	}))));
-	dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.Split, terminalStrings.split.value, undefined, true, () => terminalService.createAndFocusTerminal({
-		location: splitLocation
-	}))));
+	dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.Split, terminalStrings.split.value, undefined, true, async () => {
+		if (createTerminalCallback) {
+			const instance = await createTerminalCallback({ location: splitLocation });
+			instance.focus();
+		} else {
+			await terminalService.createAndFocusTerminal({ location: splitLocation });
+		}
+	})));
 	dropdownActions.push(new Separator());
 
 	profiles = profiles.filter(e => !e.isAutoDetected);
@@ -762,32 +798,58 @@ export function getTerminalActionBarArgs(location: ITerminalLocationOptions, pro
 		const splitOptions: ICreateTerminalOptions = { config: p, location: splitLocation };
 		const sanitizedProfileName = p.profileName.replace(/[\n\r\t]/g, '');
 		dropdownActions.push(disposableStore.add(new Action(TerminalCommandId.NewWithProfile, isDefault ? localize('defaultTerminalProfile', "{0} (Default)", sanitizedProfileName) : sanitizedProfileName, undefined, true, async () => {
-			await terminalService.createAndFocusTerminal(options);
+			if (createTerminalCallback) {
+				const instance = await createTerminalCallback(options);
+				instance.focus();
+			} else {
+				await terminalService.createAndFocusTerminal(options);
+			}
 		})));
 		submenuActions.push(disposableStore.add(new Action(TerminalCommandId.Split, isDefault ? localize('defaultTerminalProfile', "{0} (Default)", sanitizedProfileName) : sanitizedProfileName, undefined, true, async () => {
-			await terminalService.createAndFocusTerminal(splitOptions);
+			if (createTerminalCallback) {
+				const instance = await createTerminalCallback(splitOptions);
+				instance.focus();
+			} else {
+				await terminalService.createAndFocusTerminal(splitOptions);
+			}
 		})));
 	}
 
 	for (const contributed of contributedProfiles) {
 		const isDefault = contributed.title === defaultProfileName;
 		const title = isDefault ? localize('defaultTerminalProfile', "{0} (Default)", contributed.title.replace(/[\n\r\t]/g, '')) : contributed.title.replace(/[\n\r\t]/g, '');
-		dropdownActions.push(disposableStore.add(new Action('contributed', title, undefined, true, () => terminalService.createAndFocusTerminal({
-			config: {
-				extensionIdentifier: contributed.extensionIdentifier,
-				id: contributed.id,
-				title
-			},
-			location
-		}))));
-		submenuActions.push(disposableStore.add(new Action('contributed-split', title, undefined, true, () => terminalService.createAndFocusTerminal({
-			config: {
-				extensionIdentifier: contributed.extensionIdentifier,
-				id: contributed.id,
-				title
-			},
-			location: splitLocation
-		}))));
+		dropdownActions.push(disposableStore.add(new Action('contributed', title, undefined, true, async () => {
+			const options = {
+				config: {
+					extensionIdentifier: contributed.extensionIdentifier,
+					id: contributed.id,
+					title
+				},
+				location
+			};
+			if (createTerminalCallback) {
+				const instance = await createTerminalCallback(options);
+				instance.focus();
+			} else {
+				await terminalService.createAndFocusTerminal(options);
+			}
+		})));
+		submenuActions.push(disposableStore.add(new Action('contributed-split', title, undefined, true, async () => {
+			const options = {
+				config: {
+					extensionIdentifier: contributed.extensionIdentifier,
+					id: contributed.id,
+					title
+				},
+				location: splitLocation
+			};
+			if (createTerminalCallback) {
+				const instance = await createTerminalCallback(options);
+				instance.focus();
+			} else {
+				await terminalService.createAndFocusTerminal(options);
+			}
+		})));
 	}
 
 	if (dropdownActions.length > 0) {

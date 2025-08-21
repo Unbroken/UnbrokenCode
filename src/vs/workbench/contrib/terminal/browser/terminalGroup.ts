@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { Event, Emitter } from '../../../../base/common/event.js';
 import { IDisposable, Disposable, DisposableStore, dispose, toDisposable } from '../../../../base/common/lifecycle.js';
 import { SplitView, Orientation, IView, Sizing } from '../../../../base/browser/ui/splitview/splitview.js';
@@ -275,6 +274,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	constructor(
 		private _container: HTMLElement | undefined,
 		shellLaunchConfigOrInstance: IShellLaunchConfig | ITerminalInstance | undefined,
+		private readonly _terminalViewId: string,
 		@ITerminalConfigurationService private readonly _terminalConfigurationService: ITerminalConfigurationService,
 		@ITerminalInstanceService private readonly _terminalInstanceService: ITerminalInstanceService,
 		@IWorkbenchLayoutService private readonly _layoutService: IWorkbenchLayoutService,
@@ -478,7 +478,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this._container.appendChild(this._groupElement);
 		if (!this._splitPaneContainer) {
 			this._panelPosition = this._layoutService.getPanelPosition();
-			this._terminalLocation = this._viewDescriptorService.getViewLocationById(TERMINAL_VIEW_ID)!;
+			this._terminalLocation = this._viewDescriptorService.getViewLocationById(this._terminalViewId)!;
 			const orientation = this._terminalLocation === ViewContainerLocation.Panel && isHorizontal(this._panelPosition) ? Orientation.HORIZONTAL : Orientation.VERTICAL;
 			this._splitPaneContainer = this._instantiationService.createInstance(SplitPaneContainer, this._groupElement, orientation);
 			this.terminalInstances.forEach(instance => this._splitPaneContainer!.split(instance, this._activeInstanceIndex + 1));
@@ -537,7 +537,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		if (this._splitPaneContainer) {
 			// Check if the panel position changed and rotate panes if so
 			const newPanelPosition = this._layoutService.getPanelPosition();
-			const newTerminalLocation = this._viewDescriptorService.getViewLocationById(TERMINAL_VIEW_ID)!;
+			const newTerminalLocation = this._viewDescriptorService.getViewLocationById(this._terminalViewId)!;
 			const terminalPositionChanged = newPanelPosition !== this._panelPosition || newTerminalLocation !== this._terminalLocation;
 			if (terminalPositionChanged) {
 				const newOrientation = newTerminalLocation === ViewContainerLocation.Panel && isHorizontal(newPanelPosition) ? Orientation.HORIZONTAL : Orientation.VERTICAL;

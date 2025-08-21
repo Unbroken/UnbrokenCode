@@ -20,7 +20,6 @@ import { accessibleViewCurrentProviderId, accessibleViewIsShown } from '../../..
 import type { ITerminalContribution, ITerminalInstance } from '../../../terminal/browser/terminal.js';
 import { registerActiveInstanceAction, registerTerminalAction } from '../../../terminal/browser/terminalActions.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { clearShellFileHistory, getCommandHistory, getDirectoryHistory } from '../common/history.js';
 import { TerminalHistoryCommandId } from '../common/terminal.history.js';
@@ -124,7 +123,11 @@ registerActiveInstanceAction({
 			id: MenuId.ViewTitle,
 			group: 'shellIntegration',
 			order: 0,
-			when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+			when: ContextKeyExpr.or(
+				ContextKeyExpr.equals('view', 'terminal'),
+				ContextKeyExpr.equals('view', 'terminal2'),
+				ContextKeyExpr.equals('view', 'terminal3')
+			),
 			isHiddenByDefault: true
 		},
 		...[MenuId.EditorTitle, MenuId.CompactWindowEditorTitle].map(id => ({
@@ -171,7 +174,11 @@ registerTerminalAction({
 			id: MenuId.ViewTitle,
 			group: 'shellIntegration',
 			order: 1,
-			when: ContextKeyExpr.equals('view', TERMINAL_VIEW_ID),
+			when: ContextKeyExpr.or(
+				ContextKeyExpr.equals('view', 'terminal'),
+				ContextKeyExpr.equals('view', 'terminal2'),
+				ContextKeyExpr.equals('view', 'terminal3')
+			),
 			isHiddenByDefault: true
 		},
 		...[MenuId.EditorTitle, MenuId.CompactWindowEditorTitle].map(id => ({

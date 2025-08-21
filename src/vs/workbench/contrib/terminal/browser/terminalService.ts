@@ -38,7 +38,7 @@ import { getColorStyleContent, getUriClasses } from './terminalIcon.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
 import { getInstanceFromResource, getTerminalUri, parseTerminalUri } from './terminalUri.js';
 import { TerminalViewPane } from './terminalView.js';
-import { IRemoteTerminalAttachTarget, IStartExtensionTerminalRequest, ITerminalProcessExtHostProxy, ITerminalProfileService, TERMINAL_VIEW_ID } from '../common/terminal.js';
+import { IRemoteTerminalAttachTarget, IStartExtensionTerminalRequest, ITerminalProcessExtHostProxy, ITerminalProfileService } from '../common/terminal.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { columnToEditorGroup } from '../../../services/editor/common/editorGroupColumn.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
@@ -590,9 +590,15 @@ export class TerminalService extends Disposable implements ITerminalService {
 		} else {
 			this._editable = { instance: instance, data };
 		}
-		const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(TERMINAL_VIEW_ID);
-		const isEditing = this.isEditable(instance);
-		pane?.terminalTabbedView?.setEditable(isEditing);
+		// Find which view contains this instance
+		const group = this._terminalGroupService.getGroupForInstance(instance);
+		if (group) {
+			// Use the viewId from the group service that owns this instance
+			const viewId = this._terminalGroupService.terminalViewId;
+			const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(viewId);
+			const isEditing = this.isEditable(instance);
+			pane?.terminalTabbedView?.setEditable(isEditing);
+		}
 	}
 
 	isEditable(instance: ITerminalInstance | undefined): boolean {

@@ -18,12 +18,13 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { TerminalGroup } from './terminalGroup.js';
 import { getInstanceFromResource } from './terminalUri.js';
 import { TerminalViewPane } from './terminalView.js';
-import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
 import { asArray } from '../../../../base/common/arrays.js';
 
 export class TerminalGroupService extends Disposable implements ITerminalGroupService {
 	declare _serviceBrand: undefined;
+
+	readonly terminalViewId: string;
 
 	groups: ITerminalGroup[] = [];
 	activeGroupIndex: number = -1;
@@ -65,9 +66,11 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
 		@IViewsService private readonly _viewsService: IViewsService,
 		@IViewDescriptorService private readonly _viewDescriptorService: IViewDescriptorService,
-		@IQuickInputService private readonly _quickInputService: IQuickInputService
+		@IQuickInputService private readonly _quickInputService: IQuickInputService,
+		terminalViewId: string
 	) {
 		super();
+		this.terminalViewId = terminalViewId;
 
 		const terminalGroupCountContextKey = TerminalContextKeys.groupCount.bindTo(this._contextKeyService);
 		this._register(Event.runAndSubscribe(this.onDidChangeGroups, () => terminalGroupCountContextKey.set(this.groups.length)));
@@ -86,9 +89,9 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 
 	hidePanel(): void {
 		// Hide the panel if the terminal is in the panel and it has no sibling views
-		const panel = this._viewDescriptorService.getViewContainerByViewId(TERMINAL_VIEW_ID);
+		const panel = this._viewDescriptorService.getViewContainerByViewId(this.terminalViewId);
 		if (panel && this._viewDescriptorService.getViewContainerModel(panel).visibleViewDescriptors.length === 1) {
-			this._viewsService.closeView(TERMINAL_VIEW_ID);
+			this._viewsService.closeView(this.terminalViewId);
 			TerminalContextKeys.tabsMouse.bindTo(this._contextKeyService).set(false);
 		}
 	}
@@ -134,7 +137,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 			return;
 		}
 		await this.showPanel(true);
-		const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(TERMINAL_VIEW_ID);
+		const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(this.terminalViewId);
 		pane?.terminalTabbedView?.focusTabs();
 	}
 
@@ -143,7 +146,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 			return;
 		}
 
-		const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(TERMINAL_VIEW_ID);
+		const pane = this._viewsService.getActiveViewWithId<TerminalViewPane>(this.terminalViewId);
 		pane?.terminalTabbedView?.focusHover();
 	}
 
@@ -156,7 +159,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	createGroup(slcOrInstance?: IShellLaunchConfig | ITerminalInstance): ITerminalGroup {
-		const group = this._instantiationService.createInstance(TerminalGroup, this._container, slcOrInstance);
+		const group = this._instantiationService.createInstance(TerminalGroup, this._container, slcOrInstance, this.terminalViewId);
 		this.groups.push(group);
 		group.addDisposable(Event.forward(group.onPanelOrientationChanged, this._onDidChangePanelOrientation));
 		group.addDisposable(Event.forward(group.onDidDisposeInstance, this._onDidDisposeInstance));
@@ -182,8 +185,8 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	async showPanel(focus?: boolean): Promise<void> {
-		const pane = this._viewsService.getActiveViewWithId(TERMINAL_VIEW_ID)
-			?? await this._viewsService.openView(TERMINAL_VIEW_ID, focus);
+		const pane = this._viewsService.getActiveViewWithId(this.terminalViewId)
+			?? await this._viewsService.openView(this.terminalViewId, focus);
 		pane?.setExpanded(true);
 
 		if (focus) {
@@ -195,7 +198,7 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 				// HACK: Ensure the panel is still visible at this point as there may have been
 				// a request since it was opened to show a different panel
 				if (pane && !pane.isVisible()) {
-					await this._viewsService.openView(TERMINAL_VIEW_ID, focus);
+					await this._viewsService.openView(this.terminalViewId, focus);
 				}
 				await instance.focusWhenReady(true);
 			}
@@ -501,12 +504,12 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 
 	/**
 	 * Visibility should be updated in the following cases:
-	 * 1. Toggle `TERMINAL_VIEW_ID` visibility
+	 * 1. Toggle terminal view visibility
 	 * 2. Change active group
 	 * 3. Change instances in active group
 	 */
 	updateVisibility() {
-		const visible = this._viewsService.isViewVisible(TERMINAL_VIEW_ID);
+		const visible = this._viewsService.isViewVisible(this.terminalViewId);
 		this.groups.forEach((g, i) => g.setVisible(visible && i === this.activeGroupIndex));
 	}
 }
@@ -516,4 +519,20 @@ interface IInstanceLocation {
 	groupIndex: number;
 	instance: ITerminalInstance;
 	instanceIndex: number;
+}
+
+/**
+ * Default TerminalGroupService for dependency injection registration.
+ * This wrapper class allows the service to be registered with only decorator parameters.
+ */
+export class DefaultTerminalGroupService extends TerminalGroupService {
+	constructor(
+		@IContextKeyService contextKeyService: IContextKeyService,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IViewsService viewsService: IViewsService,
+		@IViewDescriptorService viewDescriptorService: IViewDescriptorService,
+		@IQuickInputService quickInputService: IQuickInputService
+	) {
+		super(contextKeyService, instantiationService, viewsService, viewDescriptorService, quickInputService, 'terminal');
+	}
 }

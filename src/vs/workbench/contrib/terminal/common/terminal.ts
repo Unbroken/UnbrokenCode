@@ -20,7 +20,6 @@ import { IEnvironmentVariableInfo } from './environmentVariable.js';
 import { IExtensionPointDescriptor } from '../../../services/extensions/common/extensionsRegistry.js';
 import { defaultTerminalContribCommandsToSkipShell } from '../terminalContribExports.js';
 
-export const TERMINAL_VIEW_ID = 'terminal';
 
 export const TERMINAL_CREATION_COMMANDS = ['workbench.action.terminal.toggleTerminal', 'workbench.action.terminal.new', 'workbench.action.togglePanel', 'workbench.action.terminal.focus'];
 
@@ -399,6 +398,8 @@ export const QUICK_LAUNCH_PROFILE_CHOICE = 'workbench.action.terminal.profile.ch
 
 export const enum TerminalCommandId {
 	Toggle = 'workbench.action.terminal.toggleTerminal',
+	Toggle2 = 'workbench.action.terminal.toggleTerminal2',
+	Toggle3 = 'workbench.action.terminal.toggleTerminal3',
 	Kill = 'workbench.action.terminal.kill',
 	KillViewOrEditor = 'workbench.action.terminal.killViewOrEditor',
 	KillEditor = 'workbench.action.terminal.killEditor',
@@ -424,6 +425,8 @@ export const enum TerminalCommandId {
 	NewLocal = 'workbench.action.terminal.newLocal',
 	NewInActiveWorkspace = 'workbench.action.terminal.newInActiveWorkspace',
 	NewWithProfile = 'workbench.action.terminal.newWithProfile',
+	NewInTerminal2 = 'workbench.action.terminal.newInTerminal2',
+	NewInTerminal3 = 'workbench.action.terminal.newInTerminal3',
 	Split = 'workbench.action.terminal.split',
 	SplitActiveTab = 'workbench.action.terminal.splitActiveTab',
 	SplitInActiveWorkspace = 'workbench.action.terminal.splitInActiveWorkspace',

@@ -481,6 +481,9 @@ export interface TerminalEditorLocation {
 export interface ITerminalGroupService extends ITerminalInstanceHost {
 	readonly _serviceBrand: undefined;
 
+	/** The view ID this group service is associated with (e.g., 'terminal', 'terminal2', 'terminal3') */
+	readonly terminalViewId: string;
+
 	/** Gets all _terminal view_ instances, ie. instances contained within terminal groups. */
 	readonly instances: readonly ITerminalInstance[];
 	readonly groups: readonly ITerminalGroup[];

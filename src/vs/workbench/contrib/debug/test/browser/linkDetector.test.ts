@@ -289,4 +289,38 @@ suite('Debug - Link Detector', () => {
 		assert.strictEqual(isWindows ? 'C:\\foo\\bar.js:12:34' : '/Users/foo/bar.js:12:34', output.children[0].textContent);
 		assert.strictEqual(isWindows ? 'C:\\baz\\qux.cs:line 6' : '/Users/baz/qux.cs:line 6', output.children[1].textContent);
 	});
+
+	test('stacktraceLineFullyClickable', () => {
+		// Test that entire stacktrace lines become clickable
+		const input = 'void (void *) - /opt/Source/Malterlib3/Malterlib/Function/Source/Private/Malterlib_Function_Function_CallImplementation.h:231';
+		const output = linkDetector.linkify(input);
+
+		assert.strictEqual(1, output.children.length);
+		assert.strictEqual('SPAN', output.tagName);
+		assert.strictEqual('A', output.firstElementChild!.tagName);
+		assertElementIsLink(output.firstElementChild!);
+		// The entire line should be the link text
+		assert.strictEqual('void (void *) - /opt/Source/Malterlib3/Malterlib/Function/Source/Private/Malterlib_Function_Function_CallImplementation.h:231', output.firstElementChild!.textContent);
+	});
+
+	test('stacktraceMultipleLines', () => {
+		// Test multiple stacktrace lines with the format "function - /path/to/file:line"
+		const input = 'func1() - /path/to/file1.cpp:10\nfunc2() - /path/to/file2.cpp:20:5';
+		const output = linkDetector.linkify(input, true);
+
+		assert.strictEqual(2, output.children.length);
+		assert.strictEqual('SPAN', output.tagName);
+
+		// First line (includes newline when split)
+		const firstLine = output.children[0] as HTMLElement;
+		assert.strictEqual(1, firstLine.children.length);
+		assert.strictEqual('A', firstLine.firstElementChild!.tagName);
+		assert.strictEqual('func1() - /path/to/file1.cpp:10', firstLine.firstElementChild!.textContent);
+
+		// Second line
+		const secondLine = output.children[1] as HTMLElement;
+		assert.strictEqual(1, secondLine.children.length);
+		assert.strictEqual('A', secondLine.firstElementChild!.tagName);
+		assert.strictEqual('func2() - /path/to/file2.cpp:20:5', secondLine.firstElementChild!.textContent);
+	});
 });

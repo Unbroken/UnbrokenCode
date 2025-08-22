@@ -37,9 +37,14 @@ const LINE_COLUMN = /(?:\:([\d]+))?(?:\:([\d]+))?/;
 const PATH_LINK_REGEX = new RegExp(`${platform.isWindows ? WIN_PATH.source : POSIX_PATH.source}${LINE_COLUMN.source}`, 'g');
 const LINE_COLUMN_REGEX = /:([\d]+)(?::([\d]+))?$/;
 
+// Matches entire lines containing stacktrace-style file references
+// Examples: "void (void *) - /path/to/file.h:231" or "    at MyClass.method (file.js:123)"
+// Captures: [0]=full line, [1]=file path, [2]=line number, [3]=column number (optional)
+const STACKTRACE_LINK_REGEX = /^.*\s-\s+((?:\/[\w\-\.]+)+\.[\w]+):([\d]+)(?::([\d]+))?.*$/gm;
+
 const MAX_LENGTH = 2000;
 
-type LinkKind = 'web' | 'path' | 'text';
+type LinkKind = 'web' | 'path' | 'stacktrace' | 'text';
 type LinkPart = {
 	kind: LinkKind;
 	value: string;
@@ -127,6 +132,15 @@ export class LinkDetector implements ILinkDetector {
 						node = this.createWebLink(includeFulltext ? text : undefined, part.value, hoverBehavior);
 						break;
 					case 'path': {
+						const path = part.captures[0];
+						const lineNumber = part.captures[1] ? Number(part.captures[1]) : 0;
+						const columnNumber = part.captures[2] ? Number(part.captures[2]) : 0;
+						node = this.createPathLink(includeFulltext ? text : undefined, part.value, path, lineNumber, columnNumber, workspaceFolder, hoverBehavior);
+						break;
+					}
+					case 'stacktrace': {
+						// For stacktrace links, captures are: [1]=file path, [2]=line, [3]=column (optional)
+						// part.value contains the full line that was matched
 						const path = part.captures[0];
 						const lineNumber = part.captures[1] ? Number(part.captures[1]) : 0;
 						const columnNumber = part.captures[2] ? Number(part.captures[2]) : 0;
@@ -350,8 +364,8 @@ export class LinkDetector implements ILinkDetector {
 			return [{ kind: 'text', value: text, captures: [], index: 0 }];
 		}
 
-		const regexes: RegExp[] = [WEB_LINK_REGEX, PATH_LINK_REGEX];
-		const kinds: LinkKind[] = ['web', 'path'];
+		const regexes: RegExp[] = [WEB_LINK_REGEX, STACKTRACE_LINK_REGEX, PATH_LINK_REGEX];
+		const kinds: LinkKind[] = ['web', 'stacktrace', 'path'];
 		const result: LinkPart[] = [];
 
 		const splitOne = (text: string, regexIndex: number, baseIndex: number) => {

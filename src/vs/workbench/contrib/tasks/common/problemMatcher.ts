@@ -98,7 +98,8 @@ export interface IAdvancedProblemPattern extends IProblemPattern {
 	// Category management
 	subProblemCategory?: number;           // Dynamic category from regex capture
 	staticSubProblemCategory?: string;     // Static category string
-	reverseSubProblemCategory?: boolean;           // Reverse the sub-problem category (e.g., "Reverse" for reverse order)
+	reverseSubProblemCategory?: boolean;   // Reverse the sub-problem category (e.g., "Reverse" for reverse order)
+	uniqueSubProblemCategory?: boolean;    // Unique locations in the sub-problem category
 
 	// Sub-problem control
 	introduceSubProblem?: boolean;         // Mark as sub-problem
@@ -106,6 +107,7 @@ export interface IAdvancedProblemPattern extends IProblemPattern {
 
 	// Nested patterns
 	pattern?: IAdvancedProblemPattern[];   // Nested pattern array
+	loopPattern?: boolean;                 // Loop over nested patterns until no match
 
 	// Control flow
 	ignore?: boolean;                      // Skip lines matching this pattern
@@ -222,8 +224,10 @@ interface IPatternProcessingState {
 	totalConsumedLines: number;
 	currentCategory: string;
 	currentCategoryReversed: boolean;
+	currentCategoryUnique: boolean;
 	subProblems: Map<string, {
 		currentCategoryReversed: boolean;
+		currentCategoryUnique: boolean;
 		problems: IResourceMarker[];
 	}>;
 	data: IProblemData;
@@ -765,6 +769,7 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			totalConsumedLines: 0,
 			currentCategory: 'Other',
 			currentCategoryReversed: false,
+			currentCategoryUnique: false,
 			subProblems: new Map(),
 			data: Object.create(null),
 			commitCurrentData: () => {
@@ -808,36 +813,24 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 				if (subProblem.currentCategoryReversed) {
 					subProblem.problems.reverse();
 				}
+
+				if (subProblem.currentCategoryUnique) {
+					const seen = new Set<string>();
+					const uniqueProblems: IResourceMarker[] = [];
+					for (const p of subProblem.problems) {
+						const m = p.marker;
+						const key = `${p.resource.toString()}#${m.startLineNumber}:${m.startColumn}-${m.endLineNumber}:${m.endColumn}`;
+						if (!seen.has(key)) {
+							seen.add(key);
+							uniqueProblems.push(p);
+						}
+					}
+					subProblem.problems = uniqueProblems;
+				}
+
 				subProblemsArray.push({ category: category.trim(), problems: subProblem.problems });
 			}
 			(mainMatch as IProblemMatch).marker.subProblems = subProblemsArray;
-		}
-
-		{
-			const state: IPatternProcessingState = {
-				lines,
-				start,
-				currentLineIndex: 0,
-				totalConsumedLines: 0,
-				currentCategory: 'Other',
-				currentCategoryReversed: false,
-				subProblems: new Map(),
-				data: Object.create(null),
-				commitCurrentData: () => {
-					const match = this.getMarkerMatch(state.data);
-
-					if (match) {
-						return true;
-					}
-
-					return false;
-				},
-			};
-
-			// Initialize commitCurrentData to commit the main match
-
-			const result2 = this.processPatterns(this.patterns, state);
-			console.log(result2.failed);
 		}
 
 		return {
@@ -965,6 +958,10 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			state.currentCategoryReversed = true;
 		}
 
+		if (pattern.uniqueSubProblemCategory) {
+			state.currentCategoryUnique = true;
+		}
+
 		if (pattern.introduceMainProblem) {
 			state.commitCurrentData();
 
@@ -990,6 +987,7 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 
 			const currentCategory = state.currentCategory;
 			const currentCategoryReversed = state.currentCategoryReversed;
+			const currentCategoryUnique = state.currentCategoryUnique;
 
 			// Reassign commitCurrentData to handle sub-problems
 			state.commitCurrentData = () => {
@@ -1001,7 +999,7 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 					};
 
 					const categoryContainer = state.subProblems.get(currentCategory) ??
-						state.subProblems.set(currentCategory, { currentCategoryReversed, problems: [] }).get(currentCategory)!;
+						state.subProblems.set(currentCategory, { currentCategoryReversed, currentCategoryUnique, problems: [] }).get(currentCategory)!;
 					categoryContainer.problems.push(resourceMarker);
 
 					return true;
@@ -1038,12 +1036,47 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 
 		// Handle nested patterns (sub-patterns) last - after all current pattern processing is complete
 		if (pattern.pattern && pattern.pattern.length > 0) {
-			const nestedResult = this.processPatterns(pattern.pattern, state);
+			if (pattern.loopPattern) {
+				let totalConsumed = 0;
+				while (true) {
+					const savedLineIndex = state.currentLineIndex;
+					const savedTotalConsumed = state.totalConsumedLines;
 
-			if (nestedResult.failed) {
-				return { success: false, needMoreLines: false };
-			} else if (nestedResult.needMoreLines) {
-				return { success: false, needMoreLines: true };
+					const nestedResult = this.processPatterns(pattern.pattern, state);
+
+					if (nestedResult.needMoreLines) {
+						return { success: false, needMoreLines: true };
+					}
+
+					if (nestedResult.failed) {
+						// Pattern didn't match, restore state and stop looping
+						state.currentLineIndex = savedLineIndex;
+						state.totalConsumedLines = savedTotalConsumed;
+						break;
+					}
+
+					const consumed = state.currentLineIndex - savedLineIndex;
+					if (consumed === 0) {
+						// No lines consumed, avoid infinite loop
+						break;
+					}
+
+					totalConsumed += consumed;
+				}
+
+				return {
+					success: totalConsumed > 0,
+					needMoreLines: false
+				};
+
+			} else {
+				const nestedResult = this.processPatterns(pattern.pattern, state);
+
+				if (nestedResult.failed) {
+					return { success: false, needMoreLines: false };
+				} else if (nestedResult.needMoreLines) {
+					return { success: false, needMoreLines: true };
+				}
 			}
 		}
 
@@ -1233,9 +1266,20 @@ export namespace Config {
 		reverseSubProblemCategory?: boolean;
 
 		/**
+		 * If true, problems inside a category are kept unique based on their location.
+		 */
+		uniqueSubProblemCategory?: boolean;
+
+		/**
 		 * Nested pattern array for hierarchical matching.
 		 */
 		pattern?: IAdvancedProblemPattern[];
+
+		/**
+		 * Whether the nested pattern should be repeatedly applied as long
+		 * as it matches.
+		 */
+		loopPattern?: boolean;
 
 		/**
 		 * Skip lines matching this pattern without creating problems.
@@ -1789,6 +1833,10 @@ export namespace Schemas {
 		type: 'boolean',
 		description: localize('AdvancedProblemPatternSchema.reverseSubProblemCategory', 'The next sub problem category that is introduced will have it\'s problems be reversed.')
 	};
+	AdvancedProblemPattern.properties['uniqueSubProblemCategory'] = {
+		type: 'boolean',
+		description: localize('AdvancedProblemPatternSchema.uniqueSubProblemCategory', 'The next sub problem category that is introduced will have it\'s problems made unique.')
+	};
 	AdvancedProblemPattern.properties['ignore'] = {
 		type: 'boolean',
 		description: localize('AdvancedProblemPatternSchema.ignore', 'Skip lines matching this pattern without creating problems.')
@@ -1820,6 +1868,7 @@ export namespace Schemas {
 				code: { type: 'integer' },
 				message: { type: 'integer' },
 				loop: { type: 'boolean' },
+				loopPattern: { type: 'boolean' },
 				multiLineMessage: { type: 'boolean' },
 				optional: { type: 'boolean' },
 				subProblemCategory: { type: 'integer' },
@@ -1827,10 +1876,16 @@ export namespace Schemas {
 				introduceSubProblem: { type: 'boolean' },
 				introduceMainProblem: { type: 'boolean' },
 				reverseSubProblemCategory: { type: 'boolean' },
+				uniqueSubProblemCategory: { type: 'boolean' },
 				ignore: { type: 'boolean' }
 			},
 			required: ['regexp']
 		}
+	};
+
+	AdvancedProblemPattern.properties['loopPattern'] = {
+		type: 'boolean',
+		description: localize('ProblemPatternSchema.loopPattern', 'If nested pattern array should loop.')
 	};
 
 	export const NamedProblemPattern: IJSONSchema = Objects.deepClone(ProblemPattern);
@@ -2513,7 +2568,9 @@ export class ProblemMatcherParser extends Parser {
 		copyProperty(result, value, 'introduceSubProblem', 'introduceSubProblem');
 		copyProperty(result, value, 'introduceMainProblem', 'introduceMainProblem');
 		copyProperty(result, value, 'reverseSubProblemCategory', 'reverseSubProblemCategory');
+		copyProperty(result, value, 'uniqueSubProblemCategory', 'uniqueSubProblemCategory');
 		copyProperty(result, value, 'ignore', 'ignore');
+		copyProperty(result, value, 'loopPattern', 'loopPattern');
 
 		// Handle nested patterns
 		if (value.pattern) {

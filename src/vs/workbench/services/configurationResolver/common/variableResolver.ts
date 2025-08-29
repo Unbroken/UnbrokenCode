@@ -6,7 +6,7 @@
 import { IStringDictionary } from '../../../../base/common/collections.js';
 import { normalizeDriveLetter } from '../../../../base/common/labels.js';
 import * as paths from '../../../../base/common/path.js';
-import { IProcessEnvironment, isWindows } from '../../../../base/common/platform.js';
+import { IProcessEnvironment, isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import * as process from '../../../../base/common/process.js';
 import * as types from '../../../../base/common/types.js';
 import { URI as uri } from '../../../../base/common/uri.js';
@@ -319,6 +319,18 @@ export abstract class AbstractVariableResolverService implements IConfigurationR
 					case 'pathSeparator':
 					case '/':
 						return paths.sep;
+
+					case 'executableExtension':
+						return isWindows ? '.exe' : '';
+
+					case 'dynamicLibraryExtension':
+						if (isWindows) {
+							return '.dll';
+						}
+						if (isMacintosh) {
+							return '.dylib';
+						}
+						return '.so';
 
 					default: {
 						try {

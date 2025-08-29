@@ -2,3 +2,7 @@
 	path = extensions/malterlib
 	url = https://github.com/Malterlib/MalterlibVSCode.git
 	branch = master
+[submodule "extensions/vscode-clangd"]
+	path = extensions/vscode-clangd
+	url = https://github.com/Unbroken/vscode-clangd.git
+	branch = master

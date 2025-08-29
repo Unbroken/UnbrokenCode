@@ -518,6 +518,7 @@ const esbuildMediaScripts = [
     'notebook-renderers/esbuild.mjs',
     'simple-browser/esbuild-preview.mjs',
     'malterlib/esbuild.mjs',
+    'vscode-clangd/esbuild.mjs',
 ];
 async function webpackExtensions(taskName, isWatch, webpackConfigLocations) {
     const webpack = require('webpack');

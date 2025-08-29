@@ -6,3 +6,7 @@
 	path = extensions/vscode-clangd
 	url = https://github.com/Unbroken/vscode-clangd.git
 	branch = master
+[submodule "extensions/codelldb"]
+	path = extensions/codelldb
+	url = https://github.com/Unbroken/codelldb.git
+	branch = master

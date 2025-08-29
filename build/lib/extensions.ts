@@ -569,6 +569,7 @@ const esbuildMediaScripts = [
 	'notebook-renderers/esbuild.mjs',
 	'simple-browser/esbuild-preview.mjs',
 	'malterlib/esbuild.mjs',
+	'vscode-clangd/esbuild.mjs',
 ];
 
 export async function webpackExtensions(taskName: string, isWatch: boolean, webpackConfigLocations: { configPath: string; outputRoot?: string }[]) {

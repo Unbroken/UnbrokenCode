@@ -316,6 +316,7 @@ function fromGithub({ name, version, repo, sha256, metadata }) {
  */
 const nativeExtensions = [
     'microsoft-authentication',
+    'codelldb',
 ];
 const excludedExtensions = [
     'vscode-api-tests',
@@ -413,8 +414,41 @@ function doPackageLocalExtensionsStream(forWeb, disableMangle, native) {
         .filter(({ name }) => builtInExtensions.every(b => b.name !== name))
         .filter(({ manifestPath }) => (forWeb ? isWebExtension(require(manifestPath)) : true)));
     const localExtensionsStream = minifyExtensionResources(event_stream_1.default.merge(...localExtensionsDescriptions.map(extension => {
-        return fromLocal(extension.path, forWeb, disableMangle)
+        // Special handling for CodeLLDB packaging (require VSIX)
+        console.log('Processing extension:', extension.name, forWeb);
+        if (extension.name === 'codelldb' && !forWeb) {
+            console.log('Processing extension VSIX:', extension.name, forWeb);
+            const buildRoot = path_1.default.join(extension.path, 'build');
+            const vsixPath = path_1.default.join(buildRoot, 'codelldb-full.vsix');
+            if (!fs_1.default.existsSync(vsixPath)) {
+                throw new Error(`CodeLLDB VSIX not found at ${vsixPath}. Ensure the 'vsix_full' target built successfully.`);
+            }
+            const packageJsonFilter = (0, gulp_filter_1.default)('package.json', { restore: true });
+            const vsixStream = vzip.src(vsixPath)
+                .pipe((0, gulp_filter_1.default)('extension/**'))
+                .pipe((0, gulp_rename_1.default)(p => p.dirname = p.dirname.replace(/^extension\/?/, '')))
+                // Exclude unnecessary CPython sysconfig artifact from CodeLLDB VSIX
+                .pipe((0, gulp_filter_1.default)(['**', '!lldb/lib/python*/_sysconfigdata__darwin_darwin.py']))
+                .pipe(packageJsonFilter)
+                .pipe((0, gulp_buffer_1.default)())
+                .pipe(event_stream_1.default.mapSync((f) => {
+                try {
+                    const data = JSON.parse(f.contents.toString('utf8'));
+                    delete data.scripts;
+                    delete data.devDependencies;
+                    f.contents = Buffer.from(JSON.stringify(data));
+                }
+                catch { }
+                return f;
+            }))
+                .pipe(packageJsonFilter.restore)
+                .pipe((0, gulp_rename_1.default)(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+            // Only package content from the VSIX to avoid source package.json (@VERSION@)
+            return vsixStream;
+        }
+        const baseStream = fromLocal(extension.path, forWeb, disableMangle)
             .pipe((0, gulp_rename_1.default)(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+        return baseStream;
     })));
     let result;
     if (forWeb) {

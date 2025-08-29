@@ -40,7 +40,7 @@ async function main(buildDir?: string) {
 		outAppPath,
 		force: true,
 		mergeASARs: true,
-		x64ArchFiles: '**/{kerberos.node,bin/vsce-sign}',
+		x64ArchFiles: '**/{kerberos.node,bin/vsce-sign,codelldb/lldb/bin/debugserver}',
 		filesToSkipComparison: (file: string) => {
 			for (const expected of filesToSkip) {
 				if (minimatch(file, expected)) {

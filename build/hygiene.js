@@ -292,7 +292,7 @@ if (require.main === module) {
 					process.exit(1);
 				}
 
-				const some = out.split(/\r?\n/).filter((l) => !!l && l !== 'extensions/malterlib');
+				const some = out.split(/\r?\n/).filter((l) => !!l && l !== 'extensions/malterlib' && l !== 'extensions/vscode-clangd');
 
 				if (some.length > 0) {
 					console.log('Reading git index versions...');

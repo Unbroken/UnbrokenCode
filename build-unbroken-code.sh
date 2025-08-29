@@ -340,7 +340,7 @@ function Create_GitHub_Release()
 
 # Ensure git submodules are initialized and updated
 echo "Checking git submodules..."
-if [ -f ".gitmodules" ]; then
+if [ -f ".gitmodules" ] && ! $IGNORE_SUBMODULE_CHECK; then
 	git submodule update --init --recursive
 	echo "Git submodules updated"
 
@@ -416,6 +416,31 @@ echo "Using build date: $VSCODE_BUILD_DATE"
 
 export VSCODE_QUALITY=stable
 
+function Build_Windown_Arch()
+{
+	echo "Building Windows $1..."
+
+	npm_config_arch=$1 NPM_ARCH=$1 VSCODE_ARCH=$1 npm ci --cpu=arm64
+
+	# Temporarily rename node_modules/.bin/rc to avoid conflict with Windows Resource Compiler
+	if [ -f "node_modules/.bin/rc" ]; then
+		mv "node_modules/.bin/rc" "node_modules/.bin/rc.bak"
+		mv "node_modules/.bin/rc.cmd" "node_modules/.bin/rc.cmd.bak" 2>/dev/null || true
+		mv "node_modules/.bin/rc.ps1" "node_modules/.bin/rc.ps1.bak" 2>/dev/null || true
+		echo "Temporarily renamed rc binaries to avoid conflict with Windows Resource Compiler"
+	fi
+
+	npm_config_arch=$1 NPM_ARCH=$1 VSCODE_ARCH=$1 npm run gulp vscode-win32-$1
+
+	# Restore rc binaries after build
+	if [ -f "node_modules/.bin/rc.bak" ]; then
+		mv "node_modules/.bin/rc.bak" "node_modules/.bin/rc"
+		mv "node_modules/.bin/rc.cmd.bak" "node_modules/.bin/rc.cmd" 2>/dev/null || true
+		mv "node_modules/.bin/rc.ps1.bak" "node_modules/.bin/rc.ps1" 2>/dev/null || true
+		echo "Restored rc binaries"
+	fi
+}
+
 function Build_Windows()
 {
 	if $SKIP_GULP_BUILD; then
@@ -424,7 +449,6 @@ function Build_Windows()
 		echo "Building Windows binaries..."
 	fi
 
-	export PATH="/c/Strawberry/perl/bin/perl:$PATH"
 	export PERL=/c/Strawberry/perl/bin/perl.exe
 	export OPENSSL_SRC_PERL=/c/Strawberry/perl/bin/perl.exe
 	hash -r
@@ -441,15 +465,9 @@ function Build_Windows()
 	export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
 
 	if ! $SKIP_GULP_BUILD; then
-		# Build Windows arm64
-		echo "Building Windows arm64..."
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu=arm64
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64
-
-		# Build Windows x64
-		echo "Building Windows x64..."
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu=x64
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-win32-x64
+		# Build in sub-shell to not pollute environment
+		(Build_Windown_Arch arm64 amd64_arm64)
+		(Build_Windown_Arch x64 amd64)
 	fi
 
 	# Download Explorer dlls for Windows 11 integration (appx)

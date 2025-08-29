@@ -314,6 +314,7 @@ export function fromGithub({ name, version, repo, sha256, metadata }: IExtension
  */
 const nativeExtensions = [
 	'microsoft-authentication',
+	'codelldb',
 ];
 
 const excludedExtensions = [
@@ -432,8 +433,40 @@ function doPackageLocalExtensionsStream(forWeb: boolean, disableMangle: boolean,
 	const localExtensionsStream = minifyExtensionResources(
 		es.merge(
 			...localExtensionsDescriptions.map(extension => {
-				return fromLocal(extension.path, forWeb, disableMangle)
+				// Special handling for CodeLLDB packaging (require VSIX)
+				console.log('Processing extension:', extension.name, forWeb);
+				if (extension.name === 'codelldb' && !forWeb) {
+					console.log('Processing extension VSIX:', extension.name, forWeb);
+					const buildRoot = path.join(extension.path, 'build');
+					const vsixPath = path.join(buildRoot, 'codelldb-full.vsix');
+					if (!fs.existsSync(vsixPath)) {
+						throw new Error(`CodeLLDB VSIX not found at ${vsixPath}. Ensure the 'vsix_full' target built successfully.`);
+					}
+					const packageJsonFilter = filter('package.json', { restore: true });
+					const vsixStream = vzip.src(vsixPath)
+						.pipe(filter('extension/**'))
+						.pipe(rename(p => p.dirname = p.dirname!.replace(/^extension\/?/, '')))
+						// Exclude unnecessary CPython sysconfig artifact from CodeLLDB VSIX
+						.pipe(filter(['**', '!lldb/lib/python*/_sysconfigdata__darwin_darwin.py']))
+						.pipe(packageJsonFilter)
+						.pipe(buffer())
+						.pipe(es.mapSync((f: File) => {
+							try {
+								const data = JSON.parse(f.contents!.toString('utf8'));
+								delete data.scripts;
+								delete data.devDependencies;
+								f.contents = Buffer.from(JSON.stringify(data));
+							} catch { }
+							return f;
+						}))
+						.pipe(packageJsonFilter.restore)
+						.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+					// Only package content from the VSIX to avoid source package.json (@VERSION@)
+					return vsixStream;
+				}
+				const baseStream = fromLocal(extension.path, forWeb, disableMangle)
 					.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+				return baseStream;
 			})
 		)
 	);

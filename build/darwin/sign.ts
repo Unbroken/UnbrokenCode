@@ -30,6 +30,14 @@ function getEntitlementsForFile(filePath: string): string {
 	} else if (filePath.includes(pluginHelperAppName)) {
 		return path.join(baseDir, 'azure-pipelines', 'darwin', 'helper-plugin-entitlements.plist');
 	}
+	// Apply a narrow entitlement only to the CodeLLDB adapter binary
+	// so it can load libLLDB signed by a different Team ID.
+	try {
+		const normalized = filePath.split('\\').join('/');
+		if (normalized.includes('/extensions/codelldb/') && normalized.includes('/adapter/codelldb')) {
+			return path.join(baseDir, 'azure-pipelines', 'darwin', 'codelldb-entitlements.plist');
+		}
+	} catch { }
 	return path.join(baseDir, 'azure-pipelines', 'darwin', 'app-entitlements.plist');
 }
 

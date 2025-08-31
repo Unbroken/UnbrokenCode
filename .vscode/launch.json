@@ -85,7 +85,8 @@
 			],
 			"presentation": {
 				"hidden": true,
-			}
+			},
+			"preLaunchTask": "Sleepdelay"
 		},
 		{
 			"type": "extensionHost",

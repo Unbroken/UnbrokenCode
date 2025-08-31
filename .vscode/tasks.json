@@ -312,6 +312,20 @@
 			"problemMatcher": [
 				"$tsc"
 			]
+		},
+		{
+			"label": "Sleepdelay",
+			"type": "shell",
+			"command": "sleep 1",
+			"windows": {
+				"command": "ping 127.0.0.1 -n 1"
+			},
+			"group": "none",
+			"presentation": {
+				"reveal": "never",
+				"group": "Sleep Delay",
+				"close": true
+			}
 		}
 	]
 }

@@ -615,10 +615,10 @@ abstract class AbstractLineMatcher implements ILineMatcher {
 	}
 
 	private createLocation(startLine: number, startColumn: number | undefined, endLine: number | undefined, endColumn: number | undefined): ILocation {
-		if (startColumn !== undefined && endColumn !== undefined) {
+		if (startColumn !== undefined && startColumn !== 0 && endColumn !== undefined && endColumn !== 0) {
 			return { startLineNumber: startLine, startCharacter: startColumn, endLineNumber: endLine || startLine, endCharacter: endColumn };
 		}
-		if (startColumn !== undefined) {
+		if (startColumn !== undefined && startColumn !== 0) {
 			return { startLineNumber: startLine, startCharacter: startColumn, endLineNumber: startLine, endCharacter: startColumn };
 		}
 		return { startLineNumber: startLine, startCharacter: 1, endLineNumber: startLine, endCharacter: 2 ** 31 - 1 }; // See https://github.com/microsoft/vscode/issues/80288#issuecomment-650636442 for discussion

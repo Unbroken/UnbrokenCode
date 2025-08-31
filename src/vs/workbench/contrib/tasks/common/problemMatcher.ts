@@ -856,6 +856,8 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			state.data.kind = patterns[0].kind;
 		}
 
+		let anySuccess = false;
+
 		for (let patternIndex = 0; patternIndex < patterns.length; patternIndex++) {
 			const pattern = patterns[patternIndex];
 
@@ -871,6 +873,10 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 					return { needMoreLines: false, failed: true };
 				}
 
+				if (loopResult.success) {
+					anySuccess = true;
+				}
+
 				continue;
 			}
 
@@ -884,9 +890,13 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			if (!result.success && !pattern.optional) {
 				return { needMoreLines: false, failed: true };
 			}
+
+			if (result.success) {
+				anySuccess = true;
+			}
 		}
 
-		return { needMoreLines: false, failed: false };
+		return { needMoreLines: false, failed: !anySuccess };
 	}
 
 	private handleMultiLineMessagePattern(pattern: IProblemPattern, lines: string[], start: number, data: IProblemData): { consumedLines: number; needMoreLines: boolean } {

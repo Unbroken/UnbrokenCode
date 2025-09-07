@@ -1415,6 +1415,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	clearBuffer(): void {
 		this._processManager.clearBuffer();
 		this.xterm?.clearBuffer();
+		this._lineDataEventAddon?.reset();
 	}
 
 	private _refreshSelectionContextKey() {

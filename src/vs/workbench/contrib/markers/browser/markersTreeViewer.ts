@@ -429,29 +429,32 @@ class MarkerWidget extends Disposable {
 	private renderDetails(marker: IMarker, filterData: MarkerFilterData | undefined, parent: HTMLElement): void {
 		parent.classList.add('details-container');
 
-		if (marker.source || marker.code) {
-			const source = this.disposables.add(new HighlightedLabel(dom.append(parent, dom.$('.marker-source'))));
-			const sourceMatches = filterData && filterData.sourceMatches || [];
-			source.set(marker.source, sourceMatches);
+		const sourceCodeContainer = dom.append(parent, dom.$('.marker-source-code-container'));
 
+		// Append line/column first (will appear on the right due to rtl)
+		const lnCol = dom.append(sourceCodeContainer, dom.$('span.marker-line'));
+		lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(marker.startLineNumber, marker.startColumn);
+
+		if (marker.source || marker.code) {
 			if (marker.code) {
 				if (typeof marker.code === 'string') {
-					const code = this.disposables.add(new HighlightedLabel(dom.append(parent, dom.$('.marker-code'))));
+					const code = this.disposables.add(new HighlightedLabel(dom.append(sourceCodeContainer, dom.$('.marker-code'))));
 					const codeMatches = filterData && filterData.codeMatches || [];
 					code.set(marker.code, codeMatches);
 				} else {
 					const container = dom.$('.marker-code');
 					const code = this.disposables.add(new HighlightedLabel(container));
 					const link = marker.code.target.toString(true);
-					this.disposables.add(new Link(parent, { href: link, label: container, title: link }, undefined, this._hoverService, this._openerService));
+					this.disposables.add(new Link(sourceCodeContainer, { href: link, label: container, title: link }, undefined, this._hoverService, this._openerService));
 					const codeMatches = filterData && filterData.codeMatches || [];
 					code.set(marker.code.value, codeMatches);
 				}
 			}
-		}
 
-		const lnCol = dom.append(parent, dom.$('span.marker-line'));
-		lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(marker.startLineNumber, marker.startColumn);
+			const source = this.disposables.add(new HighlightedLabel(dom.append(sourceCodeContainer, dom.$('.marker-source'))));
+			const sourceMatches = filterData && filterData.sourceMatches || [];
+			source.set(marker.source, sourceMatches);
+		}
 	}
 
 }
@@ -470,14 +473,15 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		dom.append(container, dom.$('.actions'));
 		dom.append(container, dom.$('.icon'));
 
-		data.resourceLabel = new HighlightedLabel(dom.append(container, dom.$('.related-info-resource')));
-		data.lnCol = dom.append(container, dom.$('span.marker-line'));
-
-		const separator = dom.append(container, dom.$('span.related-info-resource-separator'));
-		separator.textContent = ':';
-		separator.style.paddingRight = '4px';
-
 		data.description = new HighlightedLabel(dom.append(container, dom.$('.marker-description')));
+
+		const resourceLineContainer = dom.append(container, dom.$('.resource-line-container'));
+
+		data.lnCol = dom.append(resourceLineContainer, dom.$('span.marker-line'));
+		data.lnCol.style.paddingLeft = '4px';
+
+		data.resourceLabel = new HighlightedLabel(dom.append(resourceLineContainer, dom.$('.related-info-resource')));
+
 		return data;
 	}
 
@@ -512,17 +516,14 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		dom.append(container, dom.$('.actions'));
 		dom.append(container, dom.$('.icon'));
 
-		data.resourceLabel = new HighlightedLabel(dom.append(container, dom.$('.resource')));
-
-		data.lnCol = dom.append(container, dom.$('span.marker-line'));
-		data.lnCol.style.paddingLeft = '4px';
-		data.lnCol.style.paddingRight = '2px';
-
-		const separator = dom.append(container, dom.$('span.subproblem-separator'));
-		separator.textContent = ':';
-		separator.style.paddingRight = '4px';
-
 		data.description = new HighlightedLabel(dom.append(container, dom.$('.marker-description')));
+
+		const resourceLineContainer = dom.append(container, dom.$('.resource-line-container'));
+
+		data.lnCol = dom.append(resourceLineContainer, dom.$('span.marker-line'));
+		data.lnCol.style.paddingLeft = '4px';
+
+		data.resourceLabel = new HighlightedLabel(dom.append(resourceLineContainer, dom.$('.resource')));
 
 		return data;
 	}

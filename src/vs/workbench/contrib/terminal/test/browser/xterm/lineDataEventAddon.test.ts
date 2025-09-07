@@ -35,10 +35,12 @@ suite('LineDataEventAddon', () => {
 			await writeP(xterm, 'foo');
 			deepStrictEqual(events, []);
 			await writeP(xterm, '\n\r');
-			deepStrictEqual(events, ['foo']);
+			deepStrictEqual(events, []);
 			await writeP(xterm, 'bar');
-			deepStrictEqual(events, ['foo']);
+			deepStrictEqual(events, []);
 			await writeP(xterm, '\n');
+			deepStrictEqual(events, ['foo']);
+			await writeP(xterm, 'commit\n');
 			deepStrictEqual(events, ['foo', 'bar']);
 		});
 
@@ -55,17 +57,25 @@ suite('LineDataEventAddon', () => {
 			await writeP(xterm, 'foo.bar.baz.');
 			deepStrictEqual(events, []);
 			await writeP(xterm, '\n\r');
+			deepStrictEqual(events, []);
+			await writeP(xterm, 'commit\n');
 			deepStrictEqual(events, ['foo.bar.baz.']);
 		});
 
 		test('should not fire on cursor move when the backing process is not on Windows', async () => {
-			await writeP(xterm, 'foo.\x1b[H');
+			await writeP(xterm, 'foo\x1b[H');
 			deepStrictEqual(events, []);
+			await writeP(xterm, '\ncommit\x1b[H');
+			deepStrictEqual(events, []);
+			await writeP(xterm, '\n\n');
+			deepStrictEqual(events, ['foo']);
 		});
 
 		test('should fire on cursor move when the backing process is on Windows', async () => {
 			lineDataEventAddon.setOperatingSystem(OperatingSystem.Windows);
 			await writeP(xterm, 'foo\x1b[H');
+			deepStrictEqual(events, []);
+			await writeP(xterm, '\ncommit\x1b[H');
 			deepStrictEqual(events, ['foo']);
 		});
 	});

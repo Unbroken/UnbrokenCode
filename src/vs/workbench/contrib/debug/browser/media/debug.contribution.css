@@ -42,7 +42,7 @@
 }
 
 .monaco-editor .debug-top-stack-frame-column {
-	font: normal normal normal 16px/1 codicon;
+	font: normal normal normal 10px/1 codicon;
 	text-rendering: auto;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;

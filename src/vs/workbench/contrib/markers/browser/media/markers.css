@@ -41,13 +41,13 @@
 
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents {
 	display: flex;
-	line-height: 12px;
+	line-height: auto;
 	padding-right: 10px;
 }
 
 .monaco-workbench.hc-black .markers-panel .markers-panel-container .tree-container .monaco-tl-contents,
 .monaco-workbench.hc-light .markers-panel .markers-panel-container .tree-container .monaco-tl-contents {
-	line-height: 12px;
+	line-height: auto;
 }
 
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-stats {
@@ -73,6 +73,9 @@
 }
 
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-message-details-container > .marker-message-line > .marker-message {
+	flex: 1 0 auto;
+	max-width: 100%;
+	padding-right: 12px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: pre;
@@ -90,6 +93,21 @@
 	text-decoration: underline;
 }
 
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-source-code-container {
+	flex: 0 1 auto;
+	min-width: 0;
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	white-space: nowrap;
+	direction: rtl;
+	position: relative;
+	padding-left: 10px;
+	mask-image: linear-gradient(to right, transparent, black 10px);
+	-webkit-mask-image: linear-gradient(to right, transparent, black 10px);
+}
+
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-code:before {
 	content: '(';
 }
@@ -98,8 +116,14 @@
 	content: ')';
 }
 
-.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .details-container .multiline-actions,
-.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .details-container .marker-source,
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .details-container .multiline-actions {
+	margin-left: 6px;
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .details-container .marker-source {
+	margin-left: 6px;
+}
+
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .details-container .marker-line {
 	margin-left: 6px;
 }
@@ -117,7 +141,6 @@
 }
 
 .markers-panel .monaco-tl-contents .marker-icon {
-	height: 10px;
 	margin: 0 6px;
 	display: flex;
 	align-items: center;
@@ -126,6 +149,10 @@
 
 .markers-panel .monaco-tl-contents .actions .monaco-action-bar {
 	display: none;
+}
+
+.markers-panel .monaco-action-bar .actions-container {
+	height: 16px;
 }
 
 .markers-panel .monaco-list-row:hover .monaco-tl-contents > .marker-icon.quickFix,
@@ -260,19 +287,37 @@
 	flex: 1;
 }
 
-/* SubProblem styles */
-.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .resource {
+/* SubProblem and RelatedInformation container styles */
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .resource-line-container {
 	flex: 0 1 auto;
 	min-width: 0;
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	overflow: hidden;
+	white-space: nowrap;
+	direction: rtl;
+	position: relative;
+	padding-left: 10px;
+	padding-right: 6px;
+	mask-image: linear-gradient(to right, transparent, black 10px);
+	-webkit-mask-image: linear-gradient(to right, transparent, black 10px);
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .resource {
+	white-space: nowrap;
+}
+
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-description {
+	flex: 1 0 auto;
+	max-width: 100%;
+	padding-right: 12px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-description {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
+/* RelatedInformation styles */
+.markers-panel .markers-panel-container .tree-container .monaco-tl-contents .related-info-resource {
 	white-space: nowrap;
 }

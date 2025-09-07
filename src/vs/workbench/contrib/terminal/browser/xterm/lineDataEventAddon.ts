@@ -15,6 +15,9 @@ export class LineDataEventAddon extends Disposable implements ITerminalAddon {
 
 	private _xterm?: XTermTerminal;
 	private _isOsSet = false;
+	private _lastCommitedLineIndex?: number;
+	private _highestChangedLineIndex?: number;
+	private _forceCommitTimer?: ReturnType<typeof setTimeout>;
 
 	private readonly _onLineData = this._register(new Emitter<string>());
 	readonly onLineData = this._onLineData.event;
@@ -42,7 +45,12 @@ export class LineDataEventAddon extends Disposable implements ITerminalAddon {
 
 		// Fire onLineData when disposing object to flush last line
 		this._register(toDisposable(() => {
-			this._sendLineData(buffer.active, buffer.active.baseY + buffer.active.cursorY);
+			// Clear any pending timer
+			if (this._forceCommitTimer) {
+				clearTimeout(this._forceCommitTimer);
+				this._forceCommitTimer = undefined;
+			}
+			this._sendLineDataImpl(buffer.active, buffer.active.baseY + buffer.active.cursorY, true);
 		}));
 	}
 
@@ -65,19 +73,118 @@ export class LineDataEventAddon extends Disposable implements ITerminalAddon {
 		}
 	}
 
-	private _sendLineData(buffer: IBuffer, lineIndex: number): void {
+	/**
+	 * Reset line tracking state. This should be called when the terminal buffer is cleared.
+	 */
+	reset(): void {
+		// Flush any buffered data before resetting
+		if (this._xterm && this._highestChangedLineIndex !== undefined) {
+			const buffer = this._xterm.buffer;
+			this._sendLineDataImpl(buffer.active, this._highestChangedLineIndex, true);
+		}
+
+		// Clear any pending force commit timer
+		if (this._forceCommitTimer) {
+			clearTimeout(this._forceCommitTimer);
+			this._forceCommitTimer = undefined;
+		}
+
+		// Reset tracking indices
+		this._lastCommitedLineIndex = undefined;
+		this._highestChangedLineIndex = undefined;
+	}
+
+	private _sendLineData(buffer: IBuffer, lastLineIndex: number): void {
+		this._highestChangedLineIndex = Math.max(this._highestChangedLineIndex || 0, lastLineIndex);
+		this._sendLineDataImpl(buffer, lastLineIndex, false);
+		this._scheduleForceCommit(buffer);
+	}
+
+	private _scheduleForceCommit(buffer: IBuffer): void {
+		// Clear existing timer
+		if (this._forceCommitTimer) {
+			clearTimeout(this._forceCommitTimer);
+		}
+
+		// Schedule timer to force commit after 1000ms
+		this._forceCommitTimer = setTimeout(() => {
+			if (this._highestChangedLineIndex !== undefined) {
+				this._sendLineDataImpl(buffer, this._highestChangedLineIndex, true);
+			}
+		}, 1000);
+	}
+
+	private _sendLineDataImpl(buffer: IBuffer, lastLineIndex: number, forceCommit: boolean): void {
+
+		let lineIndex = 0;
+		if (this._lastCommitedLineIndex !== undefined) {
+			lineIndex = this._lastCommitedLineIndex + 1;
+		}
+
 		let line = buffer.getLine(lineIndex);
-		if (!line) {
+
+		while (!line && lineIndex <= lastLineIndex) {
+			++lineIndex;
+			line = buffer.getLine(lineIndex);
+		}
+
+		if (!line || lineIndex > lastLineIndex) {
 			return;
 		}
-		let lineData = line.translateToString(true);
-		while (lineIndex > 0 && line.isWrapped) {
-			line = buffer.getLine(--lineIndex);
-			if (!line) {
-				break;
+
+		const toCommitLineData: { data: string; lineIndex: number; startIndex: number }[] = [];
+
+		let thisLineData: string | undefined = undefined;
+		let thisLineStartIndex = 0;
+
+		while (line && lineIndex <= lastLineIndex) {
+			if (line.isWrapped) {
+				const lineData = line.translateToString(false);
+				if (thisLineData === undefined) {
+					thisLineData = '';
+					thisLineStartIndex = lineIndex;
+				}
+				thisLineData += lineData;
+			} else {
+				if (thisLineData !== undefined) {
+					toCommitLineData.push({ data: thisLineData.trimEnd(), lineIndex: lineIndex - 1, startIndex: thisLineStartIndex });
+				}
+
+				const lineData = line.translateToString(false);
+				thisLineData = lineData;
+				thisLineStartIndex = lineIndex;
 			}
-			lineData = line.translateToString(false) + lineData;
+
+			++lineIndex;
+			line = buffer.getLine(lineIndex);
 		}
-		this._onLineData.fire(lineData);
+
+		if (thisLineData !== undefined) {
+			toCommitLineData.push({ data: thisLineData.trimEnd(), lineIndex: lineIndex - 1, startIndex: thisLineStartIndex });
+		}
+
+		let numToCommit = 0;
+		if (forceCommit) {
+			numToCommit = toCommitLineData.length;
+		} else if (toCommitLineData.length > 1) {
+			numToCommit = toCommitLineData.length;
+
+			// Ignore all empty at the tail
+			while (numToCommit > 0 && !toCommitLineData[numToCommit - 1].data) {
+				--numToCommit;
+			}
+
+			// Ignore the last with value
+			if (numToCommit) {
+				--numToCommit;
+			}
+		}
+
+		for (let commitIndex = 0; commitIndex < numToCommit; ++commitIndex) {
+			const toCommit = toCommitLineData[commitIndex];
+
+			this._lastCommitedLineIndex = toCommit.lineIndex;
+			this._onLineData.fire(toCommit.data);
+		}
 	}
 }

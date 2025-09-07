@@ -853,11 +853,6 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 		patterns: IAdvancedProblemPattern[],
 		state: IPatternProcessingState,
 	): { needMoreLines: boolean; failed: boolean } {
-		// Initialize data with first pattern's kind if not inherited
-		if (patterns.length > 0 && state.data.kind === undefined) {
-			state.data.kind = patterns[0].kind;
-		}
-
 		let anySuccess = false;
 
 		for (let patternIndex = 0; patternIndex < patterns.length; patternIndex++) {
@@ -978,8 +973,9 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			state.commitCurrentData();
 
 			// Switch to main problem mode and create new data object
+			const previousKind = state.data.kind;
 			state.data = Object.create(null);
-			state.data.kind = pattern.kind;
+			state.data.kind = previousKind;
 
 			if (state.pendingCommitCurrentData) {
 				state.commitCurrentData = state.pendingCommitCurrentData;
@@ -994,8 +990,9 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			}
 
 			// Switch to sub-problem mode and create new data object
+			const previousKind = state.data.kind;
 			state.data = Object.create(null);
-			state.data.kind = pattern.kind;
+			state.data.kind = previousKind;
 
 			const currentCategory = state.currentCategory;
 			const currentCategoryReversed = state.currentCategoryReversed;
@@ -1019,6 +1016,10 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 
 				return false;
 			};
+		}
+
+		if (pattern.kind !== undefined) {
+			state.data.kind = pattern.kind;
 		}
 
 		state.currentLineIndex += 1;

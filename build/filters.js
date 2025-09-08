@@ -29,6 +29,9 @@ module.exports.all = [
 	'!test/**/out/**',
 	'!**/node_modules/**',
 	'!**/*.js.map',
+	'!extensions/malterlib/**',
+	'!extensions/codelldb/**',
+	'!extensions/vscode-clangd/**',
 ];
 
 module.exports.unicodeFilter = [

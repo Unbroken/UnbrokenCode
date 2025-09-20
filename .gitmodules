@@ -1,0 +1,4 @@
+[submodule "extensions/malterlib"]
+	path = extensions/malterlib
+	url = https://github.com/Malterlib/MalterlibVSCode.git
+	branch = master

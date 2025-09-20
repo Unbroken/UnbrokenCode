@@ -11,6 +11,7 @@ SKIP_GULP_BUILD=false
 REGENERATE_DMG=false
 BUILD_WINDOWS=false
 BUILD_MACOS=true
+IGNORE_SUBMODULE_CHECK=false
 
 # Auto-detect platform if no explicit platform flags are given
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
@@ -65,6 +66,10 @@ for arg in "$@"; do
 			BUILD_MACOS=true
 			shift
 			;;
+		--ignore-submodule-check)
+			IGNORE_SUBMODULE_CHECK=true
+			shift
+			;;
 		--help)
 			echo "Usage: $0 [OPTIONS]"
 			echo ""
@@ -78,6 +83,7 @@ for arg in "$@"; do
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
 			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
 			echo "  --all-platforms  Build for all platforms (macOS and Windows)"
+			echo "  --ignore-submodule-check  Skip checking if submodules have new commits"
 			echo "  --help           Show this help message"
 			echo ""
 			echo "Platform auto-detection:"
@@ -107,6 +113,82 @@ for arg in "$@"; do
 			;;
 	esac
 done
+
+# Function to check if submodules have new commits on master
+function Check_Submodule_Updates()
+{
+	echo "Checking if submodules have new commits..."
+	local submodule_outdated=false
+	local outdated_submodules=""
+	
+	# Check if there are any submodules
+	if ! git submodule status >/dev/null 2>&1; then
+		echo "No submodules found"
+		return 0
+	fi
+	
+	# Use git submodule foreach to check each submodule
+	git submodule foreach --quiet '
+		submodule_name="$name"
+		submodule_path="$sm_path"
+		
+		echo "Checking submodule: $submodule_name at $submodule_path"
+		
+		# Fetch latest from remote (try both master and main)
+		git fetch origin master >/dev/null 2>&1 || git fetch origin main >/dev/null 2>&1
+		
+		# Get current commit
+		current_commit=$(git rev-parse HEAD)
+		
+		# Get latest commit on master/main
+		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
+		
+		if [ "$current_commit" != "$remote_commit" ]; then
+			echo "  ⚠️  Submodule '\''$submodule_name'\'' is behind remote master/main"
+			echo "     Current: $current_commit"
+			echo "     Remote:  $remote_commit"
+			echo "OUTDATED:$submodule_name"
+		else
+			echo "  ✅ Submodule '\''$submodule_name'\'' is up-to-date"
+		fi
+	' | while IFS= read -r line; do
+		if [[ $line == OUTDATED:* ]]; then
+			submodule_name="${line#OUTDATED:}"
+			submodule_outdated=true
+			outdated_submodules="$outdated_submodules $submodule_name"
+		else
+			echo "$line"
+		fi
+	done
+	
+	# Check if any submodules were outdated (using a different approach due to subshell)
+	local check_result
+	check_result=$(git submodule foreach --quiet '
+		# Fetch latest from remote
+		git fetch origin master >/dev/null 2>&1 || git fetch origin main >/dev/null 2>&1
+		
+		# Get current and remote commits
+		current_commit=$(git rev-parse HEAD)
+		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
+		
+		if [ "$current_commit" != "$remote_commit" ]; then
+			echo "OUTDATED:$name"
+		fi
+	' | grep "^OUTDATED:" | cut -d: -f2)
+	
+	if [ -n "$check_result" ]; then
+		echo ""
+		echo -e "\033[31mError:\033[0m The following submodules have new commits available: $check_result"
+		echo "Please update them with: git submodule update --remote"
+		echo "Or use --ignore-submodule-check to skip this check"
+		echo ""
+		return 1
+	else
+		echo "All submodules are up-to-date"
+	fi
+	
+	return 0
+}
 
 # Function to wait for all background jobs and check for errors
 function WaitWithErrorPropagation()
@@ -236,6 +318,24 @@ function Create_GitHub_Release()
 		exit 1
 	fi
 }
+
+# Ensure git submodules are initialized and updated
+echo "Checking git submodules..."
+if [ -f ".gitmodules" ]; then
+	git submodule update --init --recursive
+	echo "Git submodules updated"
+	
+	# Check if submodules have new commits (unless ignored)
+	if ! $IGNORE_SUBMODULE_CHECK; then
+		if ! Check_Submodule_Updates; then
+			exit 1
+		fi
+	else
+		echo "Skipping submodule update check (--ignore-submodule-check flag set)"
+	fi
+else
+	echo "No .gitmodules file found"
+fi
 
 # If only --new-version flag is set (without --release), just update version and exit
 if $NEW_VERSION && ! $CREATE_RELEASE; then

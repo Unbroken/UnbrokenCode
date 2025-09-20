@@ -34,6 +34,8 @@ module.exports.all = [
 module.exports.unicodeFilter = [
 	'**',
 
+	'!**/build-unbroken-code.sh',
+
 	'!**/ThirdPartyNotices.txt',
 	'!**/ThirdPartyNotices.cli.txt',
 	'!**/LICENSE.{txt,rtf}',

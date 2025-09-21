@@ -9,10 +9,144 @@ PUBLISH_RELEASE=false
 SKIP_BUILD=false
 SKIP_GULP_BUILD=false
 REGENERATE_DMG=false
+GENERATE_RELEASE_DESCRIPTION=false
 BUILD_WINDOWS=false
 BUILD_MACOS=true
 BUILD_LINUX=false
 IGNORE_SUBMODULE_CHECK=false
+WINDOWS_BUILD_ARCHES=()
+WINDOWS_ENV_INITIALIZED=false
+WINDOWS_DIST_INITIALIZED=false
+WINDOWS_DIST_DIR=""
+WINDOWS_RUST_READY=false
+
+# Helper to evaluate truthy environment/flag values (accepts 1, true, yes, on)
+function is_truthy()
+{
+	local value="${1:-}"
+	value="$(echo "$value" | tr '[:upper:]' '[:lower:]')"
+	case "$value" in
+		1|true|yes|on)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+function ensure_windows_env()
+{
+	if $WINDOWS_ENV_INITIALIZED; then
+		return 0
+	fi
+
+	export PERL=/c/Strawberry/perl/bin/perl.exe
+	export OPENSSL_SRC_PERL=/c/Strawberry/perl/bin/perl.exe
+	hash -r
+
+	WINDOWS_ENV_INITIALIZED=true
+}
+
+function ensure_windows_dist_dir()
+{
+	if $WINDOWS_DIST_INITIALIZED; then
+		return 0
+	fi
+
+	WINDOWS_DIST_DIR="$PWD/.dist"
+	if ! $SKIP_GULP_BUILD; then
+		rm -rf "$WINDOWS_DIST_DIR"
+	fi
+	mkdir -p "$WINDOWS_DIST_DIR"
+	export VSCODE_BUILD_OUTPUT_DIR="$WINDOWS_DIST_DIR"
+	echo "Using distribution directory: $WINDOWS_DIST_DIR"
+	WINDOWS_DIST_INITIALIZED=true
+}
+
+function ensure_windows_rust()
+{
+	if $WINDOWS_RUST_READY; then
+		return 0
+	fi
+
+	if ! command -v cargo &> /dev/null; then
+		echo "Installing Rust for CLI build..."
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+		source "$HOME/.cargo/env"
+	fi
+
+	WINDOWS_RUST_READY=true
+}
+
+# Install platform-specific prerequisites when enabled
+function ensure_platform_prerequisites()
+{
+	if ! is_truthy "${INSTALL_PLATFORM_PREREQS:-0}"; then
+		return 0
+	fi
+
+	local uname_s="$(uname -s 2>/dev/null || echo unknown)"
+	case "$uname_s" in
+		Linux)
+			if command -v apt-get >/dev/null 2>&1; then
+				echo "Installing Linux prerequisites via apt-get..."
+				sudo apt-get update
+				sudo DEBIAN_FRONTEND=noninteractive apt-get install -y rpm pkg-config libssl-dev dpkg-dev rpm libkrb5-dev
+			elif command -v dnf >/dev/null 2>&1; then
+				echo "Installing Linux prerequisites via dnf..."
+				sudo dnf install -y rpm-build pkgconf-pkg-config openssl-devel krb5-devel
+			else
+				echo "Warning: No supported package manager found for installing Linux prerequisites" >&2
+			fi
+			;;
+		darwin*)
+			echo "macOS prerequisites are managed separately; nothing to install"
+			;;
+		MINGW*|MSYS*|CYGWIN*)
+			echo "Windows prerequisites handled externally; nothing to install"
+			;;
+		*)
+			echo "Unknown platform '$uname_s'; skipping automatic prerequisite installation" >&2
+			;;
+	esac
+}
+
+# Ensure the active Node.js version matches the value declared in .nvmrc
+function ensure_node_version_matches()
+{
+	if [ ! -f ".nvmrc" ]; then
+		return 0
+	fi
+
+	local expected_raw expected actual
+	expected_raw="$(tr -d ' \t\r\n' < .nvmrc)"
+	if [ -z "$expected_raw" ]; then
+		return 0
+	fi
+	if [[ "$expected_raw" == v* ]]; then
+		expected="$expected_raw"
+	else
+		expected="v$expected_raw"
+	fi
+
+	if ! command -v node >/dev/null 2>&1; then
+		echo "Node.js is not available; required version from .nvmrc is $expected" >&2
+		exit 1
+	fi
+
+	actual="$(node -v 2>/dev/null || echo "")"
+	if [ -z "$actual" ]; then
+		echo "Unable to determine active Node.js version" >&2
+		exit 1
+	fi
+
+	if [ "$actual" != "$expected" ]; then
+		echo "Active Node.js version $actual does not match required $expected from .nvmrc" >&2
+		echo "Install the correct version or disable SKIP_NVM_SETUP" >&2
+		exit 1
+	fi
+}
 
 # Auto-detect platform if no explicit platform flags are given
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
@@ -44,7 +178,7 @@ for arg in "$@"; do
 			;;
 		--publish)
 			PUBLISH_RELEASE=true
-			CREATE_RELEASE=true
+			SKIP_BUILD=true
 			shift
 			;;
 		--skip-build)
@@ -59,10 +193,22 @@ for arg in "$@"; do
 			REGENERATE_DMG=true
 			shift
 			;;
+		--generate-release-description)
+			GENERATE_RELEASE_DESCRIPTION=true
+			SKIP_BUILD=true
+			shift
+			;;
 		--windows)
 			BUILD_WINDOWS=true
 			BUILD_MACOS=false
 			BUILD_LINUX=false
+			shift
+			;;
+		--windows-arch=*)
+			BUILD_WINDOWS=true
+			BUILD_MACOS=false
+			BUILD_LINUX=false
+			WINDOWS_BUILD_ARCHES+=("${arg#--windows-arch=}")
 			shift
 			;;
 		--macos)
@@ -94,10 +240,12 @@ for arg in "$@"; do
 			echo "  --new-version    Increment version number before building"
 			echo "  --release        Create/update GitHub release (draft) after building"
 			echo "  --publish        Publish the GitHub release (make it public)"
-			echo "  --skip-build     Skip the build process (only for --release/--publish)"
+			echo "  --skip-build     Skip the build process (only for release-related operations)"
 			echo "  --skip-gulp-build Skip gulp build, only create installers/universal binary"
 			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
+			echo "  --generate-release-description  Update the draft release description without uploading assets"
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
+			echo "  --windows-arch=<arch>  Build only the specified Windows architecture (x64 or arm64)"
 			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
 			echo "  --linux          Build Linux binaries (x64, arm64, deb, rpm, tar.gz, CLI)"
 			echo "  --all-platforms  Build for all platforms (macOS, Windows, and Linux)"
@@ -294,7 +442,11 @@ function Update_Version()
 function Create_GitHub_Release()
 {
 	echo ""
-	echo "Creating GitHub release..."
+	if $GENERATE_RELEASE_DESCRIPTION && ! $PUBLISH_RELEASE; then
+		echo "Generating GitHub release description..."
+	else
+		echo "Creating GitHub release..."
+	fi
 
 	# Get GitHub token from git credentials if not already set
 	if [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -314,6 +466,10 @@ function Create_GitHub_Release()
 
 	if $REGENERATE_DMG; then
 		RELEASE_CMD="$RELEASE_CMD --regenerate-dmg"
+	fi
+
+	if $GENERATE_RELEASE_DESCRIPTION; then
+		RELEASE_CMD="$RELEASE_CMD --generate-release-description"
 	fi
 
 	# Check if release should be published or draft
@@ -372,41 +528,58 @@ fi
 
 # 1) Load NVM (handles common install locations)
 if $BUILD_WINDOWS ; then
-	nvm install `cat .nvmrc`
-	nvm use `cat .nvmrc`
-else
-	export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-
-	# Check common NVM locations
-	if [ -s "$NVM_DIR/nvm.sh" ]; then                 # Standard location (Linux & macOS)
-		. "$NVM_DIR/nvm.sh"
-	elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then  # macOS (Apple Silicon via Homebrew)
-		export NVM_DIR="/opt/homebrew/opt/nvm"
-		. "/opt/homebrew/opt/nvm/nvm.sh"
-	elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
-		export NVM_DIR="/usr/local/opt/nvm"
-		. "/usr/local/opt/nvm/nvm.sh"
-	elif [ -s "$HOME/.nvm/nvm.sh" ]; then             # Fallback to home directory
-		export NVM_DIR="$HOME/.nvm"
-		. "$HOME/.nvm/nvm.sh"
+	if is_truthy "${SKIP_NVM_SETUP:-0}"; then
+		echo "Skipping NVM setup; using existing Node version"
+		ensure_node_version_matches
 	else
-		echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
-		echo "To install nvm on Linux/macOS: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash" >&2
-		exit 1
+		nvm install `cat .nvmrc`
+		nvm use `cat .nvmrc`
 	fi
-
-	# 2) Respect .nvmrc (nearest one in the directory tree)
-	#    - Installs the version if needed (no output unless errors)
-	#    - Uses 'default' if no .nvmrc is found
-	if nvmrc_path="$(nvm_find_nvmrc)"; then
-		# Install (if missing) and use the version from .nvmrc
-		nvm install --no-progress
-		nvm use
+else
+	if is_truthy "${SKIP_NVM_SETUP:-0}"; then
+		echo "Skipping NVM setup; using existing Node version"
+		if ! command -v node >/dev/null 2>&1; then
+			echo "Node.js is not available; install it or disable SKIP_NVM_SETUP" >&2
+			exit 1
+		fi
+		ensure_node_version_matches
 	else
-		# No .nvmrc here; use your default if set
-		nvm use default || true
+		export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+
+		# Check common NVM locations
+		if [ -s "$NVM_DIR/nvm.sh" ]; then                 # Standard location (Linux & macOS)
+			. "$NVM_DIR/nvm.sh"
+		elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then  # macOS (Apple Silicon via Homebrew)
+			export NVM_DIR="/opt/homebrew/opt/nvm"
+			. "/opt/homebrew/opt/nvm/nvm.sh"
+		elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
+			export NVM_DIR="/usr/local/opt/nvm"
+			. "/usr/local/opt/nvm/nvm.sh"
+		elif [ -s "$HOME/.nvm/nvm.sh" ]; then             # Fallback to home directory
+			export NVM_DIR="$HOME/.nvm"
+			. "$HOME/.nvm/nvm.sh"
+		else
+			echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
+			echo "To install nvm on Linux/macOS: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash" >&2
+			exit 1
+		fi
+
+		# 2) Respect .nvmrc (nearest one in the directory tree)
+		#    - Installs the version if needed (no output unless errors)
+		#    - Uses 'default' if no .nvmrc is found
+		if nvmrc_path="$(nvm_find_nvmrc)"; then
+			# Install (if missing) and use the version from .nvmrc
+			nvm install --no-progress
+			nvm use
+		else
+			# No .nvmrc here; use your default if set
+			nvm use default || true
+		fi
 	fi
 fi
+
+ensure_platform_prerequisites
+ensure_node_version_matches
 
 echo "Using Node $(node -v) at $(command -v node)"
 
@@ -416,11 +589,13 @@ echo "Using build date: $VSCODE_BUILD_DATE"
 
 export VSCODE_QUALITY=stable
 
-function Build_Windown_Arch()
+function Run_Windows_Gulp_Build()
 {
-	echo "Building Windows $1..."
+	local arch="$1"
 
-	npm_config_arch=$1 NPM_ARCH=$1 VSCODE_ARCH=$1 npm ci --cpu=arm64
+	echo "Building Windows $arch..."
+
+	npm_config_arch=$arch NPM_ARCH=$arch VSCODE_ARCH=$arch npm ci --cpu=$arch
 
 	# Temporarily rename node_modules/.bin/rc to avoid conflict with Windows Resource Compiler
 	if [ -f "node_modules/.bin/rc" ]; then
@@ -430,7 +605,7 @@ function Build_Windown_Arch()
 		echo "Temporarily renamed rc binaries to avoid conflict with Windows Resource Compiler"
 	fi
 
-	npm_config_arch=$1 NPM_ARCH=$1 VSCODE_ARCH=$1 npm run gulp vscode-win32-$1
+	npm_config_arch=$arch NPM_ARCH=$arch VSCODE_ARCH=$arch npm run gulp vscode-win32-$arch
 
 	# Restore rc binaries after build
 	if [ -f "node_modules/.bin/rc.bak" ]; then
@@ -441,103 +616,64 @@ function Build_Windown_Arch()
 	fi
 }
 
-function Build_Windows()
+function Build_Windows_Arch()
 {
-	if $SKIP_GULP_BUILD; then
-		echo "Skipping gulp build, only creating Windows installers..."
+	local requested_arch="$1"
+	if [ -z "$requested_arch" ]; then
+		echo "Build_Windows_Arch requires an architecture (x64 or arm64)" >&2
+		exit 1
+	fi
+
+	local arch=""
+	case "$requested_arch" in
+		x64|amd64|X64)
+			arch="x64"
+			;;
+		arm64|aarch64|ARM64)
+			arch="arm64"
+			;;
+		*)
+			echo "Unsupported Windows architecture: $requested_arch" >&2
+			exit 1
+			;;
+	esac
+
+	ensure_windows_env
+	ensure_windows_dist_dir
+	local dist_dir="$WINDOWS_DIST_DIR"
+
+	if ! $SKIP_GULP_BUILD; then
+		Run_Windows_Gulp_Build "$arch"
+	fi
+
+	echo "Downloading Explorer dlls for Windows $arch..."
+	VSCODE_ARCH=$arch node build/win32/explorer-dll-fetcher .build/win32/appx
+
+	ensure_windows_rust
+	local cargo_target
+	if [ "$arch" = "x64" ]; then
+		cargo_target="x86_64-pc-windows-msvc"
 	else
-		echo "Building Windows binaries..."
+		cargo_target="aarch64-pc-windows-msvc"
 	fi
+	rustup target add "$cargo_target" >/dev/null 2>&1 || true
 
-	export PERL=/c/Strawberry/perl/bin/perl.exe
-	export OPENSSL_SRC_PERL=/c/Strawberry/perl/bin/perl.exe
-	hash -r
+	echo "Building CLI for Windows $arch..."
+	(cd cli && cargo build --release --target "$cargo_target")
 
-	# Create .dist directory for Windows builds
-	DIST_DIR="$PWD/.dist"
-	if ! $SKIP_GULP_BUILD; then
-		rm -rf "$DIST_DIR"
-	fi
-	mkdir -p "$DIST_DIR"
-	echo "Using distribution directory: $DIST_DIR"
+	echo "Integrating CLI into Windows $arch application..."
+	local cli_app_name
+	cli_app_name=$(cd "$dist_dir" && node -p "JSON.parse(require('fs').readFileSync('VSCode-win32-$arch/resources/app/product.json')).tunnelApplicationName || 'code-tunnel'")
+	mkdir -p "$dist_dir/VSCode-win32-$arch/bin"
+	cp "cli/target/$cargo_target/release/code.exe" "$dist_dir/VSCode-win32-$arch/bin/$cli_app_name.exe"
+	echo "CLI integrated as $cli_app_name.exe ($arch)"
 
-	# Set environment variable to build directly to .dist directory
-	export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
+	echo "Creating Windows $arch installers..."
+	VSCODE_ARCH=$arch npm run gulp vscode-win32-$arch-inno-updater
 
-	if ! $SKIP_GULP_BUILD; then
-		# Build in sub-shell to not pollute environment
-		(Build_Windown_Arch arm64 amd64_arm64)
-		(Build_Windown_Arch x64 amd64)
-	fi
-
-	# Download Explorer dlls for Windows 11 integration (appx)
-	echo "Downloading Explorer dlls..."
-	VSCODE_ARCH=x64 node build/win32/explorer-dll-fetcher .build/win32/appx
-	VSCODE_ARCH=arm64 node build/win32/explorer-dll-fetcher .build/win32/appx
-
-	# Build CLI for Windows
-	echo "Building Windows CLI..."
-
-	# Check if Rust is installed
-	if ! command -v cargo &> /dev/null; then
-		echo "Installing Rust for CLI build..."
-		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-		source "$HOME/.cargo/env"
-	fi
-
-	# Add Windows targets
-	rustup target add x86_64-pc-windows-msvc
-	rustup target add aarch64-pc-windows-msvc
-
-	# Build CLI for x64
-	echo "Building CLI for Windows x64..."
-	(cd cli && cargo build --release --target x86_64-pc-windows-msvc)
-
-	# Build CLI for arm64
-	echo "Building CLI for Windows arm64..."
-	(cd cli && cargo build --release --target aarch64-pc-windows-msvc)
-
-	# Integrate CLI into the main applications
-	echo "Integrating CLI into Windows x64 application..."
-
-	# Get the tunnel application name from product.json
-	CLI_APP_NAME=$(cd "$DIST_DIR" && node -p "JSON.parse(require('fs').readFileSync('VSCode-win32-x64/resources/app/product.json')).tunnelApplicationName || 'code-tunnel'")
-
-	# Create bin directory if it doesn't exist
-	mkdir -p "$DIST_DIR/VSCode-win32-x64/bin"
-
-	# Copy CLI binary to the application's bin directory
-	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$DIST_DIR/VSCode-win32-x64/bin/$CLI_APP_NAME.exe"
-
-	echo "CLI integrated as $CLI_APP_NAME.exe (x64)"
-
-	echo "Integrating CLI into Windows arm64 application..."
-
-	# Get the tunnel application name from product.json
-	CLI_APP_NAME=$(cd "$DIST_DIR" && node -p "JSON.parse(require('fs').readFileSync('VSCode-win32-arm64/resources/app/product.json')).tunnelApplicationName || 'code-tunnel'")
-
-	# Create bin directory if it doesn't exist
-	mkdir -p "$DIST_DIR/VSCode-win32-arm64/bin"
-
-	# Copy CLI binary to the application's bin directory
-	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$DIST_DIR/VSCode-win32-arm64/bin/$CLI_APP_NAME.exe"
-
-	echo "CLI integrated as $CLI_APP_NAME.exe (arm64)"
-
-	# Create installers
-	echo "Creating Windows installers..."
-
-	# Build inno-updater for x64
-	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-inno-updater
-
-	# Build inno-updater for arm64
-	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-inno-updater
-
-	# Find makeappx.exe from Windows SDK
-	MAKEAPPX=""
-	SDK_BASE="/c/Program Files (x86)/Windows Kits/10/bin"
+	local MAKEAPPX=""
+	local SDK_BASE="/c/Program Files (x86)/Windows Kits/10/bin"
 	if [ -d "$SDK_BASE" ]; then
-		# Find the latest SDK version
 		for sdk_dir in "$SDK_BASE"/10.0.*/x64; do
 			if [ -f "$sdk_dir/makeappx.exe" ]; then
 				MAKEAPPX="$sdk_dir/makeappx.exe"
@@ -545,102 +681,69 @@ function Build_Windows()
 		done
 	fi
 
-	# Prepare appx packages for Windows 11 integration (if makeappx is available)
-	if [ -n "$MAKEAPPX" ]; then
+	if [ -n "$MAKEAPPX" ] && [ -d "$dist_dir/VSCode-win32-$arch/appx/manifest" ]; then
 		echo "Found makeappx at: $MAKEAPPX"
-		echo "Preparing appx packages..."
-
-		# For x64
-		if [ -d "$DIST_DIR/VSCode-win32-x64/appx/manifest" ]; then
-			"$MAKEAPPX" pack -d "$DIST_DIR/VSCode-win32-x64/appx/manifest" -p "$DIST_DIR/VSCode-win32-x64/appx/code_x64.appx" -nv
-			rm -rf "$DIST_DIR/VSCode-win32-x64/appx/manifest"
-		fi
-
-		# For arm64
-		if [ -d "$DIST_DIR/VSCode-win32-arm64/appx/manifest" ]; then
-			"$MAKEAPPX" pack -d "$DIST_DIR/VSCode-win32-arm64/appx/manifest" -p "$DIST_DIR/VSCode-win32-arm64/appx/code_arm64.appx" -nv
-			rm -rf "$DIST_DIR/VSCode-win32-arm64/appx/manifest"
-		fi
+		echo "Preparing appx package for $arch..."
+		local appx_path="$dist_dir/VSCode-win32-$arch/appx/code_${arch}.appx"
+		"$MAKEAPPX" pack -d "$dist_dir/VSCode-win32-$arch/appx/manifest" -p "$appx_path" -nv
+		rm -rf "$dist_dir/VSCode-win32-$arch/appx/manifest"
 	else
-		echo "Error: makeappx.exe not found in Windows SDK."
+		echo "makeappx.exe not found or manifest missing for $arch; skipping appx packaging"
 		echo "Looked in: $SDK_BASE"
 		echo "To create appx packages, ensure Windows SDK is installed with Visual Studio."
-		echo "Continuing without appx packages..."
 
 		exit 1
 	fi
 
-	# Copy explorer dlls to appx directories
-	if [ -f ".build/win32/appx/code_explorer_command_x64.dll" ]; then
-		cp ".build/win32/appx/code_explorer_command_x64.dll" "$DIST_DIR/VSCode-win32-x64/appx/"
+	local explorer_dll_suffix="$arch"
+	local explorer_dll=".build/win32/appx/code_explorer_command_${explorer_dll_suffix}.dll"
+	if [ -f "$explorer_dll" ]; then
+		cp "$explorer_dll" "$dist_dir/VSCode-win32-$arch/appx/"
 	fi
 
-	if [ -f ".build/win32/appx/code_explorer_command_arm64.dll" ]; then
-		cp ".build/win32/appx/code_explorer_command_arm64.dll" "$DIST_DIR/VSCode-win32-arm64/appx/"
-	fi
+	VSCODE_ARCH=$arch npm run gulp vscode-win32-$arch-user-setup &
+	VSCODE_ARCH=$arch npm run gulp vscode-win32-$arch-system-setup &
 
-	# User installer for x64
-	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-user-setup &
+	WaitWithErrorPropagation "creating Windows $arch installers"
 
-	# System installer for x64
-	VSCODE_ARCH=x64 npm run gulp vscode-win32-x64-system-setup &
+	echo "Packaging Windows $arch CLI artifacts..."
+	local cli_temp_dir="$dist_dir/temp_cli_win32_${arch}"
+	mkdir -p "$cli_temp_dir"
+	cp "cli/target/$cargo_target/release/code.exe" "$cli_temp_dir/unbroken-code.exe"
 
-	# User installer for arm64
-	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-user-setup &
+	local win_cli_temp_dir
+	win_cli_temp_dir=$(cygpath -w "$cli_temp_dir")
+	local win_zip_path
+	win_zip_path=$(cygpath -w "$dist_dir/unbroken_code_cli_win32_${arch}_cli.zip")
+	powershell -Command "Compress-Archive -Path '$win_cli_temp_dir\*' -DestinationPath '$win_zip_path' -Force"
 
-	# System installer for arm64
-	VSCODE_ARCH=arm64 npm run gulp vscode-win32-arm64-system-setup &
+	cp "cli/target/$cargo_target/release/code.exe" "$dist_dir/unbroken-code-cli-win32-$arch.exe"
+	rm -rf "$cli_temp_dir"
 
-	WaitWithErrorPropagation "creating installers"
-
-	# Create standalone CLI binary packages
-	echo "Creating CLI binary packages..."
-
-	# Create temporary directory for CLI packaging
-	CLI_TEMP_DIR="$DIST_DIR/temp_cli_win32_x64"
-	mkdir -p "$CLI_TEMP_DIR"
-
-	# Copy CLI binary with Unbroken Code name
-	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$CLI_TEMP_DIR/unbroken-code.exe"
-
-	# Create zip package (use PowerShell on Windows, convert paths)
-	WIN_CLI_TEMP_DIR=$(cygpath -w "$CLI_TEMP_DIR")
-	WIN_ZIP_PATH=$(cygpath -w "$DIST_DIR/unbroken_code_cli_win32_x64_cli.zip")
-	powershell -Command "Compress-Archive -Path '$WIN_CLI_TEMP_DIR\*' -DestinationPath '$WIN_ZIP_PATH' -Force"
-
-	# Copy standalone binary
-	cp "cli/target/x86_64-pc-windows-msvc/release/code.exe" "$DIST_DIR/unbroken-code-cli-win32-x64.exe"
-
-	# Cleanup temp directory
-	rm -rf "$CLI_TEMP_DIR"
-
-	echo "Created unbroken_code_cli_win32_x64_cli.zip"
-
-	# Create temporary directory for CLI packaging
-	CLI_TEMP_DIR="$DIST_DIR/temp_cli_win32_arm64"
-	mkdir -p "$CLI_TEMP_DIR"
-
-	# Copy CLI binary with Unbroken Code name
-	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$CLI_TEMP_DIR/unbroken-code.exe"
-
-	# Create zip package (use PowerShell on Windows, convert paths)
-	WIN_CLI_TEMP_DIR=$(cygpath -w "$CLI_TEMP_DIR")
-	WIN_ZIP_PATH=$(cygpath -w "$DIST_DIR/unbroken_code_cli_win32_arm64_cli.zip")
-	powershell -Command "Compress-Archive -Path '$WIN_CLI_TEMP_DIR\*' -DestinationPath '$WIN_ZIP_PATH' -Force"
-
-	# Copy standalone binary
-	cp "cli/target/aarch64-pc-windows-msvc/release/code.exe" "$DIST_DIR/unbroken-code-cli-win32-arm64.exe"
-
-	# Cleanup temp directory
-	rm -rf "$CLI_TEMP_DIR"
-
-	echo "Created unbroken_code_cli_win32_arm64_cli.zip"
+	echo "Created unbroken_code_cli_win32_${arch}_cli.zip"
 
 	if $SKIP_GULP_BUILD; then
-		echo "Windows installers created successfully!"
+		echo "Windows $arch installers created successfully!"
 	else
-		echo "Windows binaries built successfully!"
+		echo "Windows $arch binaries built successfully!"
 	fi
+}
+
+function Build_Windows()
+{
+	local arches=("$@")
+	if [ ${#arches[@]} -eq 0 ]; then
+		arches=(x64 arm64)
+	fi
+
+	WINDOWS_DIST_INITIALIZED=false
+	WINDOWS_DIST_DIR=""
+
+	ensure_windows_env
+
+	for arch in "${arches[@]}"; do
+		Build_Windows_Arch "$arch"
+	done
 }
 
 function Build_Linux()
@@ -881,6 +984,9 @@ function Build_macOS()
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
 		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
 
+		touch "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app"
+		touch "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app"
+
 		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
 		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"
 		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
@@ -892,6 +998,8 @@ function Build_macOS()
 		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
 		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/binding.Makefile"
 		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/gyp-mac-tool"
+
+		cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/Assets.car" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/"
 
 		cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-arm64" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
 		cp -r "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-x64" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
@@ -975,7 +1083,7 @@ function Build_macOS()
 
 	# Create universal binary (even when skipping gulp build)
 	if true; then
-		DEBUG="*" VSCODE_ARCH=universal node build/darwin/create-universal-app.js "$DIST_DIR"
+		VSCODE_ARCH=universal node build/darwin/create-universal-app.js "$DIST_DIR"
 
 		# Create universal CLI binary if both architectures exist
 		echo "Creating universal CLI binary..."
@@ -1006,10 +1114,10 @@ function Build_macOS()
 	export AGENT_TEMPDIRECTORY=`mktemp -d`
 	echo "AGENT_TEMPDIRECTORY: $AGENT_TEMPDIRECTORY"
 
-	export CODESIGN_IDENTITY="E9944AF714BFA859585C2217AF833B286AB09E31"
+	export CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-E9944AF714BFA859585C2217AF833B286AB09E31}"
 
 	# Set the keychain profile for notarization
-	export APPLE_KEYCHAIN_PROFILE="Unbroken Notary"
+	export APPLE_KEYCHAIN_PROFILE="${APPLE_KEYCHAIN_PROFILE:-Unbroken Notary}"
 
 	# Sign all architectures
 	if $DO_SIGN; then
@@ -1044,7 +1152,7 @@ if ! $SKIP_BUILD; then
 	# Build Windows if requested
 	if $BUILD_WINDOWS; then
 		echo "Starting Windows build..."
-		Build_Windows &
+		Build_Windows "${WINDOWS_BUILD_ARCHES[@]}" &
 		BUILD_RUN=true
 	fi
 
@@ -1069,7 +1177,7 @@ else
 fi
 
 # Create GitHub release if --release flag is set
-if $CREATE_RELEASE; then
+if $CREATE_RELEASE || $GENERATE_RELEASE_DESCRIPTION || $PUBLISH_RELEASE; then
 	Create_GitHub_Release
 fi
 

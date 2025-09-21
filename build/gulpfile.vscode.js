@@ -260,6 +260,8 @@ async function compileDarwinAssetCatalog(resourcesDir, options) {
 		if (stderr && stderr.trim()) {
 			console.log(stderr.trim());
 		}
+	} catch (error) {
+		console.error('Failed to generate Assets.car exception', error);
 	} finally {
 		try {
 			await fs.promises.rm(tmpDir, { recursive: true, force: true });

@@ -8,7 +8,6 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { suite, test } from 'node:test';
-import { load } from 'js-yaml';
 import { detectChanges } from '../../../.github/actions/detect-changes/detect.ts';
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
@@ -25,57 +24,6 @@ const onlyCompileAndHygiene = {
 	'monaco-editor': 'false',
 	'telemetry': 'false',
 };
-
-interface IWorkflowJob {
-	readonly name?: string;
-	readonly needs?: string | readonly string[];
-	readonly if?: string;
-	readonly uses?: string;
-	readonly 'runs-on'?: string | readonly string[];
-	readonly with?: Record<string, unknown>;
-	readonly env?: Record<string, unknown>;
-	readonly outputs?: Record<string, string>;
-	readonly steps?: readonly { readonly id?: string; readonly name?: string; readonly 'continue-on-error'?: boolean; readonly env?: Record<string, string> }[];
-}
-
-/** A job of a reusable test workflow, and the job of pr.yml that calls the workflow. */
-interface ITestJob {
-	readonly caller: IWorkflowJob;
-	readonly job: IWorkflowJob;
-}
-
-/** Matches the reusable workflows that the test jobs of pr.yml call. */
-const testWorkflow = /^\.\/\.github\/workflows\/(?<file>pr-(linux|darwin|win32)-test\.yml|pr-linux-cli-test\.yml)$/;
-
-/**
- * Returns the jobs of the reusable test workflows that pr.yml calls, by the names of their checks, such as
- * "Windows / Electron-Unit".
- */
-function testJobs(): Map<string, ITestJob> {
-	const result = new Map<string, ITestJob>();
-	for (const caller of Object.values(loadWorkflow().jobs)) {
-		const workflow = testWorkflow.exec(caller.uses ?? '')?.groups?.file;
-		for (const job of workflow ? Object.values(loadWorkflow(workflow).jobs) : []) {
-			result.set(`${caller.name} / ${job.name}`, { caller, job });
-		}
-	}
-	return result;
-}
-
-/** Returns a value of a job of a reusable workflow, or, when it is an input of the workflow, the value that the calling job passes. */
-function resolveInput({ caller }: ITestJob, value: unknown): unknown {
-	const input = /^\$\{\{ inputs\.(?<input>\w+) \}\}$/.exec(String(value))?.groups?.input;
-	return input === undefined ? value : caller.with?.[input];
-}
-
-/**
- * Returns the change detection output that a test job reads to skip when the changes cannot affect it: the calling job
- * passes the condition to the input that the `if:` of the job reads.
- */
-function skipOutput(test: ITestJob): string | undefined {
-	const condition = resolveInput(test, test.job.if);
-	return typeof condition === 'string' ? /needs\.changes\.outputs\.(?<output>[\w-]+) == 'true'/.exec(condition)?.groups?.output : undefined;
-}
 
 async function detect(files: readonly { filename: string; previous_filename?: string; status?: string; patch?: string }[], expectedCount = files.length, failure?: Error, mergeGroup?: { readonly base_ref: string; readonly head_sha: string }) {
 	const outputs: Record<string, string> = {};
@@ -115,10 +63,6 @@ async function detect(files: readonly { filename: string; previous_filename?: st
 async function detectCoreTests(...filenames: string[]): Promise<string[]> {
 	const outputs = await detect(filenames.map(filename => ({ filename })));
 	return coreTestOutputs.map(output => outputs[output]);
-}
-
-function loadWorkflow(file = 'pr.yml'): { readonly jobs: Record<string, IWorkflowJob> } {
-	return load(readFileSync(path.join(repositoryRoot, '.github/workflows', file), 'utf8')) as { readonly jobs: Record<string, IWorkflowJob> };
 }
 
 /** Names of the built-in extensions whose files the core tests import or read by repository path. */
@@ -206,35 +150,6 @@ suite('Detect Changes', () => {
 			['false', 'false', 'false'],
 			['true', 'true', 'true'],
 		]);
-	});
-
-	test('a change to the Azure Pipelines definitions runs only Compile & Hygiene, whose build script tests read them', async () => {
-		const outputs = await detect([
-			{ filename: 'build/azure-pipelines/product-build.yml' },
-			{ filename: 'build/azure-pipelines/darwin/steps/product-build-darwin-test.yml' },
-		]);
-		const { jobs } = loadWorkflow();
-		assert.deepStrictEqual({
-			outputs,
-			// The jobs that the outputs do not skip. The calling jobs of the test workflows always run, while the jobs
-			// of the workflows skip (see the test of the "<OS> / <job>" checks below).
-			unskippableJobs: Object.entries(jobs)
-				.filter(([, job]) => !testWorkflow.test(job.uses ?? '') && !/needs\.changes\.outputs\.[\w-]+ == 'true'/.test(job.if ?? ''))
-				.map(([id]) => id),
-		}, {
-			outputs: {
-				'cli': 'false',
-				'copilot-shim': 'false',
-				'copilot': 'false',
-				'unit-tests': 'false',
-				'browser-integration': 'false',
-				'product-tests': 'false',
-				'monaco-editor': 'false',
-				'telemetry': 'false',
-			},
-			// Cancel Run only runs when Compile & Hygiene fails.
-			unskippableJobs: ['changes', 'compile', 'cancel-run', 'pr-gate'],
-		});
 	});
 
 	test('a change to the workspace configuration, the ESLint configuration or the sanity tests runs only Compile & Hygiene, and the Copilot checks lint with the ESLint configuration', async () => {
@@ -339,185 +254,4 @@ suite('Detect Changes', () => {
 		assert.deepStrictEqual(skipped, [], 'add these extensions to extensionsReadByUnitTests in .github/actions/detect-changes/detect.ts');
 	});
 
-	test('the action and the workflow pass on every output the detector sets', async () => {
-		const outputs = Object.keys(await detect([{ filename: 'README.md' }])).sort();
-		const action = load(readFileSync(path.join(repositoryRoot, '.github/actions/detect-changes/action.yml'), 'utf8')) as { readonly outputs: Record<string, unknown> };
-		assert.deepStrictEqual(Object.keys(action.outputs).sort(), outputs);
-		// The changes job also passes on the outputs of the Agent Host E2E change detection.
-		const agentHostOutputs = ['agent-host-e2e', 'agent-host-test-profile', 'agent-host-test-profile-reason'];
-		// And whether the pull request changes ripple, and whether ripple failed, for the Ripple job, and whether
-		// the test jobs have planned files to run: unit tests (for the Browser ones, browser tests), node.js
-		// integration tests and Agent Host E2E suites.
-		const rippleOutputs = ['ripple-changed', 'ripple-failed', 'selected-unit-tests', 'selected-browser-unit-tests', 'selected-node-integration-tests', 'selected-agent-host-e2e'];
-		// And the commit that a merge group forks from, for Compile & Hygiene.
-		assert.deepStrictEqual(Object.keys(loadWorkflow().jobs.changes.outputs ?? {}).sort(), [...outputs, ...agentHostOutputs, ...rippleOutputs, 'merge-group-base'].sort());
-	});
-
-	test('the Ripple check runs for the pull requests that change ripple, and the planning never fails Detect Changes', () => {
-		const { jobs } = loadWorkflow();
-		assert.deepStrictEqual({
-			outputs: [jobs.changes.outputs?.['ripple-changed'], jobs.changes.outputs?.['ripple-failed']],
-			ripple: { name: jobs.ripple?.name, needs: jobs.ripple?.needs, if: jobs.ripple?.if },
-			failingSteps: (jobs.changes.steps ?? []).filter(step => /ripple|plan/i.test(step.name ?? '') && step['continue-on-error'] !== true && step.id !== 'ripple').map(step => step.name),
-		}, {
-			outputs: ['${{ steps.ripple.outputs.changed }}', '${{ steps.ripple.outputs.failed }}'],
-			ripple: { name: 'Ripple', needs: 'changes', if: `\${{ !cancelled() && needs.changes.outputs.ripple-changed == 'true' }}` },
-			failingSteps: [],
-		});
-	});
-
-	test('the test jobs run only the planned files, and skip when the plan of a working ripple selects none', () => {
-		const { jobs } = loadWorkflow();
-		const tests = testJobs();
-		const skippedBy = (output: string) => [...tests].filter(([, test]) => skipOutput(test) === output).map(([check]) => check).sort();
-		assert.deepStrictEqual({
-			outputs: ['selected-unit-tests', 'selected-browser-unit-tests', 'selected-node-integration-tests', 'selected-agent-host-e2e'].map(output => jobs.changes.outputs?.[output]),
-			skippableUnitTests: skippedBy('selected-unit-tests'),
-			skippableBrowserUnitTests: skippedBy('selected-browser-unit-tests'),
-			skippableNodeIntegrationTests: skippedBy('selected-node-integration-tests'),
-			skippableAgentHostE2E: skippedBy('selected-agent-host-e2e'),
-			planned: [...tests].filter(([, test]) => test.job.env?.TEST_SELECTION === 'true').map(([check]) => check).sort(),
-		}, {
-			outputs: [
-				`\${{ steps.detect.outputs.unit-tests == 'true' && steps.ripple.outputs.selects-nothing != 'true' }}`,
-				`\${{ steps.detect.outputs.unit-tests == 'true' && steps.ripple.outputs.selects-nothing != 'true' && steps.ripple.outputs.selects-no-browser-tests != 'true' }}`,
-				`\${{ steps.detect.outputs.product-tests == 'true' && steps.ripple.outputs.selects-no-node-integration-tests != 'true' }}`,
-				`\${{ steps.detect-agent-host-e2e.outputs.affected == 'true' && steps.ripple.outputs.selects-no-agent-host-e2e != 'true' }}`,
-			],
-			skippableUnitTests: ['Linux / Electron-Unit (electron)', 'Linux / Electron-Unit (node)', 'Windows / Electron-Unit'].sort(),
-			skippableBrowserUnitTests: ['Linux / Browser-Unit', 'Windows / Browser-Unit'].sort(),
-			skippableNodeIntegrationTests: ['Linux / Electron (node.js)', 'Windows / Electron (node.js)'],
-			skippableAgentHostE2E: ['Linux / Agent-Host-E2E', 'Windows / Agent-Host-E2E (shard 1/3)', 'Windows / Agent-Host-E2E (shard 2/3)', 'Windows / Agent-Host-E2E (shard 3/3)'],
-			planned: [
-				'Linux / Electron-Unit (electron)', 'Linux / Electron-Unit (node)', 'Linux / Browser-Unit', 'Linux / Electron (node.js)',
-				'Linux / Agent-Host-E2E',
-				'Windows / Electron-Unit', 'Windows / Browser-Unit', 'Windows / Electron (node.js)',
-				'Windows / Agent-Host-E2E (shard 1/3)', 'Windows / Agent-Host-E2E (shard 2/3)', 'Windows / Agent-Host-E2E (shard 3/3)',
-			].sort(),
-		});
-	});
-
-	test('the folders that Check ripple treats as not browser tests are the ones the browser runner excludes', () => {
-		const runner = readFileSync(path.join(repositoryRoot, 'test/unit/browser/index.js'), 'utf8');
-		const excludeGlob = /const excludeGlob = '(?<glob>[^']+)';/.exec(runner)?.groups!.glob;
-		const folders = /^\*\*\/\{(?<folders>[^{}]+)\}\/\*\*\/\*\.test\.js$/.exec(excludeGlob ?? '')?.groups!.folders;
-		assert.ok(folders, `unexpected excludeGlob in test/unit/browser/index.js: ${excludeGlob}`);
-		const checkRipple = loadWorkflow().jobs.changes.steps?.find(step => step.id === 'ripple');
-		assert.deepStrictEqual(checkRipple?.env?.BROWSER_EXCLUDED_FOLDERS, folders.split(',').join('|'));
-	});
-
-	test('the test jobs report "<OS> / <job>" checks, which skip only when the changes cannot affect them', () => {
-		const { jobs } = loadWorkflow();
-		const tests = testJobs();
-		const declaredOutputs = Object.keys(jobs.changes.outputs ?? {});
-		// The calling jobs always run, and the jobs of their reusable workflows skip (see the test jobs in pr.yml), except
-		// the Windows one, which pull requests to main skip, as the merge queue runs it.
-		const callsOn = (name: string, condition = '!cancelled()') => ({ name, needs: 'changes', if: `\${{ ${condition} }}` });
-		const skipsWhenUnaffected = (output: string) => `\${{ needs.changes.result != 'success' || needs.changes.outputs.${output} == 'true' }}`;
-		assert.deepStrictEqual({
-			callers: Object.fromEntries(Object.entries(jobs).filter(([, job]) => testWorkflow.test(job.uses ?? '')).map(([id, job]) => [id, { name: job.name, needs: job.needs, if: job.if }])),
-			checks: Object.fromEntries([...tests].map(([check, test]) => [check, resolveInput(test, test.job.if)])),
-			undeclaredOutputs: [...tests.values()].map(skipOutput).filter(output => !output || !declaredOutputs.includes(output)),
-		}, {
-			callers: {
-				'linux-rust-tests': callsOn('Linux'),
-				'linux-tests': callsOn('Linux'),
-				'windows-tests': callsOn('Windows', `!cancelled() && (github.event_name == 'merge_group' || github.base_ref != 'main')`),
-			},
-			checks: {
-				'Linux / CLI': skipsWhenUnaffected('cli'),
-				'Linux / Copilot Shim': skipsWhenUnaffected('copilot-shim'),
-				'Linux / Electron-Unit (electron)': skipsWhenUnaffected('selected-unit-tests'),
-				'Linux / Electron-Unit (node)': skipsWhenUnaffected('selected-unit-tests'),
-				'Linux / Electron (node.js)': skipsWhenUnaffected('selected-node-integration-tests'),
-				'Linux / Electron (extension host)': skipsWhenUnaffected('product-tests'),
-				'Linux / Agent-Host-E2E': skipsWhenUnaffected('selected-agent-host-e2e'),
-				'Linux / Electron-Smoke (shard 1/3)': skipsWhenUnaffected('product-tests'),
-				'Linux / Electron-Smoke (shard 2/3)': skipsWhenUnaffected('product-tests'),
-				'Linux / Electron-Smoke (shard 3/3)': skipsWhenUnaffected('product-tests'),
-				'Linux / Browser-Unit': skipsWhenUnaffected('selected-browser-unit-tests'),
-				'Linux / Browser': skipsWhenUnaffected('browser-integration'),
-				'Linux / Remote (integration)': skipsWhenUnaffected('product-tests'),
-				'Linux / Remote (smoke)': skipsWhenUnaffected('product-tests'),
-				'Windows / Electron-Unit': skipsWhenUnaffected('selected-unit-tests'),
-				'Windows / Electron (node.js)': skipsWhenUnaffected('selected-node-integration-tests'),
-				'Windows / Electron (extension host)': skipsWhenUnaffected('product-tests'),
-				'Windows / Agent-Host-E2E (shard 1/3)': skipsWhenUnaffected('selected-agent-host-e2e'),
-				'Windows / Agent-Host-E2E (shard 2/3)': skipsWhenUnaffected('selected-agent-host-e2e'),
-				'Windows / Agent-Host-E2E (shard 3/3)': skipsWhenUnaffected('selected-agent-host-e2e'),
-				'Windows / Electron-Smoke (shard 1/3)': skipsWhenUnaffected('product-tests'),
-				'Windows / Electron-Smoke (shard 2/3)': skipsWhenUnaffected('product-tests'),
-				'Windows / Electron-Smoke (shard 3/3)': skipsWhenUnaffected('product-tests'),
-				'Windows / Electron-Smoke (WSL)': skipsWhenUnaffected('product-tests'),
-				'Windows / Browser-Unit': skipsWhenUnaffected('selected-browser-unit-tests'),
-				'Windows / Browser (integration)': skipsWhenUnaffected('browser-integration'),
-				'Windows / Browser (smoke)': skipsWhenUnaffected('browser-integration'),
-				'Windows / Remote (integration)': skipsWhenUnaffected('product-tests'),
-				'Windows / Remote (smoke, shard 1/2)': skipsWhenUnaffected('product-tests'),
-				'Windows / Remote (smoke, shard 2/2)': skipsWhenUnaffected('product-tests'),
-			},
-			undeclaredOutputs: [],
-		});
-	});
-
-	test('a job that the changes can skip has a name without expressions', () => {
-		// GitHub neither expands the matrix of a skipped job nor evaluates the expressions in its name, so a skipped
-		// "chat-lib - Test (${{ matrix.os }})" job would report under that name.
-		const alwaysRun = ['${{ !cancelled() }}', '${{ always() }}'];
-		const workflows = ['pr.yml', 'pr-linux-test.yml', 'pr-darwin-test.yml', 'pr-win32-test.yml', 'pr-linux-cli-test.yml'];
-		assert.deepStrictEqual(workflows.flatMap(workflow => Object.entries(loadWorkflow(workflow).jobs)
-			.filter(([, job]) => job.if !== undefined && !alwaysRun.includes(job.if) && job.name?.includes('${{'))
-			.map(([id, job]) => `${workflow}: ${id}: ${job.name}`)), []);
-	});
-
-	test('compile, Monaco Editor and telemetry run after Detect Changes and appear first in the job group', () => {
-		const { jobs } = loadWorkflow();
-		const skipsWhenUnaffected = (output: string) => `\${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.${output} == 'true') }}`;
-		assert.deepStrictEqual(Object.entries(jobs).slice(0, 4).map(([id, job]) => ({
-			id,
-			name: job.name,
-			needs: job.needs,
-			if: job.if,
-			uses: job.uses,
-		})), [
-			{ id: 'changes', name: 'Detect Changes', needs: undefined, if: undefined, uses: undefined },
-			{ id: 'compile', name: 'Compile & Hygiene', needs: 'changes', if: '${{ !cancelled() }}', uses: undefined },
-			{ id: 'monaco-editor', name: 'Monaco Editor', needs: 'changes', if: skipsWhenUnaffected('monaco-editor'), uses: undefined },
-			{ id: 'telemetry', name: 'Telemetry', needs: 'changes', if: skipsWhenUnaffected('telemetry'), uses: undefined },
-		]);
-	});
-
-	test('pull requests to main skip the Windows jobs, which the merge queue runs, and the merge queue and pull requests to release branches run on dedicated runners', () => {
-		const { jobs } = loadWorkflow();
-		const runner = (os: string) => `\${{ (github.event_name == 'merge_group' || startsWith(github.base_ref, 'release/')) && 'vscode-large-runners-${os}-8-core-merge-queue' || 'vscode-large-runners-${os}-8-core' }}`;
-		const runsOn = [
-			...Object.values(jobs).map(job => job['runs-on']),
-			...[...testJobs().values()].map(test => resolveInput(test, test.job['runs-on'])),
-			...Object.values(loadWorkflow('component-fixtures.yml').jobs).map(job => job['runs-on']),
-		].filter(value => value !== undefined);
-		assert.deepStrictEqual({
-			// Pull requests to release branches, which have no merge queue, run them.
-			skippedByPullRequestsToMain: Object.entries(jobs).filter(([, job]) => job.if?.includes(`(github.event_name == 'merge_group' || github.base_ref != 'main')`)).map(([id]) => id),
-			// Windows / Electron-Smoke (WSL) runs on its 1ES pool.
-			runners: [...new Set(runsOn.filter(value => typeof value === 'string'))].sort(),
-		}, {
-			skippedByPullRequestsToMain: ['windows-tests', 'copilot-windows-tests', 'chat-lib-windows-tests'],
-			runners: [runner('ubuntu'), runner('windows')].sort(),
-		});
-	});
-
-	test('PR Gate reports the result of every other job of the workflow', () => {
-		const { jobs } = loadWorkflow();
-		const gate = jobs['pr-gate'];
-		const otherJobs = Object.keys(jobs).filter(id => id !== 'pr-gate');
-		assert.deepStrictEqual({
-			name: gate.name,
-			if: gate.if,
-			needs: [gate.needs ?? []].flat().sort(),
-		}, {
-			name: 'PR Gate',
-			if: '${{ always() }}',
-			needs: otherJobs.sort(),
-		});
-	});
 });

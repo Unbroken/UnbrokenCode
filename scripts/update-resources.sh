@@ -28,6 +28,7 @@ set -euo pipefail
 #     ICONUTIL_EXTRACT_CMD below.
 
 MAIN_SRC="${1:-resources/linux/code.png}"
+APPICON_MAIN_SRC="${1:-resources/darwin/code.png}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES_DIR="$ROOT_DIR/resources"
 DARWIN_DIR="$RESOURCES_DIR/darwin"
@@ -46,7 +47,13 @@ if [ ! -f "$MAIN_SRC" ]; then
 	exit 1
 fi
 
+if [ ! -f "$APPICON_MAIN_SRC" ]; then
+	echo "App icon source not found: $APPICON_MAIN_SRC"
+	exit 1
+fi
+
 echo "Using main source: $MAIN_SRC"
+echo "Using app icon source: $APPICON_MAIN_SRC"
 
 # Image processing parameters for high-quality downsampling
 # Lanczos filter provides sharp results, unsharp mask enhances edges,
@@ -62,6 +69,9 @@ WORK_TMP="$(mktemp -d)"
 MAIN_NORMAL="$WORK_TMP/main-1024.png"
 # Use ImageMagick for initial normalization to maintain quality
 cp "$MAIN_SRC" "$MAIN_NORMAL"
+
+APPICON_NORMAL="$WORK_TMP/appicon-1024.png"
+cp "$APPICON_MAIN_SRC" "$APPICON_NORMAL"
 
 # Default badge scale (fraction of width). Shared by Windows/Darwin badge logic.
 # Can be tuned; using a conservative default that works across icon sizes.
@@ -244,6 +254,65 @@ for bmp in "$WIN32_DIR"/inno-big-*.bmp "$WIN32_DIR"/inno-small-*.bmp; do
 	rm -f "$SCALED_TMP" "$BG_TMP"
 	echo " -> updated $bmp"
 done
+
+###############################################################################
+# macOS asset catalog (AppIcon)
+###############################################################################
+ASSET_CATALOG_DIR="$DARWIN_DIR/Assets.xcassets"
+APPICONSET_DIR="$ASSET_CATALOG_DIR/AppIcon.appiconset"
+
+echo "Generating macOS asset catalog in $APPICONSET_DIR"
+mkdir -p "$APPICONSET_DIR"
+rm -f "$APPICONSET_DIR"/*.png
+
+while read -r size scale pixels filename; do
+	[ -n "$size" ] || continue
+	magick "$APPICON_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize ${pixels}x${pixels} $POST_FILTERS "$APPICONSET_DIR/$filename"
+done <<'EOF'
+16 1x 16 appicon-16.png
+16 2x 32 appicon-16@2x.png
+32 1x 32 appicon-32.png
+32 2x 64 appicon-32@2x.png
+128 1x 128 appicon-128.png
+128 2x 256 appicon-128@2x.png
+256 1x 256 appicon-256.png
+256 2x 512 appicon-256@2x.png
+512 1x 512 appicon-512.png
+512 2x 1024 appicon-512@2x.png
+EOF
+
+cat > "$ASSET_CATALOG_DIR/Contents.json" <<'JSON'
+{
+	"info": {
+		"version": 1,
+		"author": "xcode"
+	}
+}
+JSON
+
+cat > "$APPICONSET_DIR/Contents.json" <<'JSON'
+{
+	"images": [
+		{ "filename": "appicon-16.png", "idiom": "mac", "scale": "1x", "size": "16x16" },
+		{ "filename": "appicon-16@2x.png", "idiom": "mac", "scale": "2x", "size": "16x16" },
+		{ "filename": "appicon-32.png", "idiom": "mac", "scale": "1x", "size": "32x32" },
+		{ "filename": "appicon-32@2x.png", "idiom": "mac", "scale": "2x", "size": "32x32" },
+		{ "filename": "appicon-128.png", "idiom": "mac", "scale": "1x", "size": "128x128" },
+		{ "filename": "appicon-128@2x.png", "idiom": "mac", "scale": "2x", "size": "128x128" },
+		{ "filename": "appicon-256.png", "idiom": "mac", "scale": "1x", "size": "256x256" },
+		{ "filename": "appicon-256@2x.png", "idiom": "mac", "scale": "2x", "size": "256x256" },
+		{ "filename": "appicon-512.png", "idiom": "mac", "scale": "1x", "size": "512x512" },
+		{ "filename": "appicon-512@2x.png", "idiom": "mac", "scale": "2x", "size": "512x512" }
+	],
+	"info": {
+		"version": 1,
+		"author": "xcode"
+	},
+	"properties": { "precomposed": false }
+}
+JSON
+
+echo " -> generated Assets.xcassets/AppIcon.appiconset"
 
 ###############################################################################
 # Darwin: update each .icns by compositing main icon as a lower-right badge

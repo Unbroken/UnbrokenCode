@@ -23,6 +23,64 @@ async function verifyNotarization(appPath) {
     const result = await (0, cross_spawn_promise_1.spawn)('xcrun', ['stapler', 'validate', appPath]);
     console.log(`Notarization verification result:\n${result}`);
 }
+function errorContains(error, patterns) {
+    const stack = [error];
+    const seen = new Set();
+    while (stack.length) {
+        const current = stack.pop();
+        if (!current || seen.has(current)) {
+            continue;
+        }
+        seen.add(current);
+        if (typeof current === 'string') {
+            if (patterns.some(pattern => pattern.test(current))) {
+                return true;
+            }
+            continue;
+        }
+        if (current instanceof Error) {
+            if (patterns.some(pattern => pattern.test(current.message))) {
+                return true;
+            }
+            stack.push(current.cause);
+        }
+        if (typeof current === 'object') {
+            for (const value of Object.values(current)) {
+                stack.push(value);
+            }
+        }
+    }
+    return false;
+}
+function isRetryableNotarizeError(error) {
+    if (!error) {
+        return false;
+    }
+    const retryableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENETDOWN', 'ENETUNREACH', 'ECONNABORTED', 'EPROTO']);
+    const checkCode = (candidate) => {
+        if (!candidate || typeof candidate !== 'object') {
+            return false;
+        }
+        const code = candidate.code ?? candidate.errno;
+        return typeof code === 'string' && retryableCodes.has(code);
+    };
+    if (checkCode(error) || checkCode(error?.cause)) {
+        return true;
+    }
+    const statusCandidates = [error?.status, error?.statusCode, error?.response?.status];
+    for (const status of statusCandidates) {
+        if (typeof status === 'number' && (status === 408 || status >= 500)) {
+            return true;
+        }
+    }
+    if (errorContains(error, [/offline/i, /timed? ?out/i, /timeout/i, /temporarily unavailable/i, /network route/i])) {
+        return true;
+    }
+    return false;
+}
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 async function main(buildDir) {
     const arch = process.env['VSCODE_ARCH'];
     const keychainProfile = process.env['APPLE_KEYCHAIN_PROFILE'];
@@ -48,40 +106,53 @@ async function main(buildDir) {
         appPath,
         keychainProfile,
     };
-    const startTime = Date.now();
     const timeout = notarizeTimeout ? parseInt(notarizeTimeout, 10) : 3600000; // Default 1 hour
-    try {
-        const notarizePromise = (0, notarize_1.notarize)(notarizeOptions);
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Notarization timeout')), timeout);
-        });
-        await Promise.race([notarizePromise, timeoutPromise]);
-        const elapsedTime = Date.now() - startTime;
-        console.log(`Notarization completed successfully in ${Math.round(elapsedTime / 1000)} seconds`);
-        // Staple the notarization ticket to the app
-        await stapleApp(appPath);
-        // Verify the notarization
-        await verifyNotarization(appPath);
-    }
-    catch (error) {
-        const elapsedTime = Date.now() - startTime;
-        console.error(`Notarization failed after ${Math.round(elapsedTime / 1000)} seconds`);
-        // Log additional debugging information
-        console.error('Error details:', error);
-        // Check notarization history for more details
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const attemptStartTime = Date.now();
+        const attemptLabel = `Attempt ${attempt}/${maxAttempts}`;
+        if (attempt > 1) {
+            console.log(`Retrying notarization (${attemptLabel})...`);
+        }
+        else {
+            console.log(`Submitting notarization request (${attemptLabel})...`);
+        }
         try {
-            console.log('Checking notarization history...');
-            const history = await (0, cross_spawn_promise_1.spawn)('xcrun', [
-                'notarytool',
-                'history',
-                '--keychain-profile', keychainProfile
-            ]);
-            console.log(`Recent notarization history:\n${history}`);
+            const notarizePromise = (0, notarize_1.notarize)(notarizeOptions);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Notarization timeout')), timeout);
+            });
+            await Promise.race([notarizePromise, timeoutPromise]);
+            const elapsedTime = Date.now() - attemptStartTime;
+            console.log(`Notarization completed successfully in ${Math.round(elapsedTime / 1000)} seconds`);
+            await stapleApp(appPath);
+            await verifyNotarization(appPath);
+            return;
         }
-        catch (historyError) {
-            console.error('Failed to retrieve notarization history:', historyError);
+        catch (error) {
+            const elapsedTime = Date.now() - attemptStartTime;
+            console.error(`Notarization failed after ${Math.round(elapsedTime / 1000)} seconds (${attemptLabel})`);
+            console.error('Error details:', error);
+            const shouldRetry = attempt < maxAttempts && isRetryableNotarizeError(error);
+            if (!shouldRetry) {
+                try {
+                    console.log('Checking notarization history...');
+                    const history = await (0, cross_spawn_promise_1.spawn)('xcrun', [
+                        'notarytool',
+                        'history',
+                        '--keychain-profile', keychainProfile
+                    ]);
+                    console.log(`Recent notarization history:\n${history}`);
+                }
+                catch (historyError) {
+                    console.error('Failed to retrieve notarization history:', historyError);
+                }
+                throw error;
+            }
+            const delayMs = Math.min(30000 * Math.pow(2, attempt - 1), 180000);
+            console.log(`Retryable notarization error detected. Waiting ${Math.round(delayMs / 1000)} seconds before retrying...`);
+            await delay(delayMs);
         }
-        throw error;
     }
 }
 if (require.main === module) {

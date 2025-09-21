@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = void 0;
+exports.stripDarwinCFBundleIconFileExtension = stripDarwinCFBundleIconFileExtension;
 /*---------------------------------------------------------------------------------------------
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -45,6 +46,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const vinyl_fs_1 = __importDefault(require("vinyl-fs"));
 const gulp_filter_1 = __importDefault(require("gulp-filter"));
+const es = __importStar(require("event-stream"));
 const util = __importStar(require("./util"));
 const getVersion_1 = require("./getVersion");
 function isDocumentSuffix(str) {
@@ -53,6 +55,42 @@ function isDocumentSuffix(str) {
 const root = path_1.default.dirname(path_1.default.dirname(__dirname));
 const product = JSON.parse(fs_1.default.readFileSync(path_1.default.join(root, 'product.json'), 'utf8'));
 const commit = (0, getVersion_1.getVersion)(root);
+function stripDarwinCFBundleIconFileExtension(iconName) {
+    return es.map((f, cb) => {
+        if (!f || !f.contents || typeof f.relative !== 'string') {
+            cb(undefined, f);
+            return;
+        }
+        const normalizedPath = f.relative.replace(/\\/g, '/');
+        if (!/Info\.plist$/i.test(normalizedPath)) {
+            cb(undefined, f);
+            return;
+        }
+        try {
+            const source = f.contents.toString('utf8');
+            let updated = source.replace(/(<key>CFBundleIconFile<\/key>\s*<string>)([^<]+)\.icns(<\/string>)/g, '$1$2$3');
+            if (iconName) {
+                const iconNameEntry = `<key>CFBundleIconName</key>\n\t<string>${iconName}</string>`;
+                if (updated.includes('<key>CFBundleIconName</key>')) {
+                    updated = updated.replace(/<key>CFBundleIconName<\/key>\s*<string>[^<]+<\/string>/, iconNameEntry);
+                }
+                else if (/<key>CFBundleIconFile<\/key>\s*<string>[^<]+<\/string>/.test(updated)) {
+                    updated = updated.replace(/(<key>CFBundleIconFile<\/key>\s*<string>[^<]+<\/string>)/, `$1\n\t${iconNameEntry}`);
+                }
+                else if (/<\/dict>/.test(updated)) {
+                    updated = updated.replace(/<\/dict>/, `\n\t${iconNameEntry}\n</dict>`);
+                }
+            }
+            if (updated !== source) {
+                f.contents = Buffer.from(updated, 'utf8');
+            }
+        }
+        catch {
+            // If the plist is binary we leave it untouched.
+        }
+        cb(undefined, f);
+    });
+}
 function createTemplate(input) {
     return (params) => {
         return input.replace(/<%=\s*([^\s]+)\s*%>/g, (match, key) => {
@@ -235,6 +273,7 @@ function getElectron(arch) {
         return vinyl_fs_1.default.src('package.json')
             .pipe(json({ name: product.nameShort }))
             .pipe(electron(electronOpts))
+            .pipe(stripDarwinCFBundleIconFileExtension())
             .pipe((0, gulp_filter_1.default)(['**', '!**/app/package.json']))
             .pipe(vinyl_fs_1.default.dest('.build/electron'));
     };

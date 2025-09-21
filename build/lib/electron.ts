@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import vfs from 'vinyl-fs';
 import filter from 'gulp-filter';
+import * as es from 'event-stream';
 import * as util from './util';
 import { getVersion } from './getVersion';
 
@@ -27,6 +28,43 @@ function isDocumentSuffix(str?: string): str is DarwinDocumentSuffix {
 const root = path.dirname(path.dirname(__dirname));
 const product = JSON.parse(fs.readFileSync(path.join(root, 'product.json'), 'utf8'));
 const commit = getVersion(root);
+
+export function stripDarwinCFBundleIconFileExtension(iconName?: string): NodeJS.ReadWriteStream {
+	return es.map((f: any, cb: (err?: Error, data?: any) => void) => {
+		if (!f || !f.contents || typeof f.relative !== 'string') {
+			cb(undefined, f);
+			return;
+		}
+
+		const normalizedPath = f.relative.replace(/\\/g, '/');
+		if (!/Info\.plist$/i.test(normalizedPath)) {
+			cb(undefined, f);
+			return;
+		}
+
+		try {
+			const source = f.contents.toString('utf8');
+			let updated = source.replace(/(<key>CFBundleIconFile<\/key>\s*<string>)([^<]+)\.icns(<\/string>)/g, '$1$2$3');
+			if (iconName) {
+				const iconNameEntry = `<key>CFBundleIconName</key>\n\t<string>${iconName}</string>`;
+				if (updated.includes('<key>CFBundleIconName</key>')) {
+					updated = updated.replace(/<key>CFBundleIconName<\/key>\s*<string>[^<]+<\/string>/, iconNameEntry);
+				} else if (/<key>CFBundleIconFile<\/key>\s*<string>[^<]+<\/string>/.test(updated)) {
+					updated = updated.replace(/(<key>CFBundleIconFile<\/key>\s*<string>[^<]+<\/string>)/, `$1\n\t${iconNameEntry}`);
+				} else if (/<\/dict>/.test(updated)) {
+					updated = updated.replace(/<\/dict>/, `\n\t${iconNameEntry}\n</dict>`);
+				}
+			}
+			if (updated !== source) {
+				f.contents = Buffer.from(updated, 'utf8');
+			}
+		} catch {
+			// If the plist is binary we leave it untouched.
+		}
+
+		cb(undefined, f);
+	});
+}
 
 function createTemplate(input: string): (params: Record<string, string>) => string {
 	return (params: Record<string, string>) => {
@@ -219,6 +257,7 @@ function getElectron(arch: string): () => NodeJS.ReadWriteStream {
 		return vfs.src('package.json')
 			.pipe(json({ name: product.nameShort }))
 			.pipe(electron(electronOpts))
+			.pipe(stripDarwinCFBundleIconFileExtension())
 			.pipe(filter(['**', '!**/app/package.json']))
 			.pipe(vfs.dest('.build/electron'));
 	};

@@ -57,9 +57,40 @@ function debugLog(...args) {
         console.log('[release:debug]', ...args);
     }
 }
+const PLATFORM_MANIFEST_FILENAMES = {
+    'windows-x64': 'manifest-windows-x64.json',
+    'windows-arm64': 'manifest-windows-arm64.json',
+    'linux-x64': 'manifest-linux-x64.json',
+    'linux-arm64': 'manifest-linux-arm64.json',
+    'macos-x64': 'manifest-macos-x64.json',
+    'macos-arm64': 'manifest-macos-arm64.json',
+    'macos-universal': 'manifest-macos-universal.json'
+};
+const PLATFORM_FROM_KEY = {
+    'windows-x64': 'windows',
+    'windows-arm64': 'windows',
+    'linux-x64': 'linux',
+    'linux-arm64': 'linux',
+    'macos-x64': 'macos',
+    'macos-arm64': 'macos',
+    'macos-universal': 'macos'
+};
+const ARCH_FROM_KEY = {
+    'windows-x64': 'x64',
+    'windows-arm64': 'arm64',
+    'linux-x64': 'x64',
+    'linux-arm64': 'arm64',
+    'macos-x64': 'x64',
+    'macos-arm64': 'arm64',
+    'macos-universal': 'universal'
+};
 function getProductInfo() {
     const productPath = path.join(__dirname, '../../product.json');
     return JSON.parse(fs.readFileSync(productPath, 'utf8'));
+}
+function getPackageInfo() {
+    const packagePath = path.join(__dirname, '../../package.json');
+    return JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 }
 function getBuiltCommit() {
     // Get commit from all built product.json files and ensure they match
@@ -394,6 +425,272 @@ function sortAssetKeys(assets) {
     }
     return sorted;
 }
+function getManifestFilenameFromKey(key) {
+    return PLATFORM_MANIFEST_FILENAMES[key];
+}
+function manifestKeyFromFilename(filename) {
+    for (const [key, value] of Object.entries(PLATFORM_MANIFEST_FILENAMES)) {
+        if (value === filename) {
+            return key;
+        }
+    }
+    return null;
+}
+function manifestKeyFromPlatform(platform, arch) {
+    const key = `${platform}-${arch}`;
+    if (!PLATFORM_MANIFEST_FILENAMES[key]) {
+        throw new Error(`Unsupported platform/arch combination: ${platform}-${arch}`);
+    }
+    return key;
+}
+function ensureManifestConsistency(map) {
+    const versions = new Set();
+    const commits = new Set();
+    for (const manifest of map.values()) {
+        versions.add(manifest.version);
+        if (manifest.commit) {
+            commits.add(manifest.commit);
+        }
+    }
+    if (versions.size !== 1) {
+        throw new Error(`Manifest versions are inconsistent: ${Array.from(versions).join(', ')}`);
+    }
+    const commit = commits.size === 1 ? Array.from(commits)[0] : '';
+    return { version: Array.from(versions)[0], commit };
+}
+function makeAssetEntry(tagName, fileName, filePath, supportsFastUpdate) {
+    return {
+        url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${fileName}`,
+        sha256hash: getFileHash(filePath),
+        size: getFileSize(filePath),
+        supportsFastUpdate
+    };
+}
+function resolveManifestTimestamp(metadata, fallbackTimestamp) {
+    if (metadata && metadata.date) {
+        const parsed = new Date(metadata.date);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed.getTime();
+        }
+    }
+    return fallbackTimestamp;
+}
+function combineManifests(map) {
+    if (map.size === 0) {
+        return null;
+    }
+    let reference = null;
+    const combinedAssets = {};
+    let maxTimestamp = 0;
+    for (const manifest of map.values()) {
+        if (!reference) {
+            reference = manifest;
+        }
+        if (manifest.timestamp > maxTimestamp) {
+            maxTimestamp = manifest.timestamp;
+        }
+        for (const [key, value] of Object.entries(manifest.assets)) {
+            const compositeKey = `${manifest.platform}-${manifest.arch}-${key}`;
+            combinedAssets[compositeKey] = value;
+        }
+    }
+    if (!reference) {
+        return null;
+    }
+    return {
+        version: reference.version,
+        productVersion: reference.productVersion,
+        commit: reference.commit,
+        quality: reference.quality,
+        timestamp: maxTimestamp || reference.timestamp,
+        assets: sortAssetKeys(combinedAssets)
+    };
+}
+function writeManifestToDist(manifest, distDir) {
+    const key = manifestKeyFromPlatform(manifest.platform, manifest.arch);
+    const filename = getManifestFilenameFromKey(key);
+    const manifestPath = path.join(distDir, filename);
+    fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, assets: sortAssetKeys(manifest.assets) }, null, 2));
+    return {
+        path: manifestPath,
+        asset: {
+            name: filename,
+            path: manifestPath,
+            contentType: 'application/json'
+        }
+    };
+}
+async function downloadManifestAsset(octokit, assetId, filename) {
+    const { data } = await octokit.repos.getReleaseAsset({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        asset_id: assetId,
+        headers: { Accept: 'application/octet-stream' }
+    });
+    let content;
+    if (Buffer.isBuffer(data)) {
+        content = data.toString('utf8');
+    }
+    else if (data instanceof ArrayBuffer) {
+        content = Buffer.from(data).toString('utf8');
+    }
+    else if (typeof data === 'string') {
+        content = data;
+    }
+    else {
+        content = JSON.stringify(data);
+    }
+    const parsed = JSON.parse(content);
+    const key = manifestKeyFromFilename(filename);
+    if (key) {
+        parsed.platform = PLATFORM_FROM_KEY[key];
+        parsed.arch = ARCH_FROM_KEY[key];
+    }
+    parsed.assets = sortAssetKeys(parsed.assets);
+    return parsed;
+}
+async function fetchManifestsFromRelease(octokit, release) {
+    const map = new Map();
+    if (!release?.assets) {
+        return map;
+    }
+    for (const asset of release.assets) {
+        if (!asset?.name?.startsWith('manifest-') || !asset.name.endsWith('.json')) {
+            continue;
+        }
+        const key = manifestKeyFromFilename(asset.name);
+        if (!key) {
+            continue;
+        }
+        try {
+            const manifest = await downloadManifestAsset(octokit, asset.id, asset.name);
+            map.set(key, manifest);
+        }
+        catch (error) {
+            console.warn(`Failed to download manifest ${asset.name}:`, error);
+        }
+    }
+    return map;
+}
+async function publishExistingRelease(octokit, release, manifestMap, draft, releaseBody) {
+    const combinedManifest = combineManifests(manifestMap);
+    const tagName = release.tag_name;
+    const commit = combinedManifest?.commit || release.target_commitish;
+    if (!commit) {
+        throw new Error('Unable to determine commit for release notes');
+    }
+    await octokit.repos.updateRelease({
+        owner: REPO_OWNER,
+        repo: REPO_NAME,
+        release_id: release.id,
+        tag_name: tagName,
+        name: release.name || tagName,
+        body: releaseBody,
+        draft: draft,
+        target_commitish: release.target_commitish || commit
+    });
+    console.log('Release updated successfully!');
+}
+function getAssetFilenameFromManifest(manifest, assetKey) {
+    if (!manifest) {
+        return null;
+    }
+    const asset = manifest.assets[assetKey];
+    if (!asset) {
+        return null;
+    }
+    return asset.url.split('/').pop() || null;
+}
+function buildReleaseBody(manifestMap, tagName, commit, releaseNotes) {
+    const releaseBodyParts = [`Commit: \`${commit}\``];
+    if (releaseNotes.length > 0) {
+        releaseBodyParts.push('', '## What\'s New', '', ...releaseNotes.map(note => `- ${note}`));
+    }
+    const generateDownloadLink = (filename) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(tagName)}/${filename}`;
+    const getFileExtension = (filename) => {
+        if (filename.includes('.dmg')) {
+            return 'dmg';
+        }
+        if (filename.includes('.zip')) {
+            return 'zip';
+        }
+        if (filename.includes('.tar.gz')) {
+            return 'tar.gz';
+        }
+        if (filename.includes('.deb')) {
+            return 'deb';
+        }
+        if (filename.includes('.rpm')) {
+            return 'rpm';
+        }
+        if (filename.includes('.exe')) {
+            return 'exe';
+        }
+        return '';
+    };
+    const createDownloadCell = (filename) => {
+        if (!filename) {
+            return '';
+        }
+        const extension = getFileExtension(filename);
+        return `[${extension}](${generateDownloadLink(filename)})`;
+    };
+    const createMultiDownloadCell = (filenames) => {
+        const links = filenames
+            .filter((f) => !!f)
+            .map(f => createDownloadCell(f))
+            .filter(link => link !== '');
+        return links.join(' ');
+    };
+    const manifestFor = (platform, arch) => manifestMap.get(manifestKeyFromPlatform(platform, arch));
+    const macUniversal = manifestFor('macos', 'universal');
+    const macX64 = manifestFor('macos', 'x64');
+    const macArm64 = manifestFor('macos', 'arm64');
+    const winX64 = manifestFor('windows', 'x64');
+    const winArm64 = manifestFor('windows', 'arm64');
+    const linuxX64 = manifestFor('linux', 'x64');
+    const linuxArm64 = manifestFor('linux', 'arm64');
+    const macosAppUniversalDmg = getAssetFilenameFromManifest(macUniversal, 'app-dmg');
+    const macosAppUniversalZip = getAssetFilenameFromManifest(macUniversal, 'app-zip');
+    const macosAppX64Dmg = getAssetFilenameFromManifest(macX64, 'app-dmg');
+    const macosAppX64Zip = getAssetFilenameFromManifest(macX64, 'app-zip');
+    const macosAppArm64Dmg = getAssetFilenameFromManifest(macArm64, 'app-dmg');
+    const macosAppArm64Zip = getAssetFilenameFromManifest(macArm64, 'app-zip');
+    const macosCliUniversal = getAssetFilenameFromManifest(macUniversal, 'cli');
+    const macosCliX64 = getAssetFilenameFromManifest(macX64, 'cli');
+    const macosCliArm64 = getAssetFilenameFromManifest(macArm64, 'cli');
+    const winAppX64Zip = getAssetFilenameFromManifest(winX64, 'app-zip');
+    const winAppX64User = getAssetFilenameFromManifest(winX64, 'installer-user');
+    const winAppX64System = getAssetFilenameFromManifest(winX64, 'installer-system');
+    const winCliX64 = getAssetFilenameFromManifest(winX64, 'cli');
+    const winAppArm64Zip = getAssetFilenameFromManifest(winArm64, 'app-zip');
+    const winAppArm64User = getAssetFilenameFromManifest(winArm64, 'installer-user');
+    const winAppArm64System = getAssetFilenameFromManifest(winArm64, 'installer-system');
+    const winCliArm64 = getAssetFilenameFromManifest(winArm64, 'cli');
+    const linuxAppX64Tar = getAssetFilenameFromManifest(linuxX64, 'app-tar');
+    const linuxAppX64Deb = getAssetFilenameFromManifest(linuxX64, 'deb');
+    const linuxAppX64Rpm = getAssetFilenameFromManifest(linuxX64, 'rpm');
+    const linuxCliX64 = getAssetFilenameFromManifest(linuxX64, 'cli');
+    const linuxAppArm64Tar = getAssetFilenameFromManifest(linuxArm64, 'app-tar');
+    const linuxAppArm64Deb = getAssetFilenameFromManifest(linuxArm64, 'deb');
+    const linuxAppArm64Rpm = getAssetFilenameFromManifest(linuxArm64, 'rpm');
+    const linuxCliArm64 = getAssetFilenameFromManifest(linuxArm64, 'cli');
+    const tableHeader = '| Platform | Universal | x64 | arm64 | CLI Universal | CLI x64 | CLI arm64 |';
+    const tableDivider = '|----------|-----------|-----|-------|---------------|---------|-----------|';
+    const rows = [tableHeader, tableDivider];
+    if (macosAppUniversalDmg || macosAppUniversalZip || macosAppX64Dmg || macosAppX64Zip || macosAppArm64Dmg || macosAppArm64Zip || macosCliUniversal || macosCliX64 || macosCliArm64) {
+        rows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
+    }
+    if (winAppX64Zip || winAppX64User || winAppX64System || winAppArm64Zip || winAppArm64User || winAppArm64System || winCliX64 || winCliArm64) {
+        rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([winAppX64User, winAppX64System, winAppX64Zip])} | ${createMultiDownloadCell([winAppArm64User, winAppArm64System, winAppArm64Zip])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
+    }
+    if (linuxAppX64Tar || linuxAppX64Deb || linuxAppX64Rpm || linuxAppArm64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxCliX64 || linuxCliArm64) {
+        rows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
+    }
+    releaseBodyParts.push('', '---', '## Downloads', '', ...rows);
+    releaseBodyParts.push('', '## Installation Instructions', '', '### 🖥️ macOS', '- **App**: Download dmg for easy installation or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', '### 💻 Windows', '- **App**: Download exe for installer or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', '### 🐧 Linux', '- **Debian/Ubuntu**: Download deb and run `sudo dpkg -i UnbrokenCode-*.deb`', '- **RedHat/Fedora**: Download rpm and run `sudo rpm -i UnbrokenCode-*.rpm`', '- **Other**: Download tar.gz and extract', '- **CLI**: Download CLI package and add to PATH', '', '## 🔄 Auto-Update', 'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.');
+    return releaseBodyParts.join('\n');
+}
 function createDMG(appPath, dmgPath, volumeName) {
     // Generate background image if it doesn't exist
     const scriptDir = __dirname;
@@ -474,6 +771,17 @@ async function findExistingRelease(octokit, tagName, releaseName) {
     }
     return existingRelease;
 }
+function isReleaseAlreadyExistsError(error) {
+    if (!error || error.status !== 422) {
+        return false;
+    }
+    const errors = error.response?.data?.errors;
+    if (Array.isArray(errors) && errors.some((err) => err?.code === 'already_exists')) {
+        return true;
+    }
+    const message = error.response?.data?.message ?? error.message;
+    return typeof message === 'string' && message.toLowerCase().includes('already exists');
+}
 async function createGitHubRelease(octokit, tagName, releaseName, body, targetCommit, draft = true) {
     console.log(`Checking for existing release: ${tagName}`);
     console.log(`Target commit: ${targetCommit}`);
@@ -526,34 +834,14 @@ async function createGitHubRelease(octokit, tagName, releaseName, body, targetCo
     // Try to get existing release first
     let release;
     const existingRelease = await findExistingRelease(octokit, tagName, releaseName);
-    if (existingRelease) {
+    const updateExistingRelease = async (releaseToUpdate) => {
         console.log(`Updating existing release...`);
-        console.log(`Existing release commit: ${existingRelease.target_commitish}`);
-        console.log(`Existing assets count: ${existingRelease.assets?.length || 0}`);
-        // Update the existing release - ensure it's associated with the tag
+        console.log(`Existing release commit: ${releaseToUpdate.target_commitish}`);
+        console.log(`Existing assets count: ${releaseToUpdate.assets?.length || 0}`);
         const updateResult = await octokit.repos.updateRelease({
             owner: REPO_OWNER,
             repo: REPO_NAME,
-            release_id: existingRelease.id,
-            tag_name: tagName, // Ensure the release is associated with the tag
-            name: releaseName,
-            body: body,
-            draft: draft,
-            prerelease: false,
-            target_commitish: targetCommit
-        });
-        // Create ExtendedRelease object with existing assets
-        release = {
-            ...updateResult.data,
-            existingAssets: existingRelease.assets || []
-        };
-    }
-    else {
-        // Release doesn't exist, create it
-        console.log(`Creating new release: ${tagName}`);
-        const createResult = await octokit.repos.createRelease({
-            owner: REPO_OWNER,
-            repo: REPO_NAME,
+            release_id: releaseToUpdate.id,
             tag_name: tagName,
             name: releaseName,
             body: body,
@@ -561,11 +849,49 @@ async function createGitHubRelease(octokit, tagName, releaseName, body, targetCo
             prerelease: false,
             target_commitish: targetCommit
         });
-        // Create ExtendedRelease object for new release
-        release = {
-            ...createResult.data,
-            existingAssets: [] // No existing assets for new releases
+        return {
+            ...updateResult.data,
+            existingAssets: releaseToUpdate.assets || []
         };
+    };
+    if (existingRelease) {
+        release = await updateExistingRelease(existingRelease);
+    }
+    else {
+        // Release doesn't exist, create it
+        console.log(`Creating new release: ${tagName}`);
+        try {
+            const createResult = await octokit.repos.createRelease({
+                owner: REPO_OWNER,
+                repo: REPO_NAME,
+                tag_name: tagName,
+                name: releaseName,
+                body: body,
+                draft: draft,
+                prerelease: false,
+                target_commitish: targetCommit
+            });
+            // Create ExtendedRelease object for new release
+            release = {
+                ...createResult.data,
+                existingAssets: [] // No existing assets for new releases
+            };
+        }
+        catch (error) {
+            if (isReleaseAlreadyExistsError(error)) {
+                console.log(`Release already exists, switching to update path...`);
+                const fallbackExistingRelease = await findExistingRelease(octokit, tagName, releaseName);
+                if (!fallbackExistingRelease) {
+                    console.error(`Release ${tagName} reported as existing but could not be retrieved.`);
+                    throw error;
+                }
+                release = await updateExistingRelease(fallbackExistingRelease);
+            }
+            else {
+                console.error(`Failed to create GitHub release: ${error.message}`);
+                throw error;
+            }
+        }
     }
     console.log(`Release ready: ${release.html_url}`);
     return release;
@@ -609,58 +935,12 @@ async function optimizeAssetUploads(octokit, release, assets) {
     const hasWindowsAssets = assets.some(asset => asset.name.includes('win32') || asset.name.includes('Setup'));
     const hasLinuxAssets = assets.some(asset => asset.name.includes('linux'));
     console.log(`Current build includes: ${hasDarwinAssets ? 'macOS' : ''} ${hasWindowsAssets ? 'Windows' : ''} ${hasLinuxAssets ? 'Linux' : ''}`.trim());
-    // IMPORTANT: Only delete assets from the current platform to preserve cross-platform builds
-    // Check for assets that no longer exist in new list, but only for the current platform
-    for (const existingAsset of release.existingAssets) {
-        const newAsset = assets.find(a => a.name === existingAsset.name);
-        if (!newAsset) {
-            // Check if this asset belongs to the current build platform
-            const isDarwinAsset = existingAsset.name.includes('darwin');
-            const isWindowsAsset = existingAsset.name.includes('win32') || existingAsset.name.includes('Setup');
-            const isLinuxAsset = existingAsset.name.includes('linux');
-            const isGenericAsset = existingAsset.name === 'updates.json'; // Always update generic assets
-            // For Linux, check specific architecture to preserve cross-architecture builds
-            let shouldDelete = false;
-            if (isLinuxAsset && hasLinuxAssets) {
-                // Only delete Linux assets that match the architectures we're currently building
-                const isLinuxX64Asset = existingAsset.name.includes('linux-x64');
-                const isLinuxArm64Asset = existingAsset.name.includes('linux-arm64');
-                const buildingX64 = assets.some(a => a.name.includes('linux-x64'));
-                const buildingArm64 = assets.some(a => a.name.includes('linux-arm64'));
-                // Only delete if we're building that specific architecture
-                shouldDelete = (isLinuxX64Asset && buildingX64) || (isLinuxArm64Asset && buildingArm64);
-                if (!shouldDelete && (isLinuxX64Asset || isLinuxArm64Asset)) {
-                    console.log(`  ✓ Preserving ${existingAsset.name} (different Linux architecture)`);
-                }
-            }
-            else if (isDarwinAsset && hasDarwinAssets) {
-                shouldDelete = true;
-            }
-            else if (isWindowsAsset && hasWindowsAssets) {
-                shouldDelete = true;
-            }
-            else if (isGenericAsset) {
-                shouldDelete = true;
-            }
-            if (shouldDelete) {
-                console.log(`  - Removing ${existingAsset.name} (no longer generated by current build)`);
-                assetsToDelete.push({ id: existingAsset.id, name: existingAsset.name });
-            }
-            else if (!isLinuxAsset || !hasLinuxAssets) {
-                console.log(`  ✓ Preserving ${existingAsset.name} (from other platform)`);
-            }
-        }
-    }
     // Delete outdated assets
     if (assetsToDelete.length > 0) {
         console.log(`Removing ${assetsToDelete.length} changed/removed assets...`);
         for (const asset of assetsToDelete) {
             console.log(`  - Deleting ${asset.name}`);
-            await octokit.repos.deleteReleaseAsset({
-                owner: REPO_OWNER,
-                repo: REPO_NAME,
-                asset_id: asset.id
-            });
+            await deleteReleaseAssetWithRetry(octokit, asset.id, asset.name);
         }
     }
     if (assetsToUpload.length === 0) {
@@ -671,40 +951,146 @@ async function optimizeAssetUploads(octokit, release, assets) {
     }
     return assetsToUpload;
 }
-async function uploadReleaseAsset(octokit, releaseId, asset) {
-    console.log(`Uploading ${asset.name}...`);
-    const fileContent = fs.readFileSync(asset.path);
-    try {
-        await octokit.repos.uploadReleaseAsset({
-            owner: REPO_OWNER,
-            repo: REPO_NAME,
-            release_id: releaseId,
-            name: asset.name,
-            data: fileContent,
-            headers: {
-                'content-type': asset.contentType,
-                'content-length': fileContent.length
-            }
-        });
-        console.log(`  ✓ Uploaded ${asset.name}`);
+function isRetryableAssetError(error) {
+    if (!error) {
+        return false;
     }
-    catch (error) {
-        if (error.status === 422 && error.message.includes('already_exists')) {
-            console.log(`  ⚠ ${asset.name} already exists, skipping...`);
+    const status = error.status;
+    if (typeof status === 'number') {
+        if (status === 408 || status === 429 || status >= 500) {
+            return true;
+        }
+    }
+    const codes = new Set(['UND_ERR_SOCKET', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNABORTED']);
+    const cause = (error.cause ?? error);
+    const causeCode = cause?.code || cause?.errno;
+    return typeof causeCode === 'string' && codes.has(causeCode);
+}
+async function uploadReleaseAsset(octokit, releaseId, asset) {
+    const maxAttempts = 4;
+    const fileContent = fs.readFileSync(asset.path);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt === 1) {
+            console.log(`Uploading ${asset.name}...`);
         }
         else {
-            throw error;
+            console.log(`Retrying upload of ${asset.name} (attempt ${attempt}/${maxAttempts})...`);
+        }
+        try {
+            await octokit.repos.uploadReleaseAsset({
+                owner: REPO_OWNER,
+                repo: REPO_NAME,
+                release_id: releaseId,
+                name: asset.name,
+                data: fileContent,
+                headers: {
+                    'content-type': asset.contentType,
+                    'content-length': fileContent.length
+                }
+            });
+            console.log(`  ✓ Uploaded ${asset.name}`);
+            return;
+        }
+        catch (error) {
+            if (error.status === 422 && error.message.includes('already_exists')) {
+                console.log(`  ⚠ ${asset.name} already exists, skipping...`);
+                return;
+            }
+            if (attempt === maxAttempts || !isRetryableAssetError(error)) {
+                throw error;
+            }
+            const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+            console.log(`  ⚠ Upload failed (attempt ${attempt}/${maxAttempts}): ${error.message ?? error}`);
+            console.log(`    Waiting ${delayMs}ms before retrying...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+}
+async function deleteReleaseAssetWithRetry(octokit, assetId, assetName) {
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt > 1) {
+            console.log(`    Retrying delete of ${assetName} (attempt ${attempt}/${maxAttempts})...`);
+        }
+        try {
+            await octokit.repos.deleteReleaseAsset({
+                owner: REPO_OWNER,
+                repo: REPO_NAME,
+                asset_id: assetId
+            });
+            return;
+        }
+        catch (error) {
+            if (attempt === maxAttempts || !isRetryableAssetError(error)) {
+                throw error;
+            }
+            const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+            console.log(`    ⚠ Failed to delete ${assetName} (attempt ${attempt}/${maxAttempts}): ${error.message ?? error}`);
+            console.log(`      Waiting ${delayMs}ms before retrying...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
         }
     }
 }
 async function main() {
     const shouldPublish = process.argv.includes('--publish');
     const regenerateDMG = process.argv.includes('--regenerate-dmg');
+    const generateDescriptionOnly = process.argv.includes('--generate-release-description');
     const distDir = path.join(__dirname, '../../.dist');
     const product = getProductInfo();
+    const packageInfo = getPackageInfo();
+    const token = getGitHubToken();
+    const octokit = new rest_1.Octokit({ auth: token });
+    // Determine current version/tag from package.json
+    const versionFromPackage = packageInfo.version;
+    const tagNameFromVersion = `release/${versionFromPackage}`;
+    // Publish-only path: download manifests and publish release without local builds
+    if (shouldPublish || generateDescriptionOnly) {
+        console.log(`Fetching release ${tagNameFromVersion} for ${shouldPublish ? 'publishing' : 'description generation'}...`);
+        const releaseName = `${product.nameLong} ${versionFromPackage}`;
+        const existingRelease = await findExistingRelease(octokit, tagNameFromVersion, releaseName);
+        if (!existingRelease) {
+            console.error(`Release ${tagNameFromVersion} not found`);
+            process.exit(1);
+        }
+        const manifestMap = await fetchManifestsFromRelease(octokit, existingRelease);
+        if (manifestMap.size === 0) {
+            console.error('No manifests found on release; cannot continue');
+            process.exit(1);
+        }
+        const consistency = ensureManifestConsistency(manifestMap);
+        const combinedManifest = combineManifests(manifestMap);
+        if (!combinedManifest) {
+            console.error('Failed to combine manifests');
+            process.exit(1);
+        }
+        const commitForNotes = combinedManifest.commit || consistency.commit || existingRelease.target_commitish;
+        if (!commitForNotes) {
+            throw new Error('Unable to determine commit for release notes');
+        }
+        const releaseNotes = await generateReleaseNotes(commitForNotes, tagNameFromVersion);
+        const releaseBody = buildReleaseBody(manifestMap, tagNameFromVersion, commitForNotes, releaseNotes);
+        if (!shouldPublish) {
+            await publishExistingRelease(octokit, existingRelease, manifestMap, true, releaseBody);
+            return;
+        }
+        await publishExistingRelease(octokit, existingRelease, manifestMap, false, releaseBody);
+        // After publishing the release, update the feed
+        console.log('\nUpdating release feed...');
+        try {
+            const { updateReleaseFeed } = await import('./update-feed-generator.js');
+            await updateReleaseFeed(octokit);
+            console.log('Release feed updated');
+        }
+        catch (error) {
+            console.warn('Could not update release feed:', error);
+            console.log('Run manually: node build/release/update-feed-generator.js');
+        }
+        return;
+    }
     // Get version from built product.json - this ensures we're releasing what was actually built
     const architectures = ['arm64', 'x64', 'universal'];
     const foundVersions = [];
+    const productMetadata = {};
     // Check for built product.json in all architecture builds (macOS, Windows, and Linux)
     for (const arch of architectures) {
         // Check macOS builds
@@ -715,6 +1101,7 @@ async function main() {
                 const archVersion = builtProduct.version;
                 console.log(`Found version ${archVersion} in darwin-${arch} build`);
                 foundVersions.push({ arch: `darwin-${arch}`, version: archVersion });
+                productMetadata[`darwin-${arch}`] = builtProduct;
             }
             catch (error) {
                 console.error(`Failed to read version from ${macOSProductPath}:`, error);
@@ -730,6 +1117,7 @@ async function main() {
                     const archVersion = builtProduct.version;
                     console.log(`Found version ${archVersion} in win32-${arch} build`);
                     foundVersions.push({ arch: `win32-${arch}`, version: archVersion });
+                    productMetadata[`win32-${arch}`] = builtProduct;
                 }
                 catch (error) {
                     console.error(`Failed to read version from ${windowsProductPath}:`, error);
@@ -744,6 +1132,7 @@ async function main() {
                     const archVersion = builtProduct.version;
                     console.log(`Found version ${archVersion} in linux-${arch} build`);
                     foundVersions.push({ arch: `linux-${arch}`, version: archVersion });
+                    productMetadata[`linux-${arch}`] = builtProduct;
                 }
                 catch (error) {
                     console.error(`Failed to read version from ${linuxProductPath}:`, error);
@@ -784,10 +1173,28 @@ async function main() {
     console.log(`Creating GitHub release for ${product.nameLong} ${version}`);
     console.log(`Built commit: ${builtCommit}`);
     // Initialize GitHub API client
-    const token = getGitHubToken();
-    const octokit = new rest_1.Octokit({ auth: token });
-    // Prepare release assets
+    // Prepare release assets and manifests
     const assets = [];
+    const quality = 'stable';
+    const fallbackTimestamp = Date.now();
+    const localManifestMap = new Map();
+    const ensureLocalManifest = (platform, arch, metadataKey) => {
+        const metadata = productMetadata[metadataKey] || {};
+        const key = manifestKeyFromPlatform(platform, arch);
+        if (!localManifestMap.has(key)) {
+            localManifestMap.set(key, {
+                platform,
+                arch,
+                version,
+                productVersion: version,
+                commit: builtCommit,
+                quality,
+                timestamp: resolveManifestTimestamp(metadata, fallbackTimestamp),
+                assets: {}
+            });
+        }
+        return localManifestMap.get(key);
+    };
     // Check for macOS builds
     const darwinArchitectures = ['arm64', 'x64', 'universal'];
     const hasDarwinBuilds = darwinArchitectures.some(arch => {
@@ -821,6 +1228,7 @@ async function main() {
                 console.log(`  Skipping macOS ${arch} (not built)`);
                 continue;
             }
+            const manifest = ensureLocalManifest('macos', arch, `darwin-${arch}`);
             // Create DMG
             const dmgName = `UnbrokenCode-darwin-${arch}-${version}.dmg`;
             const dmgPath = path.join(distDir, dmgName);
@@ -843,12 +1251,13 @@ async function main() {
                 path: dmgPath,
                 contentType: 'application/x-apple-diskimage'
             });
+            manifest.assets['app-dmg'] = makeAssetEntry(tagName, dmgName, dmgPath, false);
             assets.push({
                 name: zipName,
                 path: zipPath,
                 contentType: 'application/zip'
             });
-            // Check for CLI binary package
+            manifest.assets['app-zip'] = makeAssetEntry(tagName, zipName, zipPath, true);
             const cliPackageName = `unbroken_code_cli_darwin_${arch}_cli.zip`;
             const cliPackagePath = path.join(distDir, cliPackageName);
             if (fs.existsSync(cliPackagePath)) {
@@ -858,18 +1267,8 @@ async function main() {
                     contentType: 'application/zip'
                 });
                 console.log(`  Added macOS ${arch} CLI package`);
+                manifest.assets['cli'] = makeAssetEntry(tagName, cliPackageName, cliPackagePath, false);
             }
-        }
-        // Check for universal CLI package
-        const universalCliPackageName = 'unbroken_code_cli_darwin_universal_cli.zip';
-        const universalCliPackagePath = path.join(distDir, universalCliPackageName);
-        if (fs.existsSync(universalCliPackagePath)) {
-            assets.push({
-                name: universalCliPackageName,
-                path: universalCliPackagePath,
-                contentType: 'application/zip'
-            });
-            console.log(`  Added macOS universal CLI package`);
         }
     }
     // Process Windows architectures if available
@@ -884,13 +1283,14 @@ async function main() {
                 console.log(`  Skipping Windows ${arch} (not built)`);
                 continue;
             }
+            ensureLocalManifest('windows', arch, `win32-${arch}`);
             // Create ZIP archive of the Windows build
             const zipName = `UnbrokenCode-win32-${arch}-${version}.zip`;
             const zipPath = path.join(distDir, zipName);
             zipAssets.push({
                 name: zipName,
                 path: zipPath,
-                contentType: 'application/zip'
+                arch
             });
             if (!fs.existsSync(zipPath)) {
                 console.log(`Creating Windows ${arch} ZIP archive...`);
@@ -921,8 +1321,16 @@ async function main() {
             await Promise.all(zipTasks);
             console.log('All ZIP archives created successfully!');
         }
-        // Add all zip assets to the main assets array
-        assets.push(...zipAssets);
+        // Add all zip assets to the main assets array and update manifests
+        for (const zipAsset of zipAssets) {
+            assets.push({
+                name: zipAsset.name,
+                path: zipAsset.path,
+                contentType: 'application/zip'
+            });
+            const manifest = ensureLocalManifest('windows', zipAsset.arch, `win32-${zipAsset.arch}`);
+            manifest.assets['app-zip'] = makeAssetEntry(tagName, zipAsset.name, zipAsset.path, true);
+        }
         // Add CLI binary packages for Windows
         for (const arch of windowsArchitectures) {
             const winDir = path.join(distDir, `VSCode-win32-${arch}`);
@@ -939,6 +1347,8 @@ async function main() {
                     contentType: 'application/zip'
                 });
                 console.log(`  Added Windows ${arch} CLI package`);
+                const manifest = ensureLocalManifest('windows', arch, `win32-${arch}`);
+                manifest.assets['cli'] = makeAssetEntry(tagName, cliPackageName, cliPackagePath, false);
             }
         }
         // Process installers sequentially (they're usually quick)
@@ -967,6 +1377,9 @@ async function main() {
                             contentType: 'application/x-msdownload'
                         });
                         console.log(`  Added Windows ${arch} ${target} installer`);
+                        const manifest = ensureLocalManifest('windows', arch, `win32-${arch}`);
+                        const manifestKey = target === 'user' ? 'installer-user' : 'installer-system';
+                        manifest.assets[manifestKey] = makeAssetEntry(tagName, installerName, destInstallerPath, false);
                     }
                 }
             }
@@ -981,6 +1394,7 @@ async function main() {
                 console.log(`  Skipping Linux ${arch} (not built)`);
                 continue;
             }
+            const manifest = ensureLocalManifest('linux', arch, `linux-${arch}`);
             // Check for tar.gz archive
             const tarGzName = `UnbrokenCode-linux-${arch}.tar.gz`;
             const tarGzPath = path.join(distDir, tarGzName);
@@ -997,6 +1411,7 @@ async function main() {
                     contentType: 'application/gzip'
                 });
                 console.log(`  Added Linux ${arch} tar.gz archive`);
+                manifest.assets['app-tar'] = makeAssetEntry(tagName, versionedTarGzName, versionedTarGzPath, true);
             }
             // Check for .deb package
             const debDir = path.join(repoPath, '.build', 'linux', 'deb');
@@ -1017,6 +1432,7 @@ async function main() {
                         contentType: 'application/vnd.debian.binary-package'
                     });
                     console.log(`  Added Linux ${arch} .deb package`);
+                    manifest.assets['deb'] = makeAssetEntry(tagName, destDebName, destDebPath, false);
                 }
             }
             // Check for .rpm package
@@ -1038,6 +1454,7 @@ async function main() {
                         contentType: 'application/x-rpm'
                     });
                     console.log(`  Added Linux ${arch} .rpm package`);
+                    manifest.assets['rpm'] = makeAssetEntry(tagName, destRpmName, destRpmPath, false);
                 }
             }
             // Check for CLI binary package
@@ -1050,334 +1467,17 @@ async function main() {
                     contentType: 'application/gzip'
                 });
                 console.log(`  Added Linux ${arch} CLI package`);
+                manifest.assets['cli'] = makeAssetEntry(tagName, cliPackageName, cliPackagePath, false);
             }
         }
     }
-    // Create update manifest JSON for auto-updater
-    // IMPORTANT: macOS auto-updater (Squirrel.Mac) requires ZIP files, not DMG!
-    // Windows auto-updater also uses this manifest
-    // Use deterministic timestamp based on built product.json to avoid unnecessary updates
-    let builtProductPath = path.join(distDir, `VSCode-darwin-universal`, 'Unbroken Code.app', 'Contents', 'Resources', 'app', 'product.json');
-    if (!fs.existsSync(builtProductPath)) {
-        // Fallback to any available built product.json
-        for (const arch of ['arm64', 'x64']) {
-            builtProductPath = path.join(distDir, `VSCode-darwin-${arch}`, 'Unbroken Code.app', 'Contents', 'Resources', 'app', 'product.json');
-            if (fs.existsSync(builtProductPath)) {
-                break;
-            }
-            builtProductPath = path.join(distDir, `VSCode-win32-${arch}`, 'resources', 'app', 'product.json');
-            if (fs.existsSync(builtProductPath)) {
-                break;
-            }
-            builtProductPath = path.join(distDir, `VSCode-linux-${arch}`, 'resources', 'app', 'product.json');
-            if (fs.existsSync(builtProductPath)) {
-                break;
-            }
-        }
+    // Persist manifests for the platforms built locally
+    for (const manifest of localManifestMap.values()) {
+        const { asset } = writeManifestToDist(manifest, distDir);
+        assets.push(asset);
     }
-    const builtProduct = fs.existsSync(builtProductPath) ? JSON.parse(fs.readFileSync(builtProductPath, 'utf8')) : {};
-    const buildTimestamp = new Date(builtProduct.date || Date.now()).getTime();
-    // Start with existing manifest if it exists (for multi-platform builds)
-    let updateManifest = {
-        version: version,
-        productVersion: version,
-        commit: builtCommit,
-        timestamp: buildTimestamp,
-        quality: 'stable',
-        assets: {}
-    };
-    // Download existing updates.json from the release to merge with our changes
-    console.log('Checking for existing updates.json from previous builds...');
-    const existingRelease = await findExistingRelease(octokit, tagName, `${product.nameLong} ${version}`);
-    const existingUpdatesAsset = existingRelease?.assets?.find((asset) => asset.name === 'updates.json');
-    if (existingRelease && existingUpdatesAsset) {
-        console.log('Found existing updates.json, downloading for merge via API...');
-        const assetUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingUpdatesAsset.id}`;
-        const response = await fetch(assetUrl, {
-            headers: {
-                'Accept': 'application/octet-stream',
-                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
-                'User-Agent': 'Unbroken-Code-Release-Script'
-            }
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to download existing updates.json: ${response.status} ${response.statusText}`);
-        }
-        const existingManifest = await response.json();
-        // Merge existing assets, preserving assets from other platforms
-        updateManifest = {
-            ...existingManifest,
-            version: version,
-            productVersion: version,
-            commit: builtCommit,
-            timestamp: buildTimestamp,
-            assets: { ...existingManifest.assets }
-        };
-        console.log('Merged existing updates.json with current build');
-    }
-    // Add macOS assets to update manifest (will overwrite existing macOS entries)
-    for (const arch of darwinArchitectures) {
-        const zipName = `UnbrokenCode-darwin-${arch}-${version}.zip`;
-        const zipPath = path.join(distDir, zipName);
-        if (fs.existsSync(zipPath)) {
-            updateManifest.assets[`darwin-${arch}`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${zipName}`,
-                sha256hash: getFileHash(zipPath),
-                size: getFileSize(zipPath),
-                supportsFastUpdate: true
-            };
-        }
-        // Add DMG file for macOS
-        const dmgName = `UnbrokenCode-darwin-${arch}-${version}.dmg`;
-        const dmgPath = path.join(distDir, dmgName);
-        if (fs.existsSync(dmgPath)) {
-            updateManifest.assets[`darwin-${arch}-dmg`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${dmgName}`,
-                sha256hash: getFileHash(dmgPath),
-                size: getFileSize(dmgPath),
-                supportsFastUpdate: false
-            };
-        }
-        // Add CLI package for macOS
-        const cliPackageName = `unbroken_code_cli_darwin_${arch}_cli.zip`;
-        const cliPackagePath = path.join(distDir, cliPackageName);
-        if (fs.existsSync(cliPackagePath)) {
-            updateManifest.assets[`darwin-${arch}-cli`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${cliPackageName}`,
-                sha256hash: getFileHash(cliPackagePath),
-                size: getFileSize(cliPackagePath),
-                supportsFastUpdate: false
-            };
-        }
-    }
-    // Add universal CLI package for macOS
-    const universalCliPackageName = 'unbroken_code_cli_darwin_universal_cli.zip';
-    const universalCliPackagePath = path.join(distDir, universalCliPackageName);
-    if (fs.existsSync(universalCliPackagePath)) {
-        updateManifest.assets['darwin-universal-cli'] = {
-            url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${universalCliPackageName}`,
-            sha256hash: getFileHash(universalCliPackagePath),
-            size: getFileSize(universalCliPackagePath),
-            supportsFastUpdate: false
-        };
-    }
-    // Add Windows assets to update manifest (will overwrite existing Windows entries)
-    for (const arch of windowsArchitectures) {
-        const zipName = `UnbrokenCode-win32-${arch}-${version}.zip`;
-        const zipPath = path.join(distDir, zipName);
-        if (fs.existsSync(zipPath)) {
-            updateManifest.assets[`win32-${arch}`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${zipName}`,
-                sha256hash: getFileHash(zipPath),
-                size: getFileSize(zipPath),
-                supportsFastUpdate: true
-            };
-        }
-        // Add installer URLs for convenience (not used by auto-updater)
-        const targets = ['user', 'system'];
-        for (const target of targets) {
-            const installerName = `UnbrokenCodeSetup-${arch}-${target}-${version}.exe`;
-            const installerPath = path.join(distDir, installerName);
-            if (fs.existsSync(installerPath)) {
-                updateManifest.assets[`win32-${arch}-${target}-setup`] = {
-                    url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${installerName}`,
-                    sha256hash: getFileHash(installerPath),
-                    size: getFileSize(installerPath),
-                    supportsFastUpdate: false
-                };
-            }
-        }
-        // Add CLI package for Windows
-        const cliPackageName = `unbroken_code_cli_win32_${arch}_cli.zip`;
-        const cliPackagePath = path.join(distDir, cliPackageName);
-        if (fs.existsSync(cliPackagePath)) {
-            updateManifest.assets[`win32-${arch}-cli`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${cliPackageName}`,
-                sha256hash: getFileHash(cliPackagePath),
-                size: getFileSize(cliPackagePath),
-                supportsFastUpdate: false
-            };
-        }
-    }
-    // Add Linux assets to update manifest (will overwrite existing Linux entries)
-    for (const arch of linuxArchitectures) {
-        const tarGzName = `UnbrokenCode-linux-${arch}-${version}.tar.gz`;
-        const tarGzPath = path.join(distDir, tarGzName);
-        if (fs.existsSync(tarGzPath)) {
-            updateManifest.assets[`linux-${arch}`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${tarGzName}`,
-                sha256hash: getFileHash(tarGzPath),
-                size: getFileSize(tarGzPath),
-                supportsFastUpdate: true
-            };
-        }
-        // Add .deb and .rpm URLs for convenience (not used by auto-updater)
-        const debName = `UnbrokenCode-linux-${arch}-${version}.deb`;
-        const debPath = path.join(distDir, debName);
-        if (fs.existsSync(debPath)) {
-            updateManifest.assets[`linux-${arch}-deb`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${debName}`,
-                sha256hash: getFileHash(debPath),
-                size: getFileSize(debPath),
-                supportsFastUpdate: false
-            };
-        }
-        const rpmName = `UnbrokenCode-linux-${arch}-${version}.rpm`;
-        const rpmPath = path.join(distDir, rpmName);
-        if (fs.existsSync(rpmPath)) {
-            updateManifest.assets[`linux-${arch}-rpm`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${rpmName}`,
-                sha256hash: getFileHash(rpmPath),
-                size: getFileSize(rpmPath),
-                supportsFastUpdate: false
-            };
-        }
-        // Add CLI package for Linux
-        const cliPackageName = `unbroken_code_cli_linux_${arch}_cli.tar.gz`;
-        const cliPackagePath = path.join(distDir, cliPackageName);
-        if (fs.existsSync(cliPackagePath)) {
-            updateManifest.assets[`linux-${arch}-cli`] = {
-                url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${tagName}/${cliPackageName}`,
-                sha256hash: getFileHash(cliPackagePath),
-                size: getFileSize(cliPackagePath),
-                supportsFastUpdate: false
-            };
-        }
-    }
-    // Sort the assets keys for deterministic output (ensures consistent SHA)
-    updateManifest.assets = sortAssetKeys(updateManifest.assets);
-    // Save update manifest
-    const manifestPath = path.join(distDir, 'updates.json');
-    fs.writeFileSync(manifestPath, JSON.stringify(updateManifest, null, 2));
-    assets.push({
-        name: 'updates.json',
-        path: manifestPath,
-        contentType: 'application/json'
-    });
-    // Generate release notes
-    const releaseNotes = await generateReleaseNotes(builtCommit, tagName);
-    // Create release body
-    const releaseBodyParts = [
-        `Commit: \`${builtCommit}\``
-    ];
-    // Add release notes if any were found
-    if (releaseNotes.length > 0) {
-        releaseBodyParts.push('', '## What\'s New', '', ...releaseNotes.map(note => `- ${note}`));
-    }
-    // Generate download links for available assets
-    const generateDownloadLink = (filename) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${encodeURIComponent(tagName)}/${filename}`;
-    // Helper function to get file extension from filename
-    const getFileExtension = (filename) => {
-        // Extract just the extension part for display
-        if (filename.includes('.dmg')) {
-            return 'dmg';
-        }
-        if (filename.includes('.zip')) {
-            return 'zip';
-        }
-        if (filename.includes('.tar.gz')) {
-            return 'tar.gz';
-        }
-        if (filename.includes('.deb')) {
-            return 'deb';
-        }
-        if (filename.includes('.rpm')) {
-            return 'rpm';
-        }
-        if (filename.includes('.exe')) {
-            return 'exe';
-        }
-        return '';
-    };
-    // Helper function to create download link with just extension as text
-    const createDownloadCell = (filename) => {
-        if (!filename) {
-            return '';
-        }
-        const extension = getFileExtension(filename);
-        return `[${extension}](${generateDownloadLink(filename)})`;
-    };
-    // Helper function to create multiple download links in one cell
-    const createMultiDownloadCell = (filenames) => {
-        const links = filenames
-            .filter(f => f !== null)
-            .map(f => createDownloadCell(f))
-            .filter(link => link !== '');
-        return links.join(' ');
-    };
-    // Add installation instructions based on available platforms
-    releaseBodyParts.push('', '---', '## Downloads', '');
-    // Find available assets from update manifest
-    const getFilenameFromUrl = (url) => url.split('/').pop() || '';
-    // Helper to get asset filename by key
-    const getAssetFilename = (key) => {
-        const asset = updateManifest.assets[key];
-        if (!asset) {
-            return null;
-        }
-        return getFilenameFromUrl(asset.url);
-    };
-    // Create download table
-    const tableRows = [];
-    // Table header
-    tableRows.push('| Platform | Universal | x64 | arm64 | CLI Universal | CLI x64 | CLI arm64 |');
-    tableRows.push('|----------|-----------|-----|-------|---------------|---------|-----------|');
-    // macOS row - include both dmg and zip for app downloads, plus universal builds
-    const macosAppX64Dmg = getAssetFilename('darwin-x64-dmg');
-    const macosAppX64Zip = getAssetFilename('darwin-x64');
-    const macosAppArm64Dmg = getAssetFilename('darwin-arm64-dmg');
-    const macosAppArm64Zip = getAssetFilename('darwin-arm64');
-    const macosAppUniversalDmg = getAssetFilename('darwin-universal-dmg');
-    const macosAppUniversalZip = getAssetFilename('darwin-universal');
-    const macosCliX64 = getAssetFilename('darwin-x64-cli');
-    const macosCliArm64 = getAssetFilename('darwin-arm64-cli');
-    const macosCliUniversal = getAssetFilename('darwin-universal-cli');
-    if (macosAppX64Dmg || macosAppX64Zip || macosAppArm64Dmg || macosAppArm64Zip || macosAppUniversalDmg || macosAppUniversalZip || macosCliX64 || macosCliArm64 || macosCliUniversal) {
-        // allow-any-unicode-next-line
-        tableRows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
-    }
-    // Windows row - include exe and zip for app downloads (no universal for Windows)
-    const winAppX64Exe = getAssetFilename('win32-x64-user-setup');
-    const winAppX64Zip = getAssetFilename('win32-x64');
-    const winAppArm64Exe = getAssetFilename('win32-arm64-user-setup');
-    const winAppArm64Zip = getAssetFilename('win32-arm64');
-    const winCliX64 = getAssetFilename('win32-x64-cli');
-    const winCliArm64 = getAssetFilename('win32-arm64-cli');
-    if (winAppX64Exe || winAppX64Zip || winAppArm64Exe || winAppArm64Zip || winCliX64 || winCliArm64) {
-        // allow-any-unicode-next-line
-        tableRows.push(`| **💻 Windows** | | ${createMultiDownloadCell([winAppX64Exe, winAppX64Zip])} | ${createMultiDownloadCell([winAppArm64Exe, winAppArm64Zip])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
-    }
-    // Linux row - include deb, rpm, and tar.gz for app downloads (no universal for Linux)
-    const linuxAppX64Deb = getAssetFilename('linux-x64-deb');
-    const linuxAppX64Rpm = getAssetFilename('linux-x64-rpm');
-    const linuxAppX64Tar = getAssetFilename('linux-x64');
-    const linuxAppArm64Deb = getAssetFilename('linux-arm64-deb');
-    const linuxAppArm64Rpm = getAssetFilename('linux-arm64-rpm');
-    const linuxAppArm64Tar = getAssetFilename('linux-arm64');
-    const linuxCliX64 = getAssetFilename('linux-x64-cli');
-    const linuxCliArm64 = getAssetFilename('linux-arm64-cli');
-    if (linuxAppX64Deb || linuxAppX64Rpm || linuxAppX64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxAppArm64Tar || linuxCliX64 || linuxCliArm64) {
-        // allow-any-unicode-next-line
-        tableRows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
-    }
-    releaseBodyParts.push(...tableRows);
-    releaseBodyParts.push('');
-    // Add simplified installation instructions
-    releaseBodyParts.push('## Installation Instructions', '', 
-    // allow-any-unicode-next-line
-    '### 🖥️ macOS', '- **App**: Download dmg for easy installation or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', 
-    // allow-any-unicode-next-line
-    '### 💻 Windows', '- **App**: Download exe for installer or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', 
-    // allow-any-unicode-next-line
-    '### 🐧 Linux', '- **Debian/Ubuntu**: Download deb and run `sudo dpkg -i UnbrokenCode-*.deb`', '- **RedHat/Fedora**: Download rpm and run `sudo rpm -i UnbrokenCode-*.rpm`', '- **Other**: Download tar.gz and extract', '- **CLI**: Download CLI package and add to PATH', '');
-    releaseBodyParts.push(
-    // allow-any-unicode-next-line
-    '## 🔄 Auto-Update', 'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.');
-    const releaseBody = releaseBodyParts.join('\n');
-    // Check for command line flags
     // Always create as draft first to upload all artifacts before it's visible
-    const release = await createGitHubRelease(octokit, tagName, `${product.nameLong} ${version}`, releaseBody, builtCommit, true // Always create as draft initially
-    );
+    const release = await createGitHubRelease(octokit, tagName, `${product.nameLong} ${version}`, 'TBD', builtCommit, true);
     // Optimize asset uploads (only upload changed assets)
     console.log('\nOptimizing asset uploads...');
     const assetsToUpload = await optimizeAssetUploads(octokit, release, assets);
@@ -1385,40 +1485,12 @@ async function main() {
     for (const asset of assetsToUpload) {
         await uploadReleaseAsset(octokit, release.id, asset);
     }
-    // If --publish flag was provided, publish the draft release
-    if (shouldPublish) {
-        console.log('\nPublishing release...');
-        try {
-            await octokit.repos.updateRelease({
-                owner: REPO_OWNER,
-                repo: REPO_NAME,
-                release_id: release.id,
-                draft: false
-            });
-            console.log('Release published successfully!');
-        }
-        catch (error) {
-            console.error('Error publishing release:', error.message);
-            process.exit(1);
-        }
-    }
     console.log('\nRelease preparation complete!');
     console.log(`Release URL: ${release.html_url}`);
     if (!shouldPublish) {
         console.log('\nRelease created as DRAFT. To publish:');
         console.log(`  - Visit ${release.html_url} and click "Publish release"`);
         console.log(`  - Or run: node build/release/create-github-release.js --publish`);
-    }
-    // After creating release, update the feed
-    console.log('\nUpdating release feed...');
-    try {
-        const { updateReleaseFeed } = await import('./update-feed-generator.js');
-        await updateReleaseFeed(octokit);
-        console.log('Release feed updated');
-    }
-    catch (error) {
-        console.warn('Could not update release feed:', error);
-        console.log('Run manually: node build/release/update-feed-generator.js');
     }
 }
 // Run if executed directly

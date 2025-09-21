@@ -33,13 +33,9 @@ node build/release/update-feed-generator.js generate
 
 # Test platform-specific feed
 node build/release/update-feed-generator.js platform darwin-universal stable
-
-# Get feed URL
-node build/release/update-feed-generator.js url
 ```
 
 **Generated Files:**
-- `updates-feed.json` - Main feed with all platforms and versions
 - `latest-darwin-{arch}.json` - Squirrel.Mac format for macOS
 - `latest-{platform}.json` - IUpdate format for Linux/Windows
 
@@ -63,5 +59,4 @@ These scripts are integrated with the main build script:
 
 ## Feed URLs
 
-- Main feed: `https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/updates-feed.json`
 - Platform feeds: `https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/latest-{platform}.json`

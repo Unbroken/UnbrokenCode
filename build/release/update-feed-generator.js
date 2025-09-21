@@ -33,7 +33,6 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFeedUrl = getFeedUrl;
 exports.generatePlatformFeed = generatePlatformFeed;
 exports.updateReleaseFeed = updateReleaseFeed;
 /*---------------------------------------------------------------------------------------------
@@ -45,8 +44,34 @@ const rest_1 = require("@octokit/rest");
 const create_github_release_1 = require("./create-github-release");
 const REPO_OWNER = 'Unbroken';
 const REPO_NAME = 'UnbrokenCode';
-const FEED_ASSET_NAME = 'updates-feed.json';
 const FEED_RELEASE_TAG = 'update-feed';
+function mapPlatformToFeedKey(manifest) {
+    let platform;
+    switch (manifest.platform) {
+        case 'macos':
+            platform = 'darwin';
+            break;
+        case 'windows':
+            platform = 'win32';
+            break;
+        default:
+            platform = 'linux';
+    }
+    return `${platform}-${manifest.arch}`;
+}
+function parseManifest(content, fallbackPlatform, fallbackArch) {
+    const parsed = JSON.parse(content);
+    return {
+        platform: parsed.platform ?? fallbackPlatform ?? 'linux',
+        arch: parsed.arch ?? fallbackArch ?? 'x64',
+        version: parsed.version,
+        productVersion: parsed.productVersion ?? parsed.version,
+        commit: parsed.commit,
+        quality: parsed.quality ?? 'stable',
+        timestamp: parsed.timestamp ?? Date.now(),
+        assets: parsed.assets ?? {}
+    };
+}
 function parseVersion(tagName) {
     // Remove 'v' prefix if present
     return tagName.startsWith('v') ? tagName.substring(1) : tagName;
@@ -103,87 +128,50 @@ async function generateUpdateFeed(octokit) {
         const version = parseVersion(release.tag_name);
         const commit = extractCommitFromNotes(release.body || '');
         console.log(`Processing release: ${version}`);
-        // Look for updates.json in assets
-        const updatesAsset = release.assets?.find(a => a.name === 'updates.json');
-        if (updatesAsset) {
-            try {
-                // Download and parse the updates.json
-                const updatesContent = await downloadAssetContent(octokit, updatesAsset.id);
-                const updates = JSON.parse(updatesContent);
-                // Initialize version entry
-                if (!feed.releases[version]) {
-                    feed.releases[version] = {};
-                }
-                // Process each platform
-                for (const [platform, info] of Object.entries(updates.assets || {})) {
-                    const platformInfo = info;
-                    const entryTimestamp = updates.timestamp || new Date(release.published_at || release.created_at).getTime();
+        const manifestAssets = release.assets?.filter(a => a.name?.startsWith('manifest-') && a.name.endsWith('.json')) ?? [];
+        if (manifestAssets.length > 0) {
+            if (!feed.releases[version]) {
+                feed.releases[version] = {};
+            }
+            for (const asset of manifestAssets) {
+                try {
+                    const fallbackPlatform = asset.name.includes('windows') ? 'windows' : asset.name.includes('macos') ? 'macos' : 'linux';
+                    const fallbackArch = asset.name.includes('arm64') ? 'arm64' : asset.name.includes('universal') ? 'universal' : 'x64';
+                    const content = await downloadAssetContent(octokit, asset.id);
+                    const manifest = parseManifest(content, fallbackPlatform, fallbackArch);
+                    const platformKey = mapPlatformToFeedKey(manifest);
+                    const fastAssetEntry = Object.entries(manifest.assets).find(([, info]) => info.supportsFastUpdate);
+                    if (!fastAssetEntry) {
+                        continue;
+                    }
+                    const [, fastAsset] = fastAssetEntry;
+                    const entryTimestamp = manifest.timestamp || new Date(release.published_at || release.created_at).getTime();
                     const entry = {
-                        version: updates.version || version,
-                        productVersion: updates.productVersion || version,
+                        version: manifest.version || version,
+                        productVersion: manifest.productVersion || manifest.version || version,
                         timestamp: entryTimestamp,
-                        url: platformInfo.url,
-                        sha256hash: platformInfo.sha256hash,
-                        size: platformInfo.size,
-                        supportsFastUpdate: platformInfo.supportsFastUpdate !== false,
-                        quality: updates.quality || 'stable',
-                        commit: commit || updates.commit
+                        url: fastAsset.url,
+                        sha256hash: fastAsset.sha256hash,
+                        size: fastAsset.size,
+                        supportsFastUpdate: fastAsset.supportsFastUpdate !== false,
+                        quality: manifest.quality || 'stable',
+                        commit: commit || manifest.commit
                     };
-                    // Track the largest timestamp
                     if (entryTimestamp > lastUpdatedTimestamp) {
                         lastUpdatedTimestamp = entryTimestamp;
                     }
-                    // Add to releases
-                    feed.releases[version][platform] = entry;
-                    // Update latest if this is the newest timestamp for this platform
-                    if (!feed.latest[platform] || entry.timestamp > feed.latest[platform].timestamp) {
-                        feed.latest[platform] = entry;
+                    feed.releases[version][platformKey] = entry;
+                    if (!feed.latest[platformKey] || entry.timestamp > feed.latest[platformKey].timestamp) {
+                        feed.latest[platformKey] = entry;
                     }
+                }
+                catch (error) {
+                    console.warn(`Failed to process manifest ${asset.name} for ${release.tag_name}:`, error);
                 }
             }
-            catch (error) {
-                console.warn(`Failed to process updates.json for ${release.tag_name}:`, error);
-                // Fallback: construct feed from asset names
-                // IMPORTANT: Use ZIP files for macOS auto-updater (Squirrel.Mac requirement)
-                // Use tar.gz files for Linux
-                const platforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal', 'linux-x64', 'linux-arm64'];
-                if (!feed.releases[version]) {
-                    feed.releases[version] = {};
-                }
-                for (const platform of platforms) {
-                    let asset;
-                    // For macOS, look for ZIP files
-                    if (platform.startsWith('darwin-')) {
-                        asset = release.assets?.find(a => a.name.includes(platform) && a.name.endsWith('.zip'));
-                    }
-                    // For Linux, look for tar.gz files
-                    else if (platform.startsWith('linux-')) {
-                        asset = release.assets?.find(a => a.name.includes(platform) && a.name.endsWith('.tar.gz'));
-                    }
-                    if (asset) {
-                        const entryTimestamp = new Date(release.published_at || release.created_at).getTime();
-                        const entry = {
-                            version: version,
-                            productVersion: version,
-                            timestamp: entryTimestamp,
-                            url: asset.browser_download_url,
-                            size: asset.size,
-                            supportsFastUpdate: true,
-                            quality: 'stable',
-                            commit: commit
-                        };
-                        // Track the largest timestamp
-                        if (entryTimestamp > lastUpdatedTimestamp) {
-                            lastUpdatedTimestamp = entryTimestamp;
-                        }
-                        feed.releases[version][platform] = entry;
-                        // Update latest if this is the newest timestamp for this platform
-                        if (!feed.latest[platform] || entry.timestamp > feed.latest[platform].timestamp) {
-                            feed.latest[platform] = entry;
-                        }
-                    }
-                }
-            }
+        }
+        else {
+            console.warn(`No manifest assets found for ${release.tag_name}, skipping`);
         }
     }
     // Set the final lastUpdated timestamp to the largest timestamp found
@@ -209,7 +197,7 @@ async function ensureFeedRelease(octokit) {
                 repo: REPO_NAME,
                 tag_name: FEED_RELEASE_TAG,
                 name: 'Update Feed',
-                body: 'Auto-generated update feed for Unbroken Code automatic updates.\n\n**⚠️ DO NOT DELETE THIS RELEASE**\n\nThis release contains the `updates-feed.json` file that is used by the auto-updater.',
+                body: 'Auto-generated update feed for Unbroken Code automatic updates.\n\n**⚠️ DO NOT DELETE THIS RELEASE**\n\nThis release hosts the auto-update manifest files used by the updater.',
                 draft: false,
                 prerelease: false
             });
@@ -220,48 +208,7 @@ async function ensureFeedRelease(octokit) {
 }
 async function uploadFeedAsset(octokit, feed) {
     const feedRelease = await ensureFeedRelease(octokit);
-    // Prepare new feed content
-    const feedContent = JSON.stringify(feed, null, 2);
-    const feedBuffer = Buffer.from(feedContent, 'utf8');
-    const newFeedSHA256 = crypto.createHash('sha256').update(feedBuffer).digest('hex');
-    // Check if feed asset already exists and compare SHA256
-    const existingAsset = feedRelease.assets?.find((a) => a.name === FEED_ASSET_NAME);
-    let feedChanged = false;
-    if (existingAsset) {
-        // Extract SHA256 from GitHub's digest property (format: "sha256:hash")
-        let existingSHA = null;
-        if (existingAsset.digest && existingAsset.digest.startsWith('sha256:')) {
-            existingSHA = existingAsset.digest.substring('sha256:'.length);
-        }
-        if (existingSHA === newFeedSHA256) {
-            console.log(`✓ ${FEED_ASSET_NAME} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-        }
-        else {
-            feedChanged = true;
-            console.log(`~ ${FEED_ASSET_NAME} changed, updating...`);
-            await octokit.repos.deleteReleaseAsset({
-                owner: REPO_OWNER,
-                repo: REPO_NAME,
-                asset_id: existingAsset.id
-            });
-        }
-    }
-    if (feedChanged) {
-        // Upload main feed asset
-        console.log(`Uploading ${FEED_ASSET_NAME}...`);
-        await octokit.repos.uploadReleaseAsset({
-            owner: REPO_OWNER,
-            repo: REPO_NAME,
-            release_id: feedRelease.id,
-            name: FEED_ASSET_NAME,
-            data: feedBuffer,
-            headers: {
-                'content-type': 'application/json',
-                'content-length': feedBuffer.length
-            }
-        });
-        console.log(`✓ Feed uploaded successfully`);
-    }
+    let releaseAssets = feedRelease.assets ?? [];
     // Create platform-specific feeds for auto-updater compatibility
     // 1. Squirrel.Mac feeds (for macOS)
     const darwinPlatforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal'];
@@ -295,7 +242,7 @@ async function uploadFeedAsset(octokit, feed) {
             const squirrelContent = JSON.stringify(squirrelFeed, null, 2);
             const squirrelBuffer = Buffer.from(squirrelContent, 'utf8');
             // Check if existing feed needs updating
-            const existingSquirrel = feedRelease.assets?.find((a) => a.name === squirrelFileName);
+            const existingSquirrel = releaseAssets.find((a) => a.name === squirrelFileName);
             const needsUpdate = await shouldUpdateAsset(existingSquirrel, squirrelContent);
             if (!needsUpdate) {
                 const existingSHA = existingSquirrel.digest?.substring('sha256:'.length) || 'unknown';
@@ -310,6 +257,7 @@ async function uploadFeedAsset(octokit, feed) {
                     repo: REPO_NAME,
                     asset_id: existingSquirrel.id
                 });
+                releaseAssets = releaseAssets.filter((asset) => asset.id !== existingSquirrel.id);
             }
             // Upload new Squirrel feed
             console.log(`Uploading ${squirrelFileName}...`);
@@ -346,7 +294,7 @@ async function uploadFeedAsset(octokit, feed) {
             const platformContent = JSON.stringify(iUpdateFeed, null, 2);
             const platformBuffer = Buffer.from(platformContent, 'utf8');
             // Check if existing feed needs updating
-            const existingPlatform = feedRelease.assets?.find((a) => a.name === platformFileName);
+            const existingPlatform = releaseAssets.find((a) => a.name === platformFileName);
             const needsUpdate = await shouldUpdateAsset(existingPlatform, platformContent);
             if (!needsUpdate) {
                 const existingSHA = existingPlatform.digest?.substring('sha256:'.length) || 'unknown';
@@ -361,6 +309,7 @@ async function uploadFeedAsset(octokit, feed) {
                     repo: REPO_NAME,
                     asset_id: existingPlatform.id
                 });
+                releaseAssets = releaseAssets.filter((asset) => asset.id !== existingPlatform.id);
             }
             // Upload platform feed
             console.log(`Uploading ${platformFileName}...`);
@@ -399,7 +348,7 @@ async function uploadFeedAsset(octokit, feed) {
             const systemContent = JSON.stringify(systemFeed, null, 2);
             const systemBuffer = Buffer.from(systemContent, 'utf8');
             // Check if existing feed needs updating
-            const existingSystem = feedRelease.assets?.find((a) => a.name === systemFileName);
+            const existingSystem = releaseAssets.find((a) => a.name === systemFileName);
             const needsSystemUpdate = await shouldUpdateAsset(existingSystem, systemContent);
             if (!needsSystemUpdate) {
                 const existingSHA = existingSystem.digest?.substring('sha256:'.length) || 'unknown';
@@ -414,6 +363,7 @@ async function uploadFeedAsset(octokit, feed) {
                         repo: REPO_NAME,
                         asset_id: existingSystem.id
                     });
+                    releaseAssets = releaseAssets.filter((asset) => asset.id !== existingSystem.id);
                 }
                 // Upload new
                 await octokit.repos.uploadReleaseAsset({
@@ -447,7 +397,7 @@ async function uploadFeedAsset(octokit, feed) {
             const userContent = JSON.stringify(userFeed, null, 2);
             const userBuffer = Buffer.from(userContent, 'utf8');
             // Check if existing feed needs updating
-            const existingUser = feedRelease.assets?.find((a) => a.name === userFileName);
+            const existingUser = releaseAssets.find((a) => a.name === userFileName);
             const needsUserUpdate = await shouldUpdateAsset(existingUser, userContent);
             if (!needsUserUpdate) {
                 const existingSHA = existingUser.digest?.substring('sha256:'.length) || 'unknown';
@@ -462,6 +412,7 @@ async function uploadFeedAsset(octokit, feed) {
                         repo: REPO_NAME,
                         asset_id: existingUser.id
                     });
+                    releaseAssets = releaseAssets.filter((asset) => asset.id !== existingUser.id);
                 }
                 // Upload new
                 await octokit.repos.uploadReleaseAsset({
@@ -495,7 +446,7 @@ async function uploadFeedAsset(octokit, feed) {
             const archiveContent = JSON.stringify(archiveFeed, null, 2);
             const archiveBuffer = Buffer.from(archiveContent, 'utf8');
             // Check if existing feed needs updating
-            const existingArchive = feedRelease.assets?.find((a) => a.name === archiveFileName);
+            const existingArchive = releaseAssets.find((a) => a.name === archiveFileName);
             const needsArchiveUpdate = await shouldUpdateAsset(existingArchive, archiveContent);
             if (!needsArchiveUpdate) {
                 const existingSHA = existingArchive.digest?.substring('sha256:'.length) || 'unknown';
@@ -510,6 +461,7 @@ async function uploadFeedAsset(octokit, feed) {
                         repo: REPO_NAME,
                         asset_id: existingArchive.id
                     });
+                    releaseAssets = releaseAssets.filter((asset) => asset.id !== existingArchive.id);
                 }
                 // Upload new
                 await octokit.repos.uploadReleaseAsset({
@@ -527,10 +479,6 @@ async function uploadFeedAsset(octokit, feed) {
             }
         }
     }
-}
-// Function to generate feed URL for product.json
-function getFeedUrl() {
-    return `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${FEED_RELEASE_TAG}/${FEED_ASSET_NAME}`;
 }
 // Helper function to check if asset needs updating based on SHA256
 async function shouldUpdateAsset(existingAsset, newContent) {
@@ -594,9 +542,7 @@ async function main() {
                     console.log(`  ${version}: ${platforms.join(', ')}`);
                 }
                 await uploadFeedAsset(octokit, feed);
-                console.log(`\nFeed generated and uploaded successfully!`);
-                console.log(`\nStatic feed URL for product.json:`);
-                console.log(`  "updateUrl": "${getFeedUrl()}"`);
+                console.log(`\nFeed assets refreshed successfully!`);
                 break;
             }
         case 'platform':
@@ -614,15 +560,10 @@ async function main() {
                 }
                 break;
             }
-        case 'url':
-            // Just print the feed URL
-            console.log(getFeedUrl());
-            break;
         default:
             console.log('Usage:');
             console.log('  ts-node update-feed-generator.ts generate     - Generate and upload feed');
             console.log('  ts-node update-feed-generator.ts platform [platform] [quality] - Test platform query');
-            console.log('  ts-node update-feed-generator.ts url          - Print feed URL');
     }
 }
 // Run if executed directly

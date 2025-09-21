@@ -39,6 +39,8 @@ module.exports.unicodeFilter = [
 
 	'!**/build-unbroken-code.sh',
 
+	'!**/build/release/create-github-release.*',
+
 	'!**/ThirdPartyNotices.txt',
 	'!**/ThirdPartyNotices.cli.txt',
 	'!**/LICENSE.{txt,rtf}',

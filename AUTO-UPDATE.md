@@ -14,8 +14,8 @@ The auto-update infrastructure has been successfully modified to work with stati
 - Generates update manifest with version info and SHA256 hashes
 
 ### 2. Update Feed Generation
-- Static JSON feed hosted on GitHub releases
-- Main feed: `https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/updates-feed.json`
+- Static JSON feeds hosted on GitHub releases
+- Platform manifests: `https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/latest-{platform}.json`
 - Squirrel.Mac compatible feeds for each platform
 
 ### 3. Feed Structure
@@ -56,22 +56,6 @@ Files: `latest-{linux-x64|linux-arm64|win32-x64|win32-arm64}.json`
 }
 ```
 
-#### Main Feed (All platforms)
-File: `updates-feed.json`
-```json
-{
-  "latest": {
-    "darwin-universal": { ... },
-    "linux-x64": { ... },
-    "win32-x64": { ... }
-  },
-  "releases": {
-    "1.104.1": { ... },
-    "1.104.0": { ... }
-  }
-}
-```
-
 ## How It Works
 
 ### Update URL Configuration
@@ -80,6 +64,8 @@ The `product.json` contains:
 "updateUrl": "https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed",
 "darwinUniversalAssetId": "darwin-universal"
 ```
+
+The updater reads the platform-specific manifests (for example `latest-darwin-universal.json`, `latest-linux-x64.json`) hosted in the `update-feed` release.
 
 ### Modified Update Service
 We've modified VS Code's `createUpdateURL` function in `abstractUpdateService.ts` to generate correct URLs for our static feeds:

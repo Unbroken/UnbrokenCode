@@ -8,6 +8,7 @@
 const gulp = require('gulp');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const es = require('event-stream');
 const vfs = require('vinyl-fs');
 const rename = require('gulp-rename');
@@ -27,13 +28,15 @@ const product = require('../product.json');
 const crypto = require('crypto');
 const i18n = require('./lib/i18n');
 const { getProductionDependencies } = require('./lib/dependencies');
-const { config } = require('./lib/electron');
+const { config, stripDarwinCFBundleIconFileExtension } = require('./lib/electron');
 const createAsar = require('./lib/asar').createAsar;
 const minimist = require('minimist');
 const { compileBuildWithoutManglingTask, compileBuildWithManglingTask } = require('./gulpfile.compile');
 const { compileNonNativeExtensionsBuildTask, compileNativeExtensionsBuildTask, compileAllExtensionsBuildTask, compileExtensionMediaBuildTask, cleanExtensionsBuildTask } = require('./gulpfile.extensions');
 const { promisify } = require('util');
 const glob = promisify(require('glob'));
+const cp = require('child_process');
+const execFileAsync = promisify(cp.execFile);
 const rcedit = promisify(require('rcedit'));
 
 // Build
@@ -207,6 +210,68 @@ function computeChecksum(filename) {
 	return hash;
 }
 
+const DARWIN_DEFAULT_APP_ICON_NAME = 'Unbroken Code';
+
+async function compileDarwinAssetCatalog(resourcesDir, options) {
+	const { appIconName, inputAssetPaths } = options;
+
+	if (process.platform !== 'darwin') {
+		console.warn('Skipping asset catalog compilation: requires macOS.');
+		return;
+	}
+
+	if (!inputAssetPaths.length) {
+		return;
+	}
+
+	const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'unbrokencode-actool-'));
+	const partialInfoPlist = path.join(tmpDir, 'asset-partial-info.plist');
+
+	try {
+		try {
+			await fs.promises.unlink(path.join(resourcesDir, 'Assets.car'));
+		} catch (error) {
+			if (error && error.code !== 'ENOENT') {
+				throw error;
+			}
+		}
+
+		const args = [
+			'actool',
+			'--compile', resourcesDir,
+			'--platform', 'macosx',
+			'--minimum-deployment-target', '10.13',
+			'--output-partial-info-plist', partialInfoPlist,
+			'--warnings',
+			'--notices',
+			'--compress-pngs',
+		];
+
+		if (appIconName) {
+			args.push('--app-icon', appIconName);
+		}
+
+		args.push(...inputAssetPaths);
+
+		const { stdout, stderr } = await execFileAsync('xcrun', args, { cwd: root });
+		if (stdout && stdout.trim()) {
+			console.log(stdout.trim());
+		}
+		if (stderr && stderr.trim()) {
+			console.log(stderr.trim());
+		}
+	} finally {
+		try {
+			await fs.promises.rm(tmpDir, { recursive: true, force: true });
+		} catch (error) {
+		}
+	}
+
+	if (!fs.existsSync(path.join(resourcesDir, 'Assets.car'))) {
+		throw new Error(`Failed to generate Assets.car in ${resourcesDir}`);
+	}
+}
+
 function packageTask(platform, arch, sourceFolderName, destinationFolderName, opts) {
 	opts = opts || {};
 
@@ -215,11 +280,24 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 	const destination = path.join(buildOutputDir, destinationFolderName);
 	platform = platform || process.platform;
 
-	const task = () => {
+	const task = async () => {
 		const electron = require('@vscode/gulp-electron');
 		const json = require('gulp-json-editor');
 
 		const out = sourceFolderName;
+		const assetCatalogPath = path.join(root, 'resources', 'darwin', 'Assets.xcassets');
+		const codeIconPath = path.join(root, 'resources', 'darwin', 'Unbroken Code.icon');
+		const hasAssetCatalog = fs.existsSync(assetCatalogPath);
+		const hasCodeIcon = fs.existsSync(codeIconPath);
+		const codeIconName = hasCodeIcon ? path.basename(codeIconPath, path.extname(codeIconPath)) : undefined;
+		const appIconName = codeIconName ?? (hasAssetCatalog ? DARWIN_DEFAULT_APP_ICON_NAME : undefined);
+		const actoolInputs = [];
+		if (hasAssetCatalog) {
+			actoolInputs.push(assetCatalogPath);
+		}
+		if (hasCodeIcon) {
+			actoolInputs.push(codeIconPath);
+		}
 
 		const checksums = computeChecksums(out, [
 			'vs/base/parts/sandbox/electron-browser/preload.js',
@@ -286,9 +364,9 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 		const telemetry = gulp.src('.build/telemetry/**', { base: '.build/telemetry', dot: true });
 
 		const jsFilter = util.filter(data => !data.isDirectory() && /\.js$/.test(data.path));
-		const root = path.resolve(path.join(__dirname, '..'));
-		const productionDependencies = getProductionDependencies(root);
-		const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat().concat('!**/*.mk');
+		const workspaceRoot = path.resolve(path.join(__dirname, '..'));
+		const productionDependencies = getProductionDependencies(workspaceRoot);
+		const dependenciesSrc = productionDependencies.map(d => path.relative(workspaceRoot, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat().concat('!**/*.mk');
 
 		const deps = gulp.src(dependenciesSrc, { base: '.', dot: true })
 			.pipe(filter(['**', `!**/${config.version}/**`, '!**/bin/darwin-arm64-87/**', '!**/package-lock.json', '!**/yarn.lock', '!**/*.{js,css}.map']))
@@ -370,7 +448,13 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 			.pipe(util.skipDirectories())
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
-			.pipe(electron({ ...config, platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }))
+			.pipe(electron({ ...config, platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }));
+
+		if (platform === 'darwin') {
+			result = result.pipe(stripDarwinCFBundleIconFileExtension(appIconName));
+		}
+
+		result = result
 			.pipe(filter(['**', '!LICENSE', '!version'], { dot: true }));
 
 		if (platform === 'linux') {
@@ -435,7 +519,21 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 			productJsonFn: () => productJsonContents
 		});
 
-		return result.pipe(vfs.dest(destination));
+		const packagedStream = result.pipe(vfs.dest(destination));
+		await util.streamToPromise(packagedStream);
+
+		if (platform === 'darwin') {
+			const appBundlePath = path.join(destination, `${product.nameLong}.app`);
+			const resourcesDir = path.join(appBundlePath, 'Contents', 'Resources');
+			if (!fs.existsSync(resourcesDir)) {
+				throw new Error(`Expected to find macOS resources at ${resourcesDir}`);
+			}
+			if (actoolInputs.length) {
+				await compileDarwinAssetCatalog(resourcesDir, { appIconName, inputAssetPaths: actoolInputs });
+			} else {
+				console.warn('Skipping asset catalog compilation: no asset inputs found.');
+			}
+		}
 	};
 	task.taskName = `package-${platform}-${arch}`;
 	return task;

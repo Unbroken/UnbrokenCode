@@ -1,0 +1,397 @@
+name: Build Release Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        type: boolean
+        default: false
+        description: "Publish the GitHub release after all builds succeed"
+      regenerate_dmg:
+        type: boolean
+        default: false
+        description: "Force regeneration of macOS DMG images"
+      skip_gulp_build:
+        type: boolean
+        default: false
+        description: "Skip gulp build steps (only repackage existing artifacts)"
+      create_release:
+        type: boolean
+        default: true
+        description: "Create/update a draft release and upload assets"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: build-release
+  cancel-in-progress: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SKIP_NVM_SETUP: "1"
+  INSTALL_PLATFORM_PREREQS: "1"
+
+jobs:
+  authorize:
+    name: Authorize Trigger
+    runs-on: ubuntu-22.04
+    environment: Build Deploy
+    outputs:
+      publish_release: ${{ inputs.publish_release }}
+      regenerate_dmg: ${{ inputs.regenerate_dmg }}
+      skip_gulp_build: ${{ inputs.skip_gulp_build }}
+      create_release: ${{ inputs.create_release }}
+    steps:
+      - name: Ensure triggering actor is allowed
+        env:
+          ACTOR: ${{ github.actor }}
+          ALLOWED_ACTORS: ${{ vars.RELEASE_BUILD_ADMINS || github.repository_owner }}
+          PUBLISH_RELEASE_INPUT: ${{ inputs.publish_release }}
+          CREATE_RELEASE_INPUT: ${{ inputs.create_release }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra allowed_list <<< "$ALLOWED_ACTORS"
+          authorized=false
+          for user in "${allowed_list[@]}"; do
+            trimmed="$(echo "$user" | xargs)"
+            [ -z "$trimmed" ] && continue
+            if [ "$ACTOR" = "$trimmed" ]; then
+              authorized=true
+              break
+            fi
+          done
+          if [ "$authorized" != "true" ]; then
+            echo "This workflow may only be triggered by: $ALLOWED_ACTORS" >&2
+            exit 1
+          fi
+          echo "Authorized actor: $ACTOR"
+
+          if [ "$PUBLISH_RELEASE_INPUT" = "true" ] && [ "$CREATE_RELEASE_INPUT" != "true" ]; then
+            echo "--publish requires create_release=true" >&2
+            exit 1
+          fi
+
+  macos:
+    name: Build macOS
+    needs: authorize
+    runs-on: macos-14
+    environment: Build Deploy
+    env:
+      APPLE_KEYCHAIN_PROFILE: ${{ vars.APPLE_KEYCHAIN_PROFILE || 'Unbroken Notary' }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install signing certificate
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MACOS_CERTIFICATE_BASE64" ] || [ -z "$MACOS_CERTIFICATE_PASSWORD" ] || [ -z "$MACOS_KEYCHAIN_PASSWORD" ]; then
+            echo "macOS signing secrets are missing. Configure MACOS_CERTIFICATE_BASE64, MACOS_CERTIFICATE_PASSWORD, and MACOS_KEYCHAIN_PASSWORD." >&2
+            exit 1
+          fi
+          CERT_PATH="$RUNNER_TEMP/signing-cert.p12"
+          echo "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          KEYCHAIN_PATH="$RUNNER_TEMP/unbroken-signing.keychain-db"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/["']//g')
+          rm -f "$CERT_PATH"
+          echo "MACOS_CODESIGN_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Configure notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.MACOS_NOTARIZE_APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.MACOS_NOTARIZE_TEAM_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.MACOS_NOTARIZE_APP_PASSWORD }}
+          APPLE_KEYCHAIN_PROFILE: ${{ env.APPLE_KEYCHAIN_PROFILE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APP_SPECIFIC_PASSWORD" ]; then
+            echo "macOS notarization secrets are missing. Configure MACOS_NOTARIZE_APPLE_ID, MACOS_NOTARIZE_TEAM_ID, and MACOS_NOTARIZE_APP_PASSWORD." >&2
+            exit 1
+          fi
+          if [ -z "${MACOS_CODESIGN_KEYCHAIN:-}" ] || [ ! -f "$MACOS_CODESIGN_KEYCHAIN" ]; then
+            echo "Signing keychain not available for notarization credential storage." >&2
+            exit 1
+          fi
+          if xcrun notarytool list-profiles --keychain "$MACOS_CODESIGN_KEYCHAIN" | grep -F "Name: $APPLE_KEYCHAIN_PROFILE" >/dev/null 2>&1; then
+            echo "Notarization profile '$APPLE_KEYCHAIN_PROFILE' already present"
+          else
+            export NOTARYTOOL_APPLE_ID="$APPLE_ID"
+            export NOTARYTOOL_APP_PASSWORD="$APP_SPECIFIC_PASSWORD"
+            xcrun notarytool store-credentials "$APPLE_KEYCHAIN_PROFILE" \
+              --apple-id @env:NOTARYTOOL_APPLE_ID \
+              --team-id "$APPLE_TEAM_ID" \
+              --password @env:NOTARYTOOL_APP_PASSWORD \
+              --keychain "$MACOS_CODESIGN_KEYCHAIN"
+            unset NOTARYTOOL_APPLE_ID NOTARYTOOL_APP_PASSWORD
+            echo "Stored notarization profile '$APPLE_KEYCHAIN_PROFILE'"
+          fi
+
+      - name: Build binaries
+        env:
+          REGENERATE_DMG: ${{ needs.authorize.outputs.regenerate_dmg }}
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+          CREATE_RELEASE_FLAG: ${{ needs.authorize.outputs.create_release }}
+          PUBLISH_RELEASE_FLAG: ${{ needs.authorize.outputs.publish_release }}
+        run: |
+          set -euo pipefail
+          args=(--macos)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          if [ "$REGENERATE_DMG" = "true" ]; then
+            args+=("--regenerate-dmg")
+          fi
+          if [ "$CREATE_RELEASE_FLAG" = "true" ] || [ "$PUBLISH_RELEASE_FLAG" = "true" ]; then
+            args+=("--release")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+      - name: Remove temporary keychain
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${MACOS_CODESIGN_KEYCHAIN:-}" ] && [ -f "$MACOS_CODESIGN_KEYCHAIN" ]; then
+            security delete-keychain "$MACOS_CODESIGN_KEYCHAIN" || true
+          fi
+        shell: bash
+
+  windows:
+    name: Build Windows
+    if: needs.authorize.outputs.create_release == 'true'
+    needs:
+      - macos
+      - authorize
+    runs-on: windows-latest
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+          CREATE_RELEASE_FLAG: ${{ needs.authorize.outputs.create_release }}
+          PUBLISH_RELEASE_FLAG: ${{ needs.authorize.outputs.publish_release }}
+        run: |
+          set -euo pipefail
+          args=(--windows)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          if [ "$CREATE_RELEASE_FLAG" = "true" ] || [ "$PUBLISH_RELEASE_FLAG" = "true" ]; then
+            args+=("--release")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+  linux_x64:
+    name: Build Linux x64
+    if: needs.authorize.outputs.create_release == 'true'
+    needs:
+      - windows
+      - authorize
+    runs-on: ubuntu-22.04
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+          CREATE_RELEASE_FLAG: ${{ needs.authorize.outputs.create_release }}
+          PUBLISH_RELEASE_FLAG: ${{ needs.authorize.outputs.publish_release }}
+        run: |
+          set -euo pipefail
+          args=(--linux)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          if [ "$CREATE_RELEASE_FLAG" = "true" ] || [ "$PUBLISH_RELEASE_FLAG" = "true" ]; then
+            args+=("--release")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+  linux_arm64:
+    name: Build Linux arm64
+    if: needs.authorize.outputs.create_release == 'true'
+    needs:
+      - linux_x64
+      - authorize
+    runs-on: ubuntu-22.04-arm64
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+          CREATE_RELEASE_FLAG: ${{ needs.authorize.outputs.create_release }}
+          PUBLISH_RELEASE: ${{ needs.authorize.outputs.publish_release }}
+        run: |
+          set -euo pipefail
+          args=(--linux)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          if [ "$CREATE_RELEASE_FLAG" = "true" ] || [ "$PUBLISH_RELEASE" = "true" ]; then
+            args+=("--release")
+          fi
+          if [ "$PUBLISH_RELEASE" = "true" ]; then
+            args+=("--publish")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+  windows_build_only:
+    name: Build Windows (no release)
+    if: needs.authorize.outputs.create_release != 'true'
+    needs:
+      - authorize
+    runs-on: windows-latest
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+        run: |
+          set -euo pipefail
+          args=(--windows)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+  linux_x64_build_only:
+    name: Build Linux x64 (no release)
+    if: needs.authorize.outputs.create_release != 'true'
+    needs:
+      - authorize
+    runs-on: ubuntu-22.04
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+        run: |
+          set -euo pipefail
+          args=(--linux)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash
+
+  linux_arm64_build_only:
+    name: Build Linux arm64 (no release)
+    if: needs.authorize.outputs.create_release != 'true'
+    needs:
+      - authorize
+    runs-on: ubuntu-22.04-arm64
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Build binaries
+        env:
+          SKIP_GULP_BUILD_INPUT: ${{ needs.authorize.outputs.skip_gulp_build }}
+        run: |
+          set -euo pipefail
+          args=(--linux)
+          if [ "$SKIP_GULP_BUILD_INPUT" = "true" ]; then
+            args+=("--skip-gulp-build")
+          fi
+          ./build-unbroken-code.sh "${args[@]}"
+        shell: bash

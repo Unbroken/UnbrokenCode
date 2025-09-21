@@ -14,6 +14,90 @@ BUILD_MACOS=true
 BUILD_LINUX=false
 IGNORE_SUBMODULE_CHECK=false
 
+# Helper to evaluate truthy environment/flag values (accepts 1, true, yes, on)
+function is_truthy()
+{
+	local value="${1:-}"
+	value="$(echo "$value" | tr '[:upper:]' '[:lower:]')"
+	case "$value" in
+		1|true|yes|on)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+# Install platform-specific prerequisites when enabled
+function ensure_platform_prerequisites()
+{
+	if ! is_truthy "${INSTALL_PLATFORM_PREREQS:-0}"; then
+		return 0
+	fi
+
+	local uname_s="$(uname -s 2>/dev/null || echo unknown)"
+	case "$uname_s" in
+		Linux)
+			if command -v apt-get >/dev/null 2>&1; then
+				echo "Installing Linux prerequisites via apt-get..."
+				sudo apt-get update
+				sudo DEBIAN_FRONTEND=noninteractive apt-get install -y rpm pkg-config libssl-dev dpkg-dev rpm
+			elif command -v dnf >/dev/null 2>&1; then
+				echo "Installing Linux prerequisites via dnf..."
+				sudo dnf install -y rpm-build pkgconf-pkg-config openssl-devel
+			else
+				echo "Warning: No supported package manager found for installing Linux prerequisites" >&2
+			fi
+			;;
+		darwin*)
+			echo "macOS prerequisites are managed separately; nothing to install"
+			;;
+		MINGW*|MSYS*|CYGWIN*)
+			echo "Windows prerequisites handled externally; nothing to install"
+			;;
+		*)
+			echo "Unknown platform '$uname_s'; skipping automatic prerequisite installation" >&2
+			;;
+	esac
+}
+
+# Ensure the active Node.js version matches the value declared in .nvmrc
+function ensure_node_version_matches()
+{
+	if [ ! -f ".nvmrc" ]; then
+		return 0
+	fi
+
+	local expected_raw expected actual
+	expected_raw="$(tr -d ' \t\r\n' < .nvmrc)"
+	if [ -z "$expected_raw" ]; then
+		return 0
+	fi
+	if [[ "$expected_raw" == v* ]]; then
+		expected="$expected_raw"
+	else
+		expected="v$expected_raw"
+	fi
+
+	if ! command -v node >/dev/null 2>&1; then
+		echo "Node.js is not available; required version from .nvmrc is $expected" >&2
+		exit 1
+	fi
+
+	actual="$(node -v 2>/dev/null || echo "")"
+	if [ -z "$actual" ]; then
+		echo "Unable to determine active Node.js version" >&2
+		exit 1
+	fi
+
+	if [ "$actual" != "$expected" ]; then
+		echo "Active Node.js version $actual does not match required $expected from .nvmrc" >&2
+		echo "Install the correct version or disable SKIP_NVM_SETUP" >&2
+		exit 1
+	fi
+}
+
 # Auto-detect platform if no explicit platform flags are given
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
 	# We're on Windows (Git Bash), default to Windows build
@@ -372,41 +456,58 @@ fi
 
 # 1) Load NVM (handles common install locations)
 if $BUILD_WINDOWS ; then
-	nvm install `cat .nvmrc`
-	nvm use `cat .nvmrc`
-else
-	export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-
-	# Check common NVM locations
-	if [ -s "$NVM_DIR/nvm.sh" ]; then                 # Standard location (Linux & macOS)
-		. "$NVM_DIR/nvm.sh"
-	elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then  # macOS (Apple Silicon via Homebrew)
-		export NVM_DIR="/opt/homebrew/opt/nvm"
-		. "/opt/homebrew/opt/nvm/nvm.sh"
-	elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
-		export NVM_DIR="/usr/local/opt/nvm"
-		. "/usr/local/opt/nvm/nvm.sh"
-	elif [ -s "$HOME/.nvm/nvm.sh" ]; then             # Fallback to home directory
-		export NVM_DIR="$HOME/.nvm"
-		. "$HOME/.nvm/nvm.sh"
+	if is_truthy "${SKIP_NVM_SETUP:-0}"; then
+		echo "Skipping NVM setup; using existing Node version"
+		ensure_node_version_matches
 	else
-		echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
-		echo "To install nvm on Linux/macOS: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash" >&2
-		exit 1
+		nvm install `cat .nvmrc`
+		nvm use `cat .nvmrc`
 	fi
-
-	# 2) Respect .nvmrc (nearest one in the directory tree)
-	#    - Installs the version if needed (no output unless errors)
-	#    - Uses 'default' if no .nvmrc is found
-	if nvmrc_path="$(nvm_find_nvmrc)"; then
-		# Install (if missing) and use the version from .nvmrc
-		nvm install --no-progress
-		nvm use
+else
+	if is_truthy "${SKIP_NVM_SETUP:-0}"; then
+		echo "Skipping NVM setup; using existing Node version"
+		if ! command -v node >/dev/null 2>&1; then
+			echo "Node.js is not available; install it or disable SKIP_NVM_SETUP" >&2
+			exit 1
+		fi
+		ensure_node_version_matches
 	else
-		# No .nvmrc here; use your default if set
-		nvm use default || true
+		export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+
+		# Check common NVM locations
+		if [ -s "$NVM_DIR/nvm.sh" ]; then                 # Standard location (Linux & macOS)
+			. "$NVM_DIR/nvm.sh"
+		elif [ -s "/opt/homebrew/opt/nvm/nvm.sh" ]; then  # macOS (Apple Silicon via Homebrew)
+			export NVM_DIR="/opt/homebrew/opt/nvm"
+			. "/opt/homebrew/opt/nvm/nvm.sh"
+		elif [ -s "/usr/local/opt/nvm/nvm.sh" ]; then     # macOS (Intel via Homebrew)
+			export NVM_DIR="/usr/local/opt/nvm"
+			. "/usr/local/opt/nvm/nvm.sh"
+		elif [ -s "$HOME/.nvm/nvm.sh" ]; then             # Fallback to home directory
+			export NVM_DIR="$HOME/.nvm"
+			. "$HOME/.nvm/nvm.sh"
+		else
+			echo "nvm not found. Ensure NVM is installed and NVM_DIR is set." >&2
+			echo "To install nvm on Linux/macOS: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash" >&2
+			exit 1
+		fi
+
+		# 2) Respect .nvmrc (nearest one in the directory tree)
+		#    - Installs the version if needed (no output unless errors)
+		#    - Uses 'default' if no .nvmrc is found
+		if nvmrc_path="$(nvm_find_nvmrc)"; then
+			# Install (if missing) and use the version from .nvmrc
+			nvm install --no-progress
+			nvm use
+		else
+			# No .nvmrc here; use your default if set
+			nvm use default || true
+		fi
 	fi
 fi
+
+ensure_platform_prerequisites
+ensure_node_version_matches
 
 echo "Using Node $(node -v) at $(command -v node)"
 
@@ -1006,10 +1107,10 @@ function Build_macOS()
 	export AGENT_TEMPDIRECTORY=`mktemp -d`
 	echo "AGENT_TEMPDIRECTORY: $AGENT_TEMPDIRECTORY"
 
-	export CODESIGN_IDENTITY="E9944AF714BFA859585C2217AF833B286AB09E31"
+	export CODESIGN_IDENTITY="${CODESIGN_IDENTITY:-E9944AF714BFA859585C2217AF833B286AB09E31}"
 
 	# Set the keychain profile for notarization
-	export APPLE_KEYCHAIN_PROFILE="Unbroken Notary"
+	export APPLE_KEYCHAIN_PROFILE="${APPLE_KEYCHAIN_PROFILE:-Unbroken Notary}"
 
 	# Sign all architectures
 	if $DO_SIGN; then

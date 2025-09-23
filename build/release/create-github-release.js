@@ -585,9 +585,9 @@ async function publishExistingRelease(octokit, release, manifestMap, draft, rele
         release_id: release.id,
         tag_name: tagName,
         name: release.name || tagName,
-        body: releaseBody,
         draft: draft,
-        target_commitish: release.target_commitish || commit
+        target_commitish: release.target_commitish || commit,
+        ...(releaseBody === undefined ? {} : { body: releaseBody }),
     });
     console.log('Release updated successfully!');
 }
@@ -1034,7 +1034,7 @@ async function deleteReleaseAssetWithRetry(octokit, assetId, assetName) {
 async function main() {
     const shouldPublish = process.argv.includes('--publish');
     const regenerateDMG = process.argv.includes('--regenerate-dmg');
-    const generateDescriptionOnly = process.argv.includes('--generate-release-description');
+    const generateDescription = process.argv.includes('--generate-release-description');
     const distDir = path.join(__dirname, '../../.dist');
     const product = getProductInfo();
     const packageInfo = getPackageInfo();
@@ -1044,7 +1044,7 @@ async function main() {
     const versionFromPackage = packageInfo.version;
     const tagNameFromVersion = `release/${versionFromPackage}`;
     // Publish-only path: download manifests and publish release without local builds
-    if (shouldPublish || generateDescriptionOnly) {
+    if (shouldPublish || generateDescription) {
         console.log(`Fetching release ${tagNameFromVersion} for ${shouldPublish ? 'publishing' : 'description generation'}...`);
         const releaseName = `${product.nameLong} ${versionFromPackage}`;
         const existingRelease = await findExistingRelease(octokit, tagNameFromVersion, releaseName);
@@ -1067,8 +1067,11 @@ async function main() {
         if (!commitForNotes) {
             throw new Error('Unable to determine commit for release notes');
         }
-        const releaseNotes = await generateReleaseNotes(commitForNotes, tagNameFromVersion);
-        const releaseBody = buildReleaseBody(manifestMap, tagNameFromVersion, commitForNotes, releaseNotes);
+        let releaseBody;
+        if (generateDescription) {
+            const releaseNotes = await generateReleaseNotes(commitForNotes, tagNameFromVersion);
+            releaseBody = buildReleaseBody(manifestMap, tagNameFromVersion, commitForNotes, releaseNotes);
+        }
         if (!shouldPublish) {
             await publishExistingRelease(octokit, existingRelease, manifestMap, true, releaseBody);
             return;

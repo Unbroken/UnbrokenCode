@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as crypto from 'crypto';
-import { Octokit } from '@octokit/rest';
+import { RestEndpointMethodTypes, Octokit } from '@octokit/rest';
 import { getGitHubToken } from './create-github-release';
 
 const REPO_OWNER = 'Unbroken';
@@ -68,6 +68,34 @@ function mapPlatformToFeedKey(manifest: PlatformManifest): string {
 	return `${platform}-${manifest.arch}`;
 }
 
+function getFeedKeysForAsset(manifest: PlatformManifest, baseKey: string, assetKey: string): string[] {
+	if (manifest.platform === 'windows') {
+		switch (assetKey) {
+			case 'installer-system':
+				return [`${baseKey}-system-setup`];
+			case 'installer-user':
+				return [`${baseKey}-user-setup`];
+			case 'app-zip':
+				return [baseKey, `${baseKey}-archive`];
+			default:
+				return [];
+		}
+	}
+	if (manifest.platform === 'macos') {
+		if (assetKey === 'app-zip') {
+			return [baseKey];
+		}
+		return [];
+	}
+	if (manifest.platform === 'linux') {
+		if (assetKey === 'app-tar') {
+			return [baseKey];
+		}
+		return [];
+	}
+	return [];
+}
+
 function parseManifest(content: string, fallbackPlatform?: PlatformManifest['platform'], fallbackArch?: PlatformManifest['arch']): PlatformManifest {
 	const parsed = JSON.parse(content);
 	return {
@@ -117,55 +145,127 @@ async function downloadAssetContent(octokit: Octokit, assetId: number): Promise<
 	}
 }
 
-async function generateUpdateFeed(octokit: Octokit): Promise<UpdateFeed> {
-	console.log('Fetching releases from GitHub...');
+type GitHubRelease = RestEndpointMethodTypes['repos']['listReleases']['response']['data'][number];
+
+async function fetchLatestProductRelease(octokit: Octokit): Promise<GitHubRelease | null> {
+	try {
+		const { data } = await octokit.repos.getLatestRelease({
+			owner: REPO_OWNER,
+			repo: REPO_NAME
+		});
+		const latestRelease = data as GitHubRelease;
+		if (latestRelease.tag_name !== FEED_RELEASE_TAG) {
+			return latestRelease;
+		}
+		console.warn(`Latest release is ${FEED_RELEASE_TAG}, searching for previous published release...`);
+	} catch (error: any) {
+		if (error.status !== 404) {
+			throw error;
+		}
+		console.warn('No published releases found via getLatestRelease.');
+	}
 
 	const { data: releases } = await octokit.repos.listReleases({
 		owner: REPO_OWNER,
 		repo: REPO_NAME,
 		per_page: 100
 	});
+	return releases.find((release): release is GitHubRelease => !release.draft && !release.prerelease && release.tag_name !== FEED_RELEASE_TAG) ?? null;
+}
+
+async function generateUpdateFeed(octokit: Octokit): Promise<UpdateFeed> {
+	console.log('Fetching latest release from GitHub...');
+
+	const release = await fetchLatestProductRelease(octokit);
 
 	const feed: UpdateFeed = {
 		latest: {},
 		releases: {},
-		lastUpdated: 0 // Will be set to the largest timestamp from processed releases
+		lastUpdated: 0
 	};
 
+	if (!release) {
+		console.warn('No suitable release found for update feed generation.');
+		feed.lastUpdated = Date.now();
+		return feed;
+	}
+
+	const version = parseVersion(release.tag_name);
+	const commit = extractCommitFromNotes(release.body || '');
+	const manifestAssets = release.assets?.filter(asset => asset.name?.startsWith('manifest-') && asset.name.endsWith('.json')) ?? [];
+
+	if (manifestAssets.length === 0) {
+		console.warn(`No manifest assets found for ${release.tag_name}, unable to generate feed.`);
+		feed.lastUpdated = Date.now();
+		return feed;
+	}
+
+	feed.releases[version] = {};
 	let lastUpdatedTimestamp = 0;
 
-	// Process releases (they come sorted by date, newest first)
-	for (const release of releases) {
-		// Skip drafts, prereleases, and the feed release itself
-		if (release.draft || release.prerelease || release.tag_name === FEED_RELEASE_TAG) {
-			continue;
-		}
-
-		const version = parseVersion(release.tag_name);
-		const commit = extractCommitFromNotes(release.body || '');
-
-		console.log(`Processing release: ${version}`);
-
-		const manifestAssets = release.assets?.filter(a => a.name?.startsWith('manifest-') && a.name.endsWith('.json')) ?? [];
-
-		if (manifestAssets.length > 0) {
-			if (!feed.releases[version]) {
-				feed.releases[version] = {};
+	for (const asset of manifestAssets) {
+		try {
+			const fallbackPlatform = asset.name.includes('windows') ? 'windows' : asset.name.includes('macos') ? 'macos' : 'linux';
+			const fallbackArch = asset.name.includes('arm64') ? 'arm64' : asset.name.includes('universal') ? 'universal' : 'x64';
+			const content = await downloadAssetContent(octokit, asset.id);
+			const manifest = parseManifest(content, fallbackPlatform as PlatformManifest['platform'], fallbackArch as PlatformManifest['arch']);
+			const platformKey = mapPlatformToFeedKey(manifest);
+			const releaseTimestamp = new Date(release.published_at || release.created_at).getTime();
+			const assetEntries = Object.entries(manifest.assets) as [string, ManifestAsset][];
+			if (assetEntries.length === 0) {
+				continue;
 			}
-			for (const asset of manifestAssets) {
-				try {
-					const fallbackPlatform = asset.name.includes('windows') ? 'windows' : asset.name.includes('macos') ? 'macos' : 'linux';
-					const fallbackArch = asset.name.includes('arm64') ? 'arm64' : asset.name.includes('universal') ? 'universal' : 'x64';
-					const content = await downloadAssetContent(octokit, asset.id);
-					const manifest = parseManifest(content, fallbackPlatform as PlatformManifest['platform'], fallbackArch as PlatformManifest['arch']);
-					const platformKey = mapPlatformToFeedKey(manifest);
-					const fastAssetEntry = Object.entries(manifest.assets).find(([, info]) => info.supportsFastUpdate);
-					if (!fastAssetEntry) {
-						continue;
+
+			const recordEntry = (key: string, entry: UpdateFeedEntry) => {
+				const entryCopy = { ...entry };
+				if (entryCopy.timestamp > lastUpdatedTimestamp) {
+					lastUpdatedTimestamp = entryCopy.timestamp;
+				}
+				feed.releases[version][key] = entryCopy;
+				if (!feed.latest[key] || entryCopy.timestamp > feed.latest[key].timestamp) {
+					feed.latest[key] = entryCopy;
+				}
+			};
+
+			let baseAssigned = false;
+
+			for (const [assetKey, assetInfo] of assetEntries) {
+				const entryTimestamp = manifest.timestamp || releaseTimestamp;
+				const entry: UpdateFeedEntry = {
+					version: manifest.version || version,
+					productVersion: manifest.productVersion || manifest.version || version,
+					timestamp: entryTimestamp,
+					url: assetInfo.url,
+					sha256hash: assetInfo.sha256hash,
+					size: assetInfo.size,
+					supportsFastUpdate: assetInfo.supportsFastUpdate !== false,
+					quality: manifest.quality || 'stable',
+					commit: commit || manifest.commit
+				};
+
+				let targetKeys = getFeedKeysForAsset(manifest, platformKey, assetKey);
+				if (targetKeys.length === 0 && assetInfo.supportsFastUpdate !== false && !baseAssigned) {
+					targetKeys = [platformKey];
+				}
+
+				if (targetKeys.length === 0) {
+					continue;
+				}
+
+				for (const key of targetKeys) {
+					recordEntry(key, entry);
+					if (key === platformKey) {
+						baseAssigned = true;
 					}
+				}
+			}
+
+			if (!baseAssigned) {
+				const fastAssetEntry = assetEntries.find(([, info]) => info.supportsFastUpdate !== false) ?? assetEntries[0];
+				if (fastAssetEntry) {
 					const [, fastAsset] = fastAssetEntry;
-					const entryTimestamp = manifest.timestamp || new Date(release.published_at || release.created_at).getTime();
-					const entry: UpdateFeedEntry = {
+					const entryTimestamp = manifest.timestamp || releaseTimestamp;
+					const fallbackEntry: UpdateFeedEntry = {
 						version: manifest.version || version,
 						productVersion: manifest.productVersion || manifest.version || version,
 						timestamp: entryTimestamp,
@@ -176,21 +276,11 @@ async function generateUpdateFeed(octokit: Octokit): Promise<UpdateFeed> {
 						quality: manifest.quality || 'stable',
 						commit: commit || manifest.commit
 					};
-
-					if (entryTimestamp > lastUpdatedTimestamp) {
-						lastUpdatedTimestamp = entryTimestamp;
-					}
-
-					feed.releases[version][platformKey] = entry;
-					if (!feed.latest[platformKey] || entry.timestamp > feed.latest[platformKey].timestamp) {
-						feed.latest[platformKey] = entry;
-					}
-				} catch (error) {
-					console.warn(`Failed to process manifest ${asset.name} for ${release.tag_name}:`, error);
+					recordEntry(platformKey, fallbackEntry);
 				}
 			}
-		} else {
-			console.warn(`No manifest assets found for ${release.tag_name}, skipping`);
+		} catch (error) {
+			console.warn(`Failed to process manifest ${asset.name} for ${release.tag_name}:`, error);
 		}
 	}
 

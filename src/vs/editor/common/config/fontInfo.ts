@@ -219,15 +219,15 @@ export const FONT_VARIATION_TRANSLATE = 'translate';
 /**
  * @internal
  */
-export const DEFAULT_WINDOWS_FONT_FAMILY = 'UnbrokenEmbedded, Consolas, \'Courier New\', monospace';;
+export const DEFAULT_WINDOWS_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, Consolas, \'Courier New\', monospace';;
 /**
  * @internal
  */
-export const DEFAULT_MAC_FONT_FAMILY = 'UnbrokenEmbedded, Menlo, Monaco, \'Courier New\', monospace';
+export const DEFAULT_MAC_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace';
 /**
  * @internal
  */
-export const DEFAULT_LINUX_FONT_FAMILY = 'UnbrokenEmbedded, \'Droid Sans Mono\', \'monospace\', monospace';
+export const DEFAULT_LINUX_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, \'Droid Sans Mono\', \'monospace\', monospace';
 /**
  * @internal
  */

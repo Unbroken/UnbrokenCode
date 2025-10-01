@@ -5602,9 +5602,9 @@ class EditorPasteAs extends BaseEditorOption<EditorOption.pasteAs, IPasteAsOptio
 
 //#endregion
 
-const DEFAULT_WINDOWS_FONT_FAMILY = 'UnbrokenEmbedded, Consolas, \'Courier New\', monospace';
-const DEFAULT_MAC_FONT_FAMILY = 'UnbrokenEmbedded, Menlo, Monaco, \'Courier New\', monospace';
-const DEFAULT_LINUX_FONT_FAMILY = 'UnbrokenEmbedded, \'Droid Sans Mono\', \'monospace\', monospace';
+const DEFAULT_WINDOWS_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, Consolas, \'Courier New\', monospace';
+const DEFAULT_MAC_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace';
+const DEFAULT_LINUX_FONT_FAMILY = 'UnbrokenEmbedded, \'Unbroken Retina\', Unbroken, \'Droid Sans Mono\', \'monospace\', monospace';
 
 /**
  * @internal

@@ -18,13 +18,6 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 
 ### 🚀 Key Enhancements Over Standard VS Code
 
-#### **C++ Development Superpowers**
-- **Malterlib Extension** shipped by default - because why wouldn't you want this?
-- **Advanced Problem Matchers** with categorized sub-problems - finally, build errors that make sense
-- **Enhanced color space control** for syntax highlighting - your eyes will thank you
-- **Smaller error squiggles** - see your actual code, not just red lines
-- **Optimized underline positioning** for smaller fonts - pixel-perfect at any zoom level
-
 #### **Productivity Unleashed**
 - **Smart Problem Navigation** - actually remembers where you were when problems disappear
 - **Sequential Problem Output** - problems appear in the order they occur (revolutionary, right?)
@@ -32,6 +25,9 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - **Git Repository Filtering** - hide unchanged repos because clutter is the enemy
 - **More items in title bar** - use that space for something useful
 - **Minimal layout by default** - less chrome, more code
+- **Better Navigation**
+	- Consistent word based navigation: Search for SingleSeparator in keyboard shortcuts
+	- Consistent navigation around decorations such as inlay hints
 
 #### **Developer Experience First**
 - **Telemetry OFF by default** - your code is your business
@@ -42,6 +38,13 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - Waste less space in UI - every pixel counts
 - Layout icons stay visible even with editor actions in title bar
 - Thoughtfully designed defaults for a minimal, distraction-free experience
+
+#### **C++ Development Superpowers**
+- **Malterlib Extension** shipped by default - because why wouldn't you want this?
+- **Advanced Problem Matchers** with categorized sub-problems - finally, build errors that make sense
+- **Enhanced color space control** for syntax highlighting - your eyes will thank you
+- **Smaller error squiggles** - see your actual code, not just red lines
+- **Optimized underline positioning** for smaller fonts - pixel-perfect at any zoom level
 
 ## Installation
 

@@ -3210,7 +3210,7 @@ export type EditorInlayHintsOptions = Readonly<Required<IEditorInlayHintsOptions
 class EditorInlayHints extends BaseEditorOption<EditorOption.inlayHints, IEditorInlayHintsOptions, EditorInlayHintsOptions> {
 
 	constructor() {
-		const defaults: EditorInlayHintsOptions = { enabled: 'on', fontSize: 0, fontFamily: '', padding: false, maximumLength: 43 };
+		const defaults: EditorInlayHintsOptions = { enabled: 'offUnlessPressed', fontSize: 0, fontFamily: '', padding: false, maximumLength: 43 };
 		super(
 			EditorOption.inlayHints, 'inlayHints', defaults,
 			{

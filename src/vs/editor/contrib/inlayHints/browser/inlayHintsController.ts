@@ -653,18 +653,21 @@ export class InlayHintsController implements IEditorContribution {
 				if (padding) {
 					if (isFirst && (isLast || tooLong)) {
 						// only element
-						cssProperties.padding = `1px ${Math.max(1, fontSize / 4) | 0}px`;
+						cssProperties.padding = `0 ${Math.max(1, fontSize / 4) | 0}px`;
+						cssProperties.margin = `0 1px`;
 						cssProperties.borderRadius = `${(fontSize / 4) | 0}px`;
 					} else if (isFirst) {
 						// first element
-						cssProperties.padding = `1px 0 1px ${Math.max(1, fontSize / 4) | 0}px`;
+						cssProperties.padding = `0 0 0 ${Math.max(1, fontSize / 4) | 0}px`;
+						cssProperties.margin = `0 0 0 1px`;
 						cssProperties.borderRadius = `${(fontSize / 4) | 0}px 0 0 ${(fontSize / 4) | 0}px`;
 					} else if ((isLast || tooLong)) {
 						// last element
-						cssProperties.padding = `1px ${Math.max(1, fontSize / 4) | 0}px 1px 0`;
+						cssProperties.padding = `0 ${Math.max(1, fontSize / 4) | 0}px 0 0`;
+						cssProperties.margin = `0 1px 0 0`;
 						cssProperties.borderRadius = `0 ${(fontSize / 4) | 0}px ${(fontSize / 4) | 0}px 0`;
 					} else {
-						cssProperties.padding = `1px 0 1px 0`;
+						cssProperties.padding = `0`;
 					}
 				}
 
@@ -754,8 +757,7 @@ export class InlayHintsController implements IEditorContribution {
 
 		const fontFamily = options.fontFamily || editorFontFamily;
 
-		const isUniform = !padding
-			&& fontFamily === editorFontFamily
+		const isUniform = fontFamily === editorFontFamily
 			&& fontSize === editorFontSize;
 
 		return { fontSize, fontFamily, padding, isUniform };

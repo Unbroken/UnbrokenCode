@@ -16,7 +16,7 @@ import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { IEditorContribution, IEditorDecorationsCollection } from '../../../common/editorCommon.js';
-import { IModelDecoration, IModelDeltaDecoration } from '../../../common/model.js';
+import { IModelDecoration, IModelDeltaDecoration, InjectedTextCursorStops } from '../../../common/model.js';
 import { ModelDecorationOptions } from '../../../common/model/textModel.js';
 import { IFeatureDebounceInformation, ILanguageFeatureDebounceService } from '../../../common/services/languageFeatureDebounce.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -237,6 +237,7 @@ export class ColorDetector extends Disposable implements IEditorContribution {
 						inlineClassNameAffectsLetterSpacing: true,
 						attachedData: ColorDecorationInjectedTextMarker,
 						widthInEm,
+						cursorStops: InjectedTextCursorStops.Right
 					}
 				}
 			});

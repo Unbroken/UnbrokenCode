@@ -216,15 +216,28 @@ export class ModelLineProjectionData {
 				}
 
 				let index = injectedText.injectedTextIndex - 1;
+				let foundCursorStop = false;
 				while (index >= 0 && this.injectionOffsets![index] === this.injectionOffsets![injectedText.injectedTextIndex]) {
 					if (hasRightCursorStop(this.injectionOptions![index].cursorStops)) {
+						foundCursorStop = true;
 						break;
 					}
 					result -= this.injectionOptions![index].content.length;
 					if (hasLeftCursorStop(this.injectionOptions![index].cursorStops)) {
+						foundCursorStop = true;
 						break;
 					}
 					index--;
+				}
+
+				// If no cursor stop was found, position cursor at the end of all adjacent injected text
+				if (!foundCursorStop) {
+					result = injectedText.offsetInInputWithInjections + injectedText.length;
+					index = injectedText.injectedTextIndex;
+					while (index + 1 < this.injectionOffsets!.length && this.injectionOffsets![index + 1] === this.injectionOffsets![index]) {
+						result += this.injectionOptions![index + 1].content.length;
+						index++;
+					}
 				}
 
 				return result;

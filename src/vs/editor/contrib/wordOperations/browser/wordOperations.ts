@@ -109,6 +109,17 @@ export class CursorWordStartLeft extends WordLeftCommand {
 	}
 }
 
+export class CursorWordStartLeftSingleSeparator extends WordLeftCommand {
+	constructor() {
+		super({
+			inSelectionMode: false,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'cursorWordStartLeftSingleSeparator',
+			precondition: undefined,
+		});
+	}
+}
+
 export class CursorWordEndLeft extends WordLeftCommand {
 	constructor() {
 		super({
@@ -144,6 +155,17 @@ export class CursorWordStartLeftSelect extends WordLeftCommand {
 			wordNavigationType: WordNavigationType.WordStart,
 			id: 'cursorWordStartLeftSelect',
 			precondition: undefined
+		});
+	}
+}
+
+export class CursorWordStartLeftSingleSeparatorSelect extends WordLeftCommand {
+	constructor() {
+		super({
+			inSelectionMode: true,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'cursorWordStartLeftSingleSeparatorSelect',
+			precondition: undefined,
 		});
 	}
 }
@@ -218,6 +240,17 @@ export class CursorWordStartRight extends WordRightCommand {
 	}
 }
 
+export class CursorWordStartRightSingleSeparator extends WordRightCommand {
+	constructor() {
+		super({
+			inSelectionMode: false,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'cursorWordStartRightSingleSeparator',
+			precondition: undefined,
+		});
+	}
+}
+
 export class CursorWordEndRight extends WordRightCommand {
 	constructor() {
 		super({
@@ -253,6 +286,17 @@ export class CursorWordStartRightSelect extends WordRightCommand {
 			wordNavigationType: WordNavigationType.WordStart,
 			id: 'cursorWordStartRightSelect',
 			precondition: undefined
+		});
+	}
+}
+
+export class CursorWordStartRightSigleSeparatorSelect extends WordRightCommand {
+	constructor() {
+		super({
+			inSelectionMode: true,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'cursorWordStartRightSingleSeparatorSelect',
+			precondition: undefined,
 		});
 	}
 }
@@ -400,6 +444,17 @@ export class DeleteWordStartLeft extends DeleteWordLeftCommand {
 	}
 }
 
+export class DeleteWordStartLeftSingleSeparator extends DeleteWordLeftCommand {
+	constructor() {
+		super({
+			whitespaceHeuristics: false,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'deleteWordStartLeftSingleSeparator',
+			precondition: EditorContextKeys.writable,
+		});
+	}
+}
+
 export class DeleteWordEndLeft extends DeleteWordLeftCommand {
 	constructor() {
 		super({
@@ -428,6 +483,17 @@ export class DeleteWordLeft extends DeleteWordLeftCommand {
 	}
 }
 
+export class DeleteWordLeftSingleSeparator extends DeleteWordLeftCommand {
+	constructor() {
+		super({
+			whitespaceHeuristics: true,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'deleteWordLeftSingleSeparator',
+			precondition: EditorContextKeys.writable,
+		});
+	}
+}
+
 export class DeleteWordStartRight extends DeleteWordRightCommand {
 	constructor() {
 		super({
@@ -435,6 +501,17 @@ export class DeleteWordStartRight extends DeleteWordRightCommand {
 			wordNavigationType: WordNavigationType.WordStart,
 			id: 'deleteWordStartRight',
 			precondition: EditorContextKeys.writable
+		});
+	}
+}
+
+export class DeleteWordStartRightSingleSeparator extends DeleteWordRightCommand {
+	constructor() {
+		super({
+			whitespaceHeuristics: false,
+			wordNavigationType: WordNavigationType.WordStartSingleSeparator,
+			id: 'deleteWordStartRightSingleSeparator',
+			precondition: EditorContextKeys.writable,
 		});
 	}
 }
@@ -516,15 +593,19 @@ export class DeleteInsideWord extends EditorAction {
 }
 
 registerEditorCommand(new CursorWordStartLeft());
+registerEditorCommand(new CursorWordStartLeftSingleSeparator());
 registerEditorCommand(new CursorWordEndLeft());
 registerEditorCommand(new CursorWordLeft());
 registerEditorCommand(new CursorWordStartLeftSelect());
+registerEditorCommand(new CursorWordStartLeftSingleSeparatorSelect());
 registerEditorCommand(new CursorWordEndLeftSelect());
 registerEditorCommand(new CursorWordLeftSelect());
 registerEditorCommand(new CursorWordStartRight());
+registerEditorCommand(new CursorWordStartRightSingleSeparator());
 registerEditorCommand(new CursorWordEndRight());
 registerEditorCommand(new CursorWordRight());
 registerEditorCommand(new CursorWordStartRightSelect());
+registerEditorCommand(new CursorWordStartRightSigleSeparatorSelect());
 registerEditorCommand(new CursorWordEndRightSelect());
 registerEditorCommand(new CursorWordRightSelect());
 registerEditorCommand(new CursorWordAccessibilityLeft());
@@ -532,9 +613,12 @@ registerEditorCommand(new CursorWordAccessibilityLeftSelect());
 registerEditorCommand(new CursorWordAccessibilityRight());
 registerEditorCommand(new CursorWordAccessibilityRightSelect());
 registerEditorCommand(new DeleteWordStartLeft());
+registerEditorCommand(new DeleteWordStartLeftSingleSeparator());
 registerEditorCommand(new DeleteWordEndLeft());
 registerEditorCommand(new DeleteWordLeft());
+registerEditorCommand(new DeleteWordLeftSingleSeparator());
 registerEditorCommand(new DeleteWordStartRight());
+registerEditorCommand(new DeleteWordStartRightSingleSeparator());
 registerEditorCommand(new DeleteWordEndRight());
 registerEditorCommand(new DeleteWordRight());
 registerEditorAction(DeleteInsideWord);

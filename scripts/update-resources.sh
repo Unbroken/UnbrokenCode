@@ -28,7 +28,6 @@ set -euo pipefail
 #     ICONUTIL_EXTRACT_CMD below.
 
 MAIN_SRC="${1:-resources/linux/code.png}"
-APPICON_MAIN_SRC="${1:-resources/darwin/code.png}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES_DIR="$ROOT_DIR/resources"
 DARWIN_DIR="$RESOURCES_DIR/darwin"
@@ -47,13 +46,7 @@ if [ ! -f "$MAIN_SRC" ]; then
 	exit 1
 fi
 
-if [ ! -f "$APPICON_MAIN_SRC" ]; then
-	echo "App icon source not found: $APPICON_MAIN_SRC"
-	exit 1
-fi
-
 echo "Using main source: $MAIN_SRC"
-echo "Using app icon source: $APPICON_MAIN_SRC"
 
 # Image processing parameters for high-quality downsampling
 # Lanczos filter provides sharp results, unsharp mask enhances edges,
@@ -69,13 +62,6 @@ WORK_TMP="$(mktemp -d)"
 MAIN_NORMAL="$WORK_TMP/main-1024.png"
 # Use ImageMagick for initial normalization to maintain quality
 cp "$MAIN_SRC" "$MAIN_NORMAL"
-
-APPICON_NORMAL="$WORK_TMP/appicon-1024.png"
-cp "$APPICON_MAIN_SRC" "$APPICON_NORMAL"
-
-# Default badge scale (fraction of width). Shared by Windows/Darwin badge logic.
-# Can be tuned; using a conservative default that works across icon sizes.
-BADGE_SCALE=0.22
 
 ###############################################################################
 # Linux
@@ -133,6 +119,10 @@ for target in 70 150 512; do
 	fi
 done
 
+# Default badge scale (fraction of width).
+# Can be tuned; using a conservative default that works across icon sizes.
+WINDOWS_BADGE_SCALE=0.22
+
 # Badge other .ico files (they currently have the small logo in the corner).
 # For each ico except code.ico, extract frames, badge the largest frame, then create a new ico.
 for ico in "$WIN32_DIR"/*.ico; do
@@ -167,7 +157,7 @@ for ico in "$WIN32_DIR"/*.ico; do
 	fi
 
 	# Create badge sized for largest frame using master image with high-quality filters
-	BADGE_W=$(awk -v w="$LARGEST_W" -v s="$BADGE_SCALE" 'BEGIN{printf("%d", (w*s)+0.5)}')
+	BADGE_W=$(awk -v w="$LARGEST_W" -v s="$WINDOWS_BADGE_SCALE" 'BEGIN{printf("%d", (w*s)+0.5)}')
 	BADGE_TMP="$WORK_TMP/win-badge-${BADGE_W}.png"
 	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERS -resize ${BADGE_W}x${BADGE_W} "$BADGE_TMP"
 
@@ -256,101 +246,66 @@ for bmp in "$WIN32_DIR"/inno-big-*.bmp "$WIN32_DIR"/inno-small-*.bmp; do
 done
 
 ###############################################################################
-# macOS asset catalog (AppIcon)
-###############################################################################
-ASSET_CATALOG_DIR="$DARWIN_DIR/Assets.xcassets"
-APPICONSET_DIR="$ASSET_CATALOG_DIR/AppIcon.appiconset"
-
-echo "Generating macOS asset catalog in $APPICONSET_DIR"
-mkdir -p "$APPICONSET_DIR"
-rm -f "$APPICONSET_DIR"/*.png
-
-while read -r size scale pixels filename; do
-	[ -n "$size" ] || continue
-	magick "$APPICON_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize ${pixels}x${pixels} $POST_FILTERS "$APPICONSET_DIR/$filename"
-done <<'EOF'
-16 1x 16 appicon-16.png
-16 2x 32 appicon-16@2x.png
-32 1x 32 appicon-32.png
-32 2x 64 appicon-32@2x.png
-128 1x 128 appicon-128.png
-128 2x 256 appicon-128@2x.png
-256 1x 256 appicon-256.png
-256 2x 512 appicon-256@2x.png
-512 1x 512 appicon-512.png
-512 2x 1024 appicon-512@2x.png
-EOF
-
-cat > "$ASSET_CATALOG_DIR/Contents.json" <<'JSON'
-{
-	"info": {
-		"version": 1,
-		"author": "xcode"
-	}
-}
-JSON
-
-cat > "$APPICONSET_DIR/Contents.json" <<'JSON'
-{
-	"images": [
-		{ "filename": "appicon-16.png", "idiom": "mac", "scale": "1x", "size": "16x16" },
-		{ "filename": "appicon-16@2x.png", "idiom": "mac", "scale": "2x", "size": "16x16" },
-		{ "filename": "appicon-32.png", "idiom": "mac", "scale": "1x", "size": "32x32" },
-		{ "filename": "appicon-32@2x.png", "idiom": "mac", "scale": "2x", "size": "32x32" },
-		{ "filename": "appicon-128.png", "idiom": "mac", "scale": "1x", "size": "128x128" },
-		{ "filename": "appicon-128@2x.png", "idiom": "mac", "scale": "2x", "size": "128x128" },
-		{ "filename": "appicon-256.png", "idiom": "mac", "scale": "1x", "size": "256x256" },
-		{ "filename": "appicon-256@2x.png", "idiom": "mac", "scale": "2x", "size": "256x256" },
-		{ "filename": "appicon-512.png", "idiom": "mac", "scale": "1x", "size": "512x512" },
-		{ "filename": "appicon-512@2x.png", "idiom": "mac", "scale": "2x", "size": "512x512" }
-	],
-	"info": {
-		"version": 1,
-		"author": "xcode"
-	},
-	"properties": { "precomposed": false }
-}
-JSON
-
-echo " -> generated Assets.xcassets/AppIcon.appiconset"
-
-###############################################################################
 # Darwin: update each .icns by compositing main icon as a lower-right badge
 ###############################################################################
 echo "Updating Darwin .icns files in $DARWIN_DIR"
-# Parameters for overlay:
-BADGE_SCALE=0.36   # badge takes ~36% of the icon width
-BADGE_PADDING=8    # padding in pixels from bottom-right corner
+MACOS_BADGE_SCALE=0.36   # badge takes ~40% of the icon width
 
-# Create a full, unbadged macOS app icon for resources/darwin/code.icns from the main source.
-# This will replace the existing code.icns with a complete icon generated directly
-# from the master image (no corner badge).
+# Generate code.icns using actool from "Unbroken Code.icon"
+# This matches how the build system generates icons via compileDarwinAssetCatalog
+CODE_ICON_SOURCE="$DARWIN_DIR/Unbroken Code.icon"
 CODE_ICNS="$DARWIN_DIR/code.icns"
-if [ -f "$MAIN_NORMAL" ]; then
-	echo "Generating full icon for $CODE_ICNS from main source"
-	TMP_ICONSET="$WORK_TMP/code.iconset"
-	rm -rf "$TMP_ICONSET"
-	mkdir -p "$TMP_ICONSET"
+if [ -d "$CODE_ICON_SOURCE" ]; then
+	echo "Generating $CODE_ICNS from $CODE_ICON_SOURCE using actool"
 
-	# produce all required sizes with high-quality downsampling filters
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 16x16 $POST_FILTERS "$TMP_ICONSET/icon_16x16.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 32x32 $POST_FILTERS "$TMP_ICONSET/icon_16x16@2x.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 32x32 $POST_FILTERS "$TMP_ICONSET/icon_32x32.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 64x64 $POST_FILTERS "$TMP_ICONSET/icon_32x32@2x.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 128x128 $POST_FILTERS "$TMP_ICONSET/icon_128x128.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 256x256 $POST_FILTERS "$TMP_ICONSET/icon_128x128@2x.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 256x256 $POST_FILTERS "$TMP_ICONSET/icon_256x256.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 512x512 $POST_FILTERS "$TMP_ICONSET/icon_256x256@2x.png"
-	magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERSPO2 -resize 512x512 $POST_FILTERS "$TMP_ICONSET/icon_512x512.png"
-	cp "$MAIN_NORMAL" "$TMP_ICONSET/icon_512x512@2x.png"
+	# Use temporary directory for actool compilation
+	ACTOOL_TMP="$WORK_TMP/actool-output"
+	mkdir -p "$ACTOOL_TMP"
+	ACTOOL_PLIST="$WORK_TMP/asset-partial-info.plist"
 
-	# produce icns
-	iconutil --convert icns "$TMP_ICONSET" -o "$WORK_TMP/code_full.icns" >/dev/null 2>&1 || { echo "iconutil failed to generate code.icns"; rm -rf "$TMP_ICONSET"; }
-	if [ -f "$WORK_TMP/code_full.icns" ]; then
-		mv "$WORK_TMP/code_full.icns" "$CODE_ICNS"
-		echo " -> generated $CODE_ICNS"
+	# Use actool with same arguments as compileDarwinAssetCatalog
+	xcrun actool \
+		--compile "$ACTOOL_TMP" \
+		--platform macosx \
+		--minimum-deployment-target 10.13 \
+		--output-partial-info-plist "$ACTOOL_PLIST" \
+		--warnings \
+		--notices \
+		--compress-pngs \
+		--app-icon "Unbroken Code" \
+		"$CODE_ICON_SOURCE"
+
+	# Copy the generated icon from temp directory to final location
+	if [ -f "$ACTOOL_TMP/Unbroken Code.icns" ]; then
+		cp "$ACTOOL_TMP/Unbroken Code.icns" "$CODE_ICNS"
+		echo " -> generated $CODE_ICNS via actool"
+	else
+		echo "Warning: actool failed to generate Unbroken Code.icns"
 	fi
-	rm -rf "$TMP_ICONSET"
+
+	rm -rf "$ACTOOL_TMP" "$ACTOOL_PLIST"
+fi
+
+# Extract largest image from code.icns for use as badge source in subsequent operations
+CODE_BADGE_SOURCE=""
+if [ -f "$CODE_ICNS" ]; then
+	CODE_ICONSET_TMP="$WORK_TMP/code.iconset"
+	rm -rf "$CODE_ICONSET_TMP"
+	iconutil --convert iconset "$CODE_ICNS" -o "$CODE_ICONSET_TMP"
+
+	# Find the largest PNG in code.iconset
+	CODE_BADGE_W=0
+	for p in "$CODE_ICONSET_TMP"/*.png; do
+		w=$(sips -g pixelWidth "$p" 2>/dev/null | awk '/pixelWidth/ {print $2}')
+		if [ -n "$w" ] && [ "$w" -gt "$CODE_BADGE_W" ]; then
+			CODE_BADGE_W=$w
+			CODE_BADGE_SOURCE="$p"
+		fi
+	done
+
+	if [ -n "$CODE_BADGE_SOURCE" ]; then
+		echo "Extracted badge source from code.icns: $CODE_BADGE_SOURCE ($CODE_BADGE_W px)"
+	fi
 fi
 
 # Iterate over remaining .icns files and badge them (skip the full code.icns)
@@ -405,17 +360,38 @@ for icns in "$DARWIN_DIR"/*.icns; do
 		echo "Largest icon: $LARGEST_PNG ($LARGEST_W px)"
 
 		# compute badge width and padding based on largest image
-		badge_w=$(awk -v w="$LARGEST_W" -v s="$BADGE_SCALE" 'BEGIN{printf("%d", (w*s)+0.5)}')
-		PADX=+18
-		PADY=-7
+		badge_w=$(awk -v w="$LARGEST_W" -v s="$MACOS_BADGE_SCALE" 'BEGIN{printf("%d", (w*s)+0.5)}')
+		PADX=+30
+		PADY=-12
 
-		# create scaled badge from master image with high-quality filters
+		# Calculate size and position of transparent region to clear for badge
+		clear_size_right=$(awk -v b="$LARGEST_W" -v m="0.145" 'BEGIN{printf("%d", b*m)}')
+		clear_size_bottom=$(awk -v b="$LARGEST_W" -v m="0.06" 'BEGIN{printf("%d", b*m)}')
+		clear_start_x=$(awk -v w="$LARGEST_W" -v s="$clear_size_right" 'BEGIN{printf("%d", w-s)}')
+		clear_start_y=$(awk -v w="$LARGEST_W" -v s="$clear_size_bottom" 'BEGIN{printf("%d", w-s)}')
+		start_x_bottom=$(awk -v b="$LARGEST_W" -v m="0.64" 'BEGIN{printf("%d", b*m)}')  # Bottom strip starts from left edge
+		start_y_right=$(awk -v b="$LARGEST_W" -v m="0.725" 'BEGIN{printf("%d", b*m)}')   # Right strip starts from top edge
+
+		# create scaled badge from extracted code.icns image with high-quality filters
 		BADGE_TMP="$WORK_TMP/badge-large-${badge_w}.png"
-		magick "$MAIN_NORMAL" $DOWNSAMPLE_FILTERS -resize ${badge_w}x${badge_w} "$BADGE_TMP"
+		magick "$CODE_BADGE_SOURCE" $DOWNSAMPLE_FILTERS -resize ${badge_w}x${badge_w} "$BADGE_TMP"
 
-		# composite badge onto a copy of the largest image
+		# Clear transparent areas for badge placement (bottom strip and right strip)
+		# First clear the bottom strip (i >= start_x_bottom AND j >= start_y)
+		CLEARED_BOTTOM="$WORK_TMP/cleared-bottom.png"
+		magick "$LARGEST_PNG" -alpha set \
+			-channel A -fx "((i>=$start_x_bottom) && (j>=$clear_start_y)) ? 0 : a" +channel \
+			"$CLEARED_BOTTOM"
+
+		# Then clear the right strip (i >= start_x AND j >= start_y_right)
+		CLEARED_LARGE="$WORK_TMP/cleared-large.png"
+		magick "$CLEARED_BOTTOM" -alpha set \
+			-channel A -fx "((i>=$clear_start_x) && (j>=$start_y_right)) ? 0 : a" +channel \
+			"$CLEARED_LARGE"
+
+		# composite badge onto the cleared image
 		BADGED_LARGE="$WORK_TMP/badged-large.png"
-		composite -gravity southeast -geometry ${PADX}${PADY} "$BADGE_TMP" "$LARGEST_PNG" "$BADGED_LARGE"
+		composite -gravity southeast -geometry ${PADX}${PADY} "$BADGE_TMP" "$CLEARED_LARGE" "$BADGED_LARGE"
 
 		# For every png in the iconset, scale the badged large image to the target size
 		for png in "$ICONSET_DIR"/*.png; do

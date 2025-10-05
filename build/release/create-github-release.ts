@@ -27,12 +27,7 @@ interface ReleaseAsset {
 }
 
 type GitHubRelease = RestEndpointMethodTypes['repos']['createRelease']['response']['data'];
-type GitHubAssetBase = RestEndpointMethodTypes['repos']['listReleaseAssets']['response']['data'][0];
-
-// Extend GitHubAsset to include digest property that's not in the types
-interface GitHubAsset extends GitHubAssetBase {
-	digest?: string; // Format: "sha256:hash"
-}
+type GitHubAsset = RestEndpointMethodTypes['repos']['listReleaseAssets']['response']['data'][0];
 
 interface ExtendedRelease extends GitHubRelease {
 	existingAssets?: GitHubAsset[];
@@ -299,7 +294,7 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 		execSync('git rev-parse --verify upstream/main', { stdio: 'pipe' });
 		debugLog('Fetched upstream/main successfully');
 	} catch (error) {
-		debugLog('Failed to fetch/verify upstream/main. Skipping upstream filtering.', (error as any)?.message ?? String(error));
+		debugLog('Failed to fetch/verify upstream/main. Skipping upstream filtering.', (error as Error)?.message ?? String(error));
 		return { shaSet, subjectSet };
 	}
 
@@ -312,7 +307,7 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 		}
 		debugLog('Upstream SHA set size:', shaSet.size);
 	} catch (error) {
-		debugLog('Error building upstream SHA set:', (error as any)?.message ?? String(error));
+		debugLog('Error building upstream SHA set:', (error as Error)?.message ?? String(error));
 	}
 
 	try {
@@ -324,7 +319,7 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 		}
 		debugLog('Upstream subject set size:', subjectSet.size);
 	} catch (error) {
-		debugLog('Error building upstream subject set:', (error as any)?.message ?? String(error));
+		debugLog('Error building upstream subject set:', (error as Error)?.message ?? String(error));
 	}
 
 	return { shaSet, subjectSet };
@@ -587,7 +582,7 @@ async function downloadManifestAsset(octokit: Octokit, assetId: number, filename
 		repo: REPO_NAME,
 		asset_id: assetId,
 		headers: { Accept: 'application/octet-stream' }
-	}) as any;
+	});
 
 	let content: string;
 	if (Buffer.isBuffer(data)) {
@@ -1093,7 +1088,7 @@ async function uploadReleaseAsset(octokit: Octokit, releaseId: number, asset: Re
 				repo: REPO_NAME,
 				release_id: releaseId,
 				name: asset.name,
-				data: fileContent as any,
+				data: fileContent as unknown as string,
 				headers: {
 					'content-type': asset.contentType,
 					'content-length': fileContent.length

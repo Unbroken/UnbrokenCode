@@ -184,7 +184,8 @@ export class HoverWidget extends Widget implements IHoverWidget {
 					this.layout();
 					// This changes the dimensions of the hover so trigger a layout
 					this._onRequestLayout.fire();
-				}
+				},
+				sanitizerConfig: options.markdownSanitizerConfig
 			}));
 			contentsElement.appendChild(element);
 		}

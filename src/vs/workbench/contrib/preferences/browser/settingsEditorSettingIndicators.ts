@@ -5,7 +5,7 @@
 
 import * as DOM from '../../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
-import { HoverStyle, type IHoverOptions, type IHoverWidget } from '../../../../base/browser/ui/hover/hover.js';
+import { HoverStyle, type IHoverOptions, type IDelayedHoverOptions, type IHoverWidget } from '../../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { SimpleIconLabel } from '../../../../base/browser/ui/iconLabel/simpleIconLabel.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -455,7 +455,7 @@ export class SettingsTreeIndicatorsLabel implements IDisposable {
 					contentMarkdownString = prefaceText;
 					for (const scope of element.overriddenScopeList) {
 						const scopeDisplayText = this.getInlineScopeDisplayText(scope);
-						contentMarkdownString += `\n- [${scopeDisplayText}](${encodeURIComponent(scope)} "${getAccessibleScopeDisplayText(scope, this.languageService)}")`;
+						contentMarkdownString += `\n- [${scopeDisplayText}](${scope} "${getAccessibleScopeDisplayText(scope, this.languageService)}")`;
 					}
 				}
 				if (element.overriddenDefaultsLanguageList.length) {
@@ -466,26 +466,33 @@ export class SettingsTreeIndicatorsLabel implements IDisposable {
 					contentMarkdownString += prefaceText;
 					for (const language of element.overriddenDefaultsLanguageList) {
 						const scopeDisplayText = this.languageService.getLanguageName(language);
-						contentMarkdownString += `\n- [${scopeDisplayText}](${encodeURIComponent(`default:${language}`)} "${scopeDisplayText}")`;
+						contentMarkdownString += `\n- [${scopeDisplayText}](default:${language} "${scopeDisplayText}")`;
 					}
 				}
 				const content: IMarkdownString = {
 					value: contentMarkdownString,
-					isTrusted: false,
+					isTrusted: true,
 					supportHtml: false
 				};
-				this.scopeOverridesIndicator.disposables.add(this.hoverService.setupDelayedHover(this.scopeOverridesIndicator.element, () => ({
-					...this.defaultHoverOptions,
-					content,
-					linkHandler: (url: string) => {
-						const [scope, language] = decodeURIComponent(url).split(':');
-						onDidClickOverrideElement.fire({
-							settingKey: element.setting.key,
-							scope: scope as ScopeString,
-							language
-						});
-					}
-				}), { setupKeyboardEvents: true }));
+				this.scopeOverridesIndicator.disposables.add(this.hoverService.setupDelayedHover(this.scopeOverridesIndicator.element, (): IDelayedHoverOptions => {
+					return {
+						...this.defaultHoverOptions,
+						content,
+						linkHandler: (url: string) => {
+							const [scope, language] = url.split(':');
+							onDidClickOverrideElement.fire({
+								settingKey: element.setting.key,
+								scope: scope as ScopeString,
+								language
+							});
+						},
+						markdownSanitizerConfig: {
+							allowedLinkSchemes: {
+								augment: ['default', 'workspace', 'user', 'remote']
+							}
+						}
+					};
+				}, { setupKeyboardEvents: true }));
 			}
 		}
 		this.render();

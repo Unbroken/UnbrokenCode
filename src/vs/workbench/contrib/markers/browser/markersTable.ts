@@ -580,8 +580,8 @@ export class MarkersTable extends Disposable implements IProblemsWidget {
 		const [firstMarkerOfB] = b.markers;
 		if (firstMarkerOfA && firstMarkerOfB) {
 			// Compare by resource sequence number first
-			const rseqA = firstMarkerOfA.marker.resourceSequenceNumber ?? Number.MAX_SAFE_INTEGER;
-			const rseqB = firstMarkerOfB.marker.resourceSequenceNumber ?? Number.MAX_SAFE_INTEGER;
+			const rseqA = firstMarkerOfA.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+			const rseqB = firstMarkerOfB.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
 			if (rseqA !== rseqB) {
 				return rseqA - rseqB;
 			}

@@ -148,7 +148,20 @@ export class MarkerController implements IEditorContribution {
 
 		const textModel = this._editor.getModel();
 		const model = this._getOrCreateModel(multiFile ? undefined : textModel.uri);
-		model.move(next, textModel, this._editor.getPosition());
+
+		const selectedMarker = this._markerNavigationService.getSelectedMarker();
+		if (selectedMarker) {
+			if (model.findAndSelectMarker(selectedMarker)) {
+				model.move(next, textModel, this._editor.getPosition());
+			} else {
+				model.resetIndex();
+				const selectedPosition = new Position(selectedMarker.startLineNumber, selectedMarker.startColumn);
+				model.move(next, textModel, selectedPosition);
+			}
+		} else {
+			model.initializeIndex();
+		}
+
 		if (!model.selected) {
 			return;
 		}
@@ -168,6 +181,10 @@ export class MarkerController implements IEditorContribution {
 		} else {
 			// show in this editor
 			this._widget!.showAtMarker(model.selected.marker, model.selected.index, model.selected.total);
+		}
+
+		if (model.selected) {
+			this._markerNavigationService.fireNavigationEvent(model.selected.marker);
 		}
 	}
 }

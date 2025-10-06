@@ -125,7 +125,7 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 		}
 		const entries: IMarkerChange[] = [];
 		let totalMarkerCount = 0;
-		let resourceSequence = 0;
+		let resourceSequence = 100000;
 		let markerSequence = 0;
 		for (const uri of toSync) {
 			++resourceSequence;

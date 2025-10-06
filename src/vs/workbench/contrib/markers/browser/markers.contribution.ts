@@ -114,11 +114,12 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		'problems.sortOrder': {
 			'description': Messages.PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER,
 			'type': 'string',
-			'default': 'position',
-			'enum': ['severity', 'position'],
+			'default': 'output',
+			'enum': ['severity', 'position', 'output'],
 			'enumDescriptions': [
 				Messages.PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_SEVERITY,
 				Messages.PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_POSITION,
+				Messages.PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_OUTPUT,
 			],
 		},
 	}

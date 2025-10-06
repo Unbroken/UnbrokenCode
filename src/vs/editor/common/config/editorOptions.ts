@@ -3916,7 +3916,7 @@ export interface IRulerOption {
 class EditorRulers extends BaseEditorOption<EditorOption.rulers, (number | IRulerOption)[], IRulerOption[]> {
 
 	constructor() {
-		const defaults: IRulerOption[] = [];
+		const defaults: IRulerOption[] = [{ column: 190, color: null }];
 		const columnSchema: IJSONSchema = { type: 'number', description: nls.localize('rulers.size', "Number of monospace characters at which this editor ruler will render.") };
 		super(
 			EditorOption.rulers, 'rulers', defaults,

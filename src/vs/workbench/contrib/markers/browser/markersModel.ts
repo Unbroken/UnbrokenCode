@@ -44,8 +44,8 @@ function compareResourceMarkersByOutputOrder(a: ResourceMarkers, b: ResourceMark
 	const [firstMarkerOfB] = b.markers;
 	if (firstMarkerOfA && firstMarkerOfB) {
 		// Compare by resource sequence number first
-		const rseqA = firstMarkerOfA.marker.resourceSequenceNumber;
-		const rseqB = firstMarkerOfB.marker.resourceSequenceNumber;
+		const rseqA = firstMarkerOfA.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+		const rseqB = firstMarkerOfB.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
 		if (rseqA !== rseqB) {
 			return rseqA - rseqB;
 		}
@@ -127,6 +127,7 @@ export class Category {
 		readonly id: string,
 		readonly name: string,
 		readonly problems: SubProblem[],
+		readonly parentMarker: IMarker,
 	) { }
 
 	toString(): string {
@@ -153,6 +154,7 @@ export class SubProblem {
 		readonly id: string,
 		readonly resourceMarker: IResourceMarker,
 		readonly category: string,
+		readonly parentMarker: IMarker,
 	) { }
 
 	toString(): string {
@@ -225,6 +227,7 @@ export interface MarkerChangesEvent {
 	readonly added: Set<ResourceMarkers>;
 	readonly removed: Set<ResourceMarkers>;
 	readonly updated: Set<ResourceMarkers>;
+	resourceSequenceNumberChanged: boolean;
 }
 
 export class MarkersModel {
@@ -265,7 +268,8 @@ export class MarkersModel {
 			this._onDidChange.fire({
 				added: allResources,
 				removed: allResources,
-				updated: new Set<ResourceMarkers>()
+				updated: new Set<ResourceMarkers>(),
+				resourceSequenceNumberChanged: false
 			});
 		}
 	}
@@ -277,7 +281,7 @@ export class MarkersModel {
 		}
 		this.resourcesByUri.clear();
 		this._total = 0;
-		this._onDidChange.fire({ removed, added: new Set<ResourceMarkers>(), updated: new Set<ResourceMarkers>() });
+		this._onDidChange.fire({ removed, added: new Set<ResourceMarkers>(), updated: new Set<ResourceMarkers>(), resourceSequenceNumberChanged: false });
 	}
 
 	private _total: number = 0;
@@ -290,7 +294,7 @@ export class MarkersModel {
 	}
 
 	setResourceMarkers(resourcesMarkers: [URI, IMarker[]][]): void {
-		const change: MarkerChangesEvent = { added: new Set(), removed: new Set(), updated: new Set() };
+		const change: MarkerChangesEvent = { added: new Set(), removed: new Set(), updated: new Set(), resourceSequenceNumberChanged: false };
 		for (const [resource, rawMarkers] of resourcesMarkers) {
 
 			if (unsupportedSchemas.has(resource.scheme)) {
@@ -335,12 +339,22 @@ export class MarkersModel {
 							const categoryId = this.id(markerId, 'category', categoryIndex);
 							const subProblems = categoryGroup.problems.map((resourceMarker, index) => {
 								const subProblemId = this.id(markerId, resourceMarker.resource.toString(), resourceMarker.marker.startLineNumber, resourceMarker.marker.startColumn, resourceMarker.marker.endLineNumber, resourceMarker.marker.endColumn, index, categoryGroup.category);
-								return new SubProblem(subProblemId, resourceMarker, categoryGroup.category);
+								return new SubProblem(subProblemId, resourceMarker, categoryGroup.category, rawMarker);
 							});
-							return new Category(categoryId, categoryGroup.category, subProblems);
+							return new Category(categoryId, categoryGroup.category, subProblems, rawMarker);
 						});
 					}
 					markers.push(new Marker(markerId, rawMarker, relatedInformation, categories));
+				}
+
+				// Check if resourceSequenceNumber has changed (only for updated resources)
+				if (change.updated.has(resourceMarkers) && this._sortOrder === MarkerSortOrder.OutputOrder) {
+					const oldFirstMarker = resourceMarkers.markers[0];
+					const newFirstMarker = markers[0];
+					if (oldFirstMarker && newFirstMarker &&
+						oldFirstMarker.marker.resourceSequenceNumber !== newFirstMarker.marker.resourceSequenceNumber) {
+						change.resourceSequenceNumberChanged = true;
+					}
 				}
 
 				this._total -= resourceMarkers.total;

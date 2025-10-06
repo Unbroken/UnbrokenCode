@@ -26,6 +26,17 @@ export class MarkerCoordinate {
 	) { }
 }
 
+function compareResourceMarkersByOutputOrder(a: IMarker, b: IMarker): number {
+	// Compare by resource sequence number first
+	const rseqA = a.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+	const rseqB = b.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+	if (rseqA !== rseqB) {
+		return rseqA - rseqB;
+	}
+	// Fallback to path comparison
+	return a.resource.toString().localeCompare(b.resource.toString()) || a.resource.toString().localeCompare(b.resource.toString());
+}
+
 export class MarkerList {
 
 	private readonly _onDidChange = new Emitter<void>();
@@ -36,6 +47,16 @@ export class MarkerList {
 
 	private _markers: IMarker[] = [];
 	private _nextIdx: number = -1;
+
+	private static _markersEqual(a: IMarker, b: IMarker): boolean {
+		return a.resource.toString() === b.resource.toString()
+			&& a.startLineNumber === b.startLineNumber
+			&& a.startColumn === b.startColumn
+			&& a.endLineNumber === b.endLineNumber
+			&& a.endColumn === b.endColumn
+			&& a.severity === b.severity
+			&& a.message === b.message;
+	}
 
 	constructor(
 		resourceFilter: URI | ((uri: URI) => boolean) | undefined,
@@ -50,15 +71,31 @@ export class MarkerList {
 
 		const compareOrder = this._configService.getValue<string>('problems.sortOrder');
 		const compareMarker = (a: IMarker, b: IMarker): number => {
-			let res = compare(a.resource.toString(), b.resource.toString());
-			if (res === 0) {
-				if (compareOrder === 'position') {
-					res = Range.compareRangesUsingStarts(a, b) || MarkerSeverity.compare(a.severity, b.severity);
-				} else {
-					res = MarkerSeverity.compare(a.severity, b.severity) || Range.compareRangesUsingStarts(a, b);
+			if (compareOrder === 'output') {
+				let res = compareResourceMarkersByOutputOrder(a, b);
+				if (res === 0) {
+					const seqA = a.sequenceNumber;
+					const seqB = b.sequenceNumber;
+					if (seqA !== seqB) {
+						res = seqA - seqB;
+					}
+
+					if (res === 0) {
+						res = Range.compareRangesUsingStarts(a, b) || MarkerSeverity.compare(a.severity, b.severity);
+					}
 				}
+				return res;
+			} else {
+				let res = compare(a.resource.toString(), b.resource.toString());
+				if (res === 0) {
+					if (compareOrder === 'position') {
+						res = Range.compareRangesUsingStarts(a, b) || MarkerSeverity.compare(a.severity, b.severity);
+					} else {
+						res = MarkerSeverity.compare(a.severity, b.severity) || Range.compareRangesUsingStarts(a, b);
+					}
+				}
+				return res;
 			}
-			return res;
 		};
 
 		const updateMarker = () => {
@@ -71,15 +108,7 @@ export class MarkerList {
 			}
 			newMarkers.sort(compareMarker);
 
-			if (equals(newMarkers, this._markers, (a, b) =>
-				a.resource.toString() === b.resource.toString()
-				&& a.startLineNumber === b.startLineNumber
-				&& a.startColumn === b.startColumn
-				&& a.endLineNumber === b.endLineNumber
-				&& a.endColumn === b.endColumn
-				&& a.severity === b.severity
-				&& a.message === b.message
-			)) {
+			if (equals(newMarkers, this._markers, MarkerList._markersEqual)) {
 				return false;
 			}
 
@@ -182,6 +211,14 @@ export class MarkerList {
 		this._nextIdx = -1;
 	}
 
+	initializeIndex() {
+		if (this._nextIdx === -1 && this._markers.length > 0) {
+			this._nextIdx = 0;
+		} else {
+			this._nextIdx = -1;
+		}
+	}
+
 	move(fwd: boolean, model: ITextModel, position: Position): boolean {
 		if (this._markers.length === 0) {
 			return false;
@@ -214,14 +251,31 @@ export class MarkerList {
 		}
 		return undefined;
 	}
+
+	/**
+	 * Find a specific marker in the list and set the index to it.
+	 * Returns true if the marker was found.
+	 */
+	findAndSelectMarker(marker: IMarker): boolean {
+		const idx = this._markers.findIndex(m => MarkerList._markersEqual(m, marker));
+		if (idx >= 0) {
+			this._nextIdx = idx;
+			return true;
+		}
+		return false;
+	}
 }
 
 export const IMarkerNavigationService = createDecorator<IMarkerNavigationService>('IMarkerNavigationService');
 
 export interface IMarkerNavigationService {
 	readonly _serviceBrand: undefined;
+	readonly onDidNavigateToMarker: Event<IMarker>;
 	registerProvider(provider: IMarkerListProvider): IDisposable;
 	getMarkerList(resource: URI | undefined): MarkerList;
+	getSelectedMarker(): IMarker | undefined;
+	setSelectedMarker(marker: IMarker | undefined): void;
+	fireNavigationEvent(marker: IMarker): void;
 }
 
 export interface IMarkerListProvider {
@@ -232,7 +286,11 @@ class MarkerNavigationService implements IMarkerNavigationService, IMarkerListPr
 
 	readonly _serviceBrand: undefined;
 
+	private readonly _onDidNavigateToMarker = new Emitter<IMarker>();
+	readonly onDidNavigateToMarker: Event<IMarker> = this._onDidNavigateToMarker.event;
+
 	private readonly _provider = new LinkedList<IMarkerListProvider>();
+	private _selectedMarker: IMarker | undefined = undefined;
 
 	constructor(
 		@IMarkerService private readonly _markerService: IMarkerService,
@@ -253,6 +311,18 @@ class MarkerNavigationService implements IMarkerNavigationService, IMarkerListPr
 		}
 		// default
 		return new MarkerList(resource, this._markerService, this._configService);
+	}
+
+	getSelectedMarker(): IMarker | undefined {
+		return this._selectedMarker;
+	}
+
+	setSelectedMarker(marker: IMarker | undefined): void {
+		this._selectedMarker = marker;
+	}
+
+	fireNavigationEvent(marker: IMarker): void {
+		this._onDidNavigateToMarker.fire(marker);
 	}
 }
 

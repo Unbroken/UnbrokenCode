@@ -127,6 +127,7 @@ export class Category {
 		readonly id: string,
 		readonly name: string,
 		readonly problems: SubProblem[],
+		readonly parentMarker: IMarker,
 	) { }
 
 	toString(): string {
@@ -153,6 +154,7 @@ export class SubProblem {
 		readonly id: string,
 		readonly resourceMarker: IResourceMarker,
 		readonly category: string,
+		readonly parentMarker: IMarker,
 	) { }
 
 	toString(): string {
@@ -329,9 +331,9 @@ export class MarkersModel {
 							const categoryId = this.id(markerId, 'category', categoryIndex);
 							const subProblems = categoryGroup.problems.map((resourceMarker, index) => {
 								const subProblemId = this.id(markerId, resourceMarker.resource.toString(), resourceMarker.marker.startLineNumber, resourceMarker.marker.startColumn, resourceMarker.marker.endLineNumber, resourceMarker.marker.endColumn, index, categoryGroup.category);
-								return new SubProblem(subProblemId, resourceMarker, categoryGroup.category);
+								return new SubProblem(subProblemId, resourceMarker, categoryGroup.category, rawMarker);
 							});
-							return new Category(categoryId, categoryGroup.category, subProblems);
+							return new Category(categoryId, categoryGroup.category, subProblems, rawMarker);
 						});
 					}
 					const marker = new Marker(markerId, rawMarker, relatedInformation, categories);

@@ -2757,6 +2757,7 @@ enum WorkbenchLayoutSettings {
 	PANEL_POSITION = 'workbench.panel.defaultLocation',
 	PANEL_OPENS_MAXIMIZED = 'workbench.panel.opensMaximized',
 	ZEN_MODE_CONFIG = 'zenMode',
+	EDITOR_DEFAULT_CENTERED_LAYOUT = 'workbench.editor.defaultCenteredLayout',
 	EDITOR_CENTERED_LAYOUT_AUTO_RESIZE = 'workbench.editor.centeredLayoutAutoResize',
 }
 
@@ -2854,6 +2855,7 @@ class LayoutStateModel extends Disposable {
 		// Set dynamic defaults: part sizing and side bar visibility
 		const workbenchState = this.contextService.getWorkbenchState();
 		const mainContainerDimension = configuration.mainContainerDimension;
+		LayoutStateKeys.MAIN_EDITOR_CENTERED.defaultValue = this.configurationService.getValue(WorkbenchLayoutSettings.EDITOR_DEFAULT_CENTERED_LAYOUT) ?? false;
 		LayoutStateKeys.SIDEBAR_SIZE.defaultValue = Math.min(300, mainContainerDimension.width / 4);
 		LayoutStateKeys.SIDEBAR_HIDDEN.defaultValue = workbenchState === WorkbenchState.EMPTY;
 		LayoutStateKeys.AUXILIARYBAR_SIZE.defaultValue = Math.min(300, mainContainerDimension.width / 4);

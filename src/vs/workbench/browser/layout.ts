@@ -2816,6 +2816,7 @@ enum WorkbenchLayoutSettings {
 	PANEL_POSITION = 'workbench.panel.defaultLocation',
 	PANEL_OPENS_MAXIMIZED = 'workbench.panel.opensMaximized',
 	ZEN_MODE_CONFIG = 'zenMode',
+	EDITOR_DEFAULT_CENTERED_LAYOUT = 'workbench.editor.defaultCenteredLayout',
 	EDITOR_CENTERED_LAYOUT_AUTO_RESIZE = 'workbench.editor.centeredLayoutAutoResize',
 	EDITOR_RESTORE_EDITORS = 'workbench.editor.restoreEditors',
 }
@@ -2915,6 +2916,7 @@ class LayoutStateModel extends Disposable {
 		const auxiliaryBarForceMaximized = this.configurationService.getValue(WorkbenchLayoutSettings.AUXILIARYBAR_FORCE_MAXIMIZED);
 		const workbenchState = this.contextService.getWorkbenchState();
 		const mainContainerDimension = configuration.mainContainerDimension;
+		LayoutStateKeys.MAIN_EDITOR_CENTERED.defaultValue = this.configurationService.getValue(WorkbenchLayoutSettings.EDITOR_DEFAULT_CENTERED_LAYOUT) ?? false;
 		LayoutStateKeys.SIDEBAR_SIZE.defaultValue = Math.min(300, mainContainerDimension.width / 4);
 		LayoutStateKeys.SIDEBAR_HIDDEN.defaultValue = workbenchState === WorkbenchState.EMPTY || auxiliaryBarForceMaximized === true;
 		LayoutStateKeys.AUXILIARYBAR_SIZE.defaultValue = auxiliaryBarForceMaximized ? Math.max(300, mainContainerDimension.width / 2) : Math.min(300, mainContainerDimension.width / 4);

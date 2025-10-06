@@ -424,6 +424,11 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 					localize('workbench.editor.splitInGroupLayoutHorizontal', "Editors are positioned from left to right.")
 				]
 			},
+			'workbench.editor.defaultCenteredLayout': {
+				'type': 'boolean',
+				'default': false,
+				'description': localize('defaultCenteredLayout', "Controls whether the editor should use centered layout by default.")
+			},
 			'workbench.editor.centeredLayoutAutoResize': {
 				'type': 'boolean',
 				'default': true,

@@ -23,6 +23,7 @@ import { deepClone } from '../../../../base/common/objects.js';
 import { isDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { IMarkerNavigationService } from '../../../../editor/contrib/gotoError/browser/markerNavigationService.js';
 import { localize } from '../../../../nls.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -34,7 +35,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { ResultKind } from '../../../../platform/keybinding/common/keybindingResolver.js';
 import { IListService, IOpenEvent, IWorkbenchObjectTreeOptions, WorkbenchObjectTree } from '../../../../platform/list/browser/listService.js';
-import { IMarkerService, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity, IMarker } from '../../../../platform/markers/common/markers.js';
 import { IOpenerService, withSelection } from '../../../../platform/opener/common/opener.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -173,6 +174,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		@IOpenerService openerService: IOpenerService,
 		@IThemeService themeService: IThemeService,
 		@IHoverService hoverService: IHoverService,
+		@IMarkerNavigationService private readonly markerNavigationService: IMarkerNavigationService,
 	) {
 		const memento = new Memento<IMarkersPanelState>(Markers.MARKERS_VIEW_STORAGE_ID, storageService);
 		const panelState = memento.getMemento(StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -365,8 +367,8 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 				if (markerOrChange instanceof Marker) {
 					this.widget.updateMarker(markerOrChange);
 				} else {
-					if (markerOrChange.added.size || markerOrChange.removed.size || this.filters.activeFile) {
-						// Reset complete widget
+					if (markerOrChange.added.size || markerOrChange.removed.size || markerOrChange.resourceSequenceNumberChanged || this.filters.activeFile) {
+						// Reset complete widget when resources are added/removed or resource order has changed
 						this.resetWidget();
 					} else {
 						// Update resource
@@ -577,6 +579,27 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.saveState();
 	}
 
+	private syncSelectionWithNavigatedMarker(marker: IMarker): void {
+		const resourceMarkers = this.markersModel.getResourceMarkers(marker.resource);
+		if (!resourceMarkers) {
+			return;
+		}
+
+		const markerWrapper = resourceMarkers.markers.find(m =>
+			m.marker.resource.toString() === marker.resource.toString() &&
+			m.marker.startLineNumber === marker.startLineNumber &&
+			m.marker.startColumn === marker.startColumn &&
+			m.marker.endLineNumber === marker.endLineNumber &&
+			m.marker.endColumn === marker.endColumn &&
+			m.marker.severity === marker.severity &&
+			m.marker.message === marker.message
+		);
+
+		if (markerWrapper) {
+			this.widget.setMarkerSelection([markerWrapper], [markerWrapper]);
+		}
+	}
+
 	private onDidChangeMarkersViewVisibility(visible: boolean): void {
 		this.onVisibleDisposables.clear();
 		if (visible) {
@@ -626,6 +649,10 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		disposables.push(toDisposable(() => { this.cachedFilterStats = undefined; }));
 
 		disposables.push(toDisposable(() => this.rangeHighlightDecorations.removeHighlightRange()));
+
+		disposables.push(this.markerNavigationService.onDidNavigateToMarker(marker => {
+			this.syncSelectionWithNavigatedMarker(marker);
+		}));
 
 		return disposables;
 	}
@@ -716,6 +743,19 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		const selection = this.widget.getSelection();
 		if (selection && selection.length > 0) {
 			this.lastSelectedRelativeTop = this.widget.getRelativeTop(selection[0]) || 0;
+
+			const selectedElement = selection[0];
+			if (selectedElement instanceof Marker) {
+				this.markerNavigationService.setSelectedMarker(selectedElement.marker);
+			} else if (selectedElement instanceof RelatedInformation) {
+				this.markerNavigationService.setSelectedMarker(selectedElement.marker);
+			} else if (selectedElement instanceof Category || selectedElement instanceof SubProblem) {
+				this.markerNavigationService.setSelectedMarker(selectedElement.parentMarker);
+			} else {
+				this.markerNavigationService.setSelectedMarker(undefined);
+			}
+		} else {
+			this.markerNavigationService.setSelectedMarker(undefined);
 		}
 	}
 

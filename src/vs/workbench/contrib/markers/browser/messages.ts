@@ -22,6 +22,7 @@ export default class Messages {
 	public static PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER: string = nls.localize('problems.panel.configuration.compareOrder', "Controls the order in which problems are navigated.");
 	public static PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_SEVERITY: string = nls.localize('problems.panel.configuration.compareOrder.severity', "Navigate problems ordered by severity");
 	public static PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_POSITION: string = nls.localize('problems.panel.configuration.compareOrder.position', "Navigate problems ordered by position");
+	public static PROBLEMS_PANEL_CONFIGURATION_COMPARE_ORDER_OUTPUT: string = nls.localize('problems.panel.configuration.compareOrder.output', "Navigate problems ordered by the order they were generated");
 
 	public static MARKERS_PANEL_TITLE_PROBLEMS: ILocalizedString = nls.localize2('markers.panel.title.problems', "Problems");
 

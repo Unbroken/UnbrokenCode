@@ -5,6 +5,7 @@
 
 import assert from 'assert';
 import { Event } from '../../../../../base/common/event.js';
+import { IMarkerNavigationService } from '../../../../../editor/contrib/gotoError/browser/markerNavigationService.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
@@ -45,6 +46,7 @@ suite('MarkersView', () => {
 		});
 		const markerService = disposables.add(new MarkerService());
 		instantiationService.stub(IMarkerService, markerService);
+		instantiationService.stub(IMarkerNavigationService, upcastPartial<IMarkerNavigationService>({ onDidNavigateToMarker: Event.None, setSelectedMarker: () => { } }));
 		const view = disposables.add(instantiationService.createInstance(MarkersView, { id: Markers.MARKERS_VIEW_ID, title: 'Problems' }));
 		const labels = disposables.add(instantiationService.createInstance(ResourceLabels, view));
 		instantiationService.stubInstance(ResourceLabels, labels);
@@ -96,10 +98,11 @@ suite('MarkersView', () => {
 			test('keeps only current diagnostics across repeated hidden updates', async () => {
 				const { view, markerService } = createView(viewMode);
 				await update(view, markerService, resources[0], 'first');
-				await update(view, markerService, resources[1], 'second');
+				await update(view, markerService, resources[1], 'zzz');
 				view.setMultiline(false);
 				const filterChanged = Event.toPromise(view.filterWidget.onDidChangeFilterText);
-				view.filterWidget.setFilterText('second');
+				// The fuzzy filter also matches partially, so this shares no letters with the other marker or the paths
+				view.filterWidget.setFilterText('zzz');
 				await filterChanged;
 
 				for (let revision = 0; revision < 3; revision++) {
@@ -107,7 +110,7 @@ suite('MarkersView', () => {
 					const obsolete = currentMarkers(view);
 					view.setVisible(false);
 					const changed = Event.toPromise(markerService.onMarkerChanged);
-					markerService.changeAll('test', resources.map((resource, index) => ({ resource, marker: marker(`${index ? 'second' : 'first'} hidden ${revision}`) })));
+					markerService.changeAll('test', resources.map((resource, index) => ({ resource, marker: marker(`${index ? 'zzz' : 'first'} hidden ${revision}`) })));
 					await changed;
 					view.setVisible(true);
 					const current = currentMarkers(view);
@@ -122,11 +125,11 @@ suite('MarkersView', () => {
 						stats: view.getFilterStats()
 					}, {
 						obsolete: [false, false],
-						messages: [`first hidden ${revision}`, `second hidden ${revision}`],
+						messages: [`first hidden ${revision}`, `zzz hidden ${revision}`],
 						rendered: [false, true],
 						multiline: [false, false],
 						viewMode,
-						filter: 'second',
+						filter: 'zzz',
 						stats: { total: 2, filtered: 1 }
 					});
 				}

@@ -8,6 +8,7 @@ import type { HoverPosition } from './hoverWidget.js';
 import type { CancellationToken } from '../../../common/cancellation.js';
 import type { IMarkdownString } from '../../../common/htmlContent.js';
 import type { IDisposable } from '../../../common/lifecycle.js';
+import type { MarkdownSanitizerConfig } from '../../markdownRenderer.js';
 
 /**
  * Enables the convenient display of rich markdown-based hovers in the workbench.
@@ -196,6 +197,11 @@ export interface IHoverOptions {
 	 * be used to open the links using its default options.
 	 */
 	linkHandler?(url: string): void;
+
+	/**
+	 * Sanitization configuration for markdown rendering, such as allowed link schemes.
+	 */
+	markdownSanitizerConfig?: MarkdownSanitizerConfig;
 
 	/**
 	 * Whether to trap focus in the following ways:

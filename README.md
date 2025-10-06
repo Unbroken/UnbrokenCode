@@ -38,6 +38,7 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - Waste less space in UI - every pixel counts
 - Layout icons stay visible even with editor actions in title bar
 - Thoughtfully designed defaults for a minimal, distraction-free experience
+- Cleaner centered layout that actually centers on screen instead of in editor window and uses all available space to the right
 
 #### **C++ Development Superpowers**
 - **Malterlib Extension** shipped by default - because why wouldn't you want this?

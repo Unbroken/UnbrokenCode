@@ -1093,7 +1093,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsView {
 				e.affectsConfiguration('editor.scrollbar') ||
 				e.affectsConfiguration('editor.lineNumbers') ||
 				e.affectsConfiguration('editor.folding') ||
-				e.affectsConfiguration('editor.glyphMargin')) {
+				e.affectsConfiguration('editor.glyphMargin') ||
+				e.affectsConfiguration('editor.minimap')) {
 				this.centeredLayoutWidget.recalculate();
 			}
 		}));
@@ -1136,6 +1137,9 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsView {
 				// Get scrollbar width - vertical scrollbar takes up width
 				const scrollbarWidth = layoutInfo?.verticalScrollbarWidth || 0;
 
+				// Get minimap width - minimap takes up width on the right
+				const minimapWidth = layoutInfo?.minimap?.minimapWidth || 0;
+
 				// Get overscroll - the padding on the right side
 				const scrollBeyondLastColumn = control.getOption(EditorOption.scrollBeyondLastColumn);
 
@@ -1144,6 +1148,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsView {
 					typicalCharWidth: fontInfo?.typicalHalfwidthCharacterWidth || 8,
 					contentLeft: layoutInfo?.contentLeft || 0,
 					scrollbarWidth,
+					minimapWidth,
 					overscrollWidth: scrollBeyondLastColumn || 0
 				};
 			}

@@ -224,6 +224,8 @@ export class CenteredViewLayout implements IDisposable {
 		// Hide the left sash when left margin is too small (< 3px) to avoid interfering with other splitters
 		if (this.splitView.sashes.length > 0) {
 			const sash = this.splitView.sashes[0];
+			sash.maxDragMargin = 3;
+
 			if (desiredLeftMargin < 3) {
 				sash.state = SashState.Disabled;
 			} else {

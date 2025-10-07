@@ -25,6 +25,7 @@ export interface CenteredViewEditorWidthConfig {
 	useFixedWidth?: boolean;
 	fixedWidth?: number;
 	scrollbarWidth?: number;
+	minimapWidth?: number;
 	overscrollWidth?: number;
 }
 
@@ -163,11 +164,12 @@ export class CenteredViewLayout implements IDisposable {
 
 			const textContentWidth = rightmostRuler * editorWidthConfig.typicalCharWidth;
 
-			// Total width includes contentLeft (line numbers, etc.), scrollbar, and overscroll
+			// Total width includes contentLeft (line numbers, etc.), scrollbar, minimap, and overscroll
 			const scrollbarWidth = editorWidthConfig.scrollbarWidth || 0;
+			const minimapWidth = editorWidthConfig.minimapWidth || 0;
 			const overscrollChars = editorWidthConfig.overscrollWidth || 0;
 			const overscrollWidth = overscrollChars * editorWidthConfig.typicalCharWidth;
-			desiredCenterWidth = editorWidthConfig.contentLeft + textContentWidth + scrollbarWidth + overscrollWidth;
+			desiredCenterWidth = editorWidthConfig.contentLeft + textContentWidth + scrollbarWidth + minimapWidth + overscrollWidth;
 
 			// Center based on window width and text content width only (excluding contentLeft, scrollbar, overscroll)
 			globalLeftMargin = (windowWidth - textContentWidth) / 2 - editorWidthConfig.contentLeft;

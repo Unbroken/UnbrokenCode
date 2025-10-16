@@ -204,6 +204,13 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
+      - name: Configure rust
+        run: |
+          set -euo pipefail
+          rustup install 1.89.0
+          rustup default 1.89.0
+        shell: bash
+
       - name: Build binaries
         run: |
           set -euo pipefail
@@ -228,6 +235,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
+
+      - name: Configure rust
+        run: |
+          set -euo pipefail
+          rustup install 1.89.0
+          rustup default 1.89.0
+        shell: bash
 
       - name: Build binaries
         run: |

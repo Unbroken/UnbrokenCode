@@ -359,7 +359,10 @@
 			"textDocumentChangeReason",
 			"resolvers",
 			"taskExecutionTerminal",
-			"dataChannels"
+			"dataChannels",
+			"contribEditorContentMenu",
+			"chatSessionsProvider",
+			"devDeviceId"
 		],
 		"GitHub.remotehub": [
 			"contribRemoteHelp",

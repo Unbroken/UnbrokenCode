@@ -94,6 +94,8 @@ interface IMarkersPanelState {
 	activeFile?: boolean;
 	multiline?: boolean;
 	viewMode?: MarkersViewMode;
+	sortOrder?: MarkerSortOrder;
+	showProblemDetails?: boolean;
 }
 
 export interface IProblemsWidget {
@@ -192,7 +194,7 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 		this.sortOrderContextKey = MarkersContextKeys.MarkersSortOrderContextKey.bindTo(contextKeyService);
 
 		this.markersModel = this._register(instantiationService.createInstance(MarkersModel));
-		
+
 		// Initialize sort order from saved state
 		const savedSortOrder = this.panelState.sortOrder;
 		if (savedSortOrder) {

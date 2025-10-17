@@ -191,6 +191,18 @@ jobs:
       - authorize
     runs-on: ubuntu-22.04
     steps:
+      - name: Maximize disk space 1
+        shell: bash
+        run: |
+          df -h --sync
+          swapon --show
+          pwd
+          sudo mkdir -p /mnt/workspace
+          sudo chown "$USER" /mnt/workspace
+          sudo mount --bind /mnt/workspace "$PWD"
+          ls -laF .
+          df -h .
+
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
@@ -223,6 +235,18 @@ jobs:
       - authorize
     runs-on: ubuntu-22.04-arm
     steps:
+      - name: Maximize disk space 1
+        shell: bash
+        run: |
+          df -h --sync
+          swapon --show
+          pwd
+          sudo mkdir -p /mnt/workspace
+          sudo chown "$USER" /mnt/workspace
+          sudo mount --bind /mnt/workspace "$PWD"
+          ls -laF .
+          df -h .
+
       - name: Checkout sources
         uses: actions/checkout@v4
         with:

@@ -314,55 +314,56 @@
 			"inlineCompletionsAdditions"
 		],
 		"GitHub.copilot-chat": [
-			"interactive",
-			"terminalDataWriteEvent",
-			"terminalExecuteCommandEvent",
-			"terminalSelection",
-			"terminalQuickFixProvider",
-			"chatParticipantAdditions",
-			"defaultChatParticipant",
-			"embeddings",
-			"chatEditing",
-			"chatProvider",
-			"mappedEditsProvider",
+			"activeComment",
 			"aiRelatedInformation",
 			"aiSettingsSearch",
+			"aiTextSearchProvider",
+			"authLearnMore",
+			"chatEditing",
+			"chatParticipantAdditions",
+			"chatParticipantPrivate",
+			"chatProvider",
+			"chatReferenceBinaryData",
+			"chatReferenceDiagnostic",
+			"chatSessionsProvider",
+			"chatStatusItem",
 			"codeActionAI",
+			"commentReveal",
+			"contribCommentEditorActionsMenu",
+			"contribCommentsViewThreadMenus",
+			"contribCommentThreadAdditionalMenu",
+			"contribDebugCreateConfiguration",
+			"contribEditorContentMenu",
+			"contribLanguageModelToolSets",
+			"contribSourceControlInputBoxMenu",
+			"dataChannels",
+			"defaultChatParticipant",
+			"devDeviceId",
+			"documentFiltersExclusive",
+			"embeddings",
+			"extensionsAny",
+			"findFiles2",
 			"findTextInFiles",
 			"findTextInFiles2",
-			"textSearchProvider",
-			"textSearchProvider2",
-			"activeComment",
-			"commentReveal",
-			"contribSourceControlInputBoxMenu",
-			"contribCommentEditorActionsMenu",
-			"contribCommentThreadAdditionalMenu",
-			"contribCommentsViewThreadMenus",
-			"newSymbolNamesProvider",
-			"findFiles2",
-			"chatReferenceDiagnostic",
-			"extensionsAny",
-			"authLearnMore",
-			"testObserver",
-			"aiTextSearchProvider",
-			"documentFiltersExclusive",
-			"chatParticipantPrivate",
-			"contribDebugCreateConfiguration",
 			"inlineCompletionsAdditions",
-			"chatReferenceBinaryData",
-			"languageModelSystem",
+			"interactive",
 			"languageModelCapabilities",
 			"languageModelDataPart",
-			"chatStatusItem",
-			"taskProblemMatcherStatus",
-			"contribLanguageModelToolSets",
-			"textDocumentChangeReason",
+			"languageModelSystem",
+			"languageModelThinkingPart",
+			"mappedEditsProvider",
+			"newSymbolNamesProvider",
 			"resolvers",
 			"taskExecutionTerminal",
-			"dataChannels",
-			"contribEditorContentMenu",
-			"chatSessionsProvider",
-			"devDeviceId"
+			"taskProblemMatcherStatus",
+			"terminalDataWriteEvent",
+			"terminalExecuteCommandEvent",
+			"terminalQuickFixProvider",
+			"terminalSelection",
+			"testObserver",
+			"textDocumentChangeReason",
+			"textSearchProvider",
+			"textSearchProvider2"
 		],
 		"GitHub.remotehub": [
 			"contribRemoteHelp",
@@ -490,5 +491,68 @@
 		"insider": {
 			"serverApplicationName": "unbroken-code-server-insiders"
 		}
+	},
+	"defaultChatAgent": {
+		"extensionId": "GitHub.copilot",
+		"chatExtensionId": "GitHub.copilot-chat",
+		"documentationUrl": "https://aka.ms/github-copilot-overview",
+		"termsStatementUrl": "https://aka.ms/github-copilot-terms-statement",
+		"privacyStatementUrl": "https://aka.ms/github-copilot-privacy-statement",
+		"skusDocumentationUrl": "https://aka.ms/github-copilot-plans",
+		"publicCodeMatchesUrl": "https://aka.ms/github-copilot-match-public-code",
+		"manageSettingsUrl": "https://aka.ms/github-copilot-settings",
+		"managePlanUrl": "https://aka.ms/github-copilot-manage-plan",
+		"manageOverageUrl": "https://aka.ms/github-copilot-manage-overage",
+		"upgradePlanUrl": "https://aka.ms/github-copilot-upgrade-plan",
+		"signUpUrl": "https://aka.ms/github-sign-up",
+		"provider": {
+			"default": {
+				"id": "github",
+				"name": "GitHub"
+			},
+			"enterprise": {
+				"id": "github-enterprise",
+				"name": "GHE.com"
+			},
+			"google": {
+				"id": "google",
+				"name": "Google"
+			},
+			"apple": {
+				"id": "apple",
+				"name": "Apple"
+			}
+		},
+		"providerUriSetting": "github-enterprise.uri",
+		"providerScopes": [
+			[
+				"user:email"
+			],
+			[
+				"read:user"
+			],
+			[
+				"read:user",
+				"user:email",
+				"repo",
+				"workflow"
+			]
+		],
+		"entitlementUrl": "https://api.github.com/copilot_internal/user",
+		"entitlementSignupLimitedUrl": "https://api.github.com/copilot_internal/subscribe_limited_user",
+		"chatQuotaExceededContext": "github.copilot.chat.quotaExceeded",
+		"completionsQuotaExceededContext": "github.copilot.completions.quotaExceeded",
+		"walkthroughCommand": "github.copilot.open.walkthrough",
+		"completionsMenuCommand": "github.copilot.toggleStatusMenu",
+		"completionsRefreshTokenCommand": "github.copilot.signIn",
+		"chatRefreshTokenCommand": "github.copilot.refreshToken",
+		"completionsAdvancedSetting": "github.copilot.advanced",
+		"completionsEnablementSetting": "github.copilot.enable",
+		"nextEditSuggestionsSetting": "github.copilot.nextEditSuggestions.enabled"
+	},
+	"trustedExtensionAuthAccess": {
+		"github": [
+			"github.copilot-chat"
+		]
 	}
 }

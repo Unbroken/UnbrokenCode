@@ -308,7 +308,7 @@ function Check_Submodule_Updates()
 		current_commit=$(git rev-parse HEAD)
 
 		# Get latest commit on master/main
-		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
+		remote_commit=$(git rev-parse --verify origin/master 2>/dev/null || git rev-parse --verify origin/main 2>/dev/null)
 
 		if [ "$current_commit" != "$remote_commit" ]; then
 			echo "  ⚠️  Submodule '\''$submodule_name'\'' is behind remote master/main"
@@ -336,7 +336,7 @@ function Check_Submodule_Updates()
 
 		# Get current and remote commits
 		current_commit=$(git rev-parse HEAD)
-		remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main 2>/dev/null)
+		remote_commit=$(git rev-parse --verify origin/master 2>/dev/null || git rev-parse --verify origin/main 2>/dev/null)
 
 		if [ "$current_commit" != "$remote_commit" ]; then
 			echo "OUTDATED:$name"

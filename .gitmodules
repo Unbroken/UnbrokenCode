@@ -10,3 +10,6 @@
 	path = extensions/codelldb
 	url = https://github.com/Unbroken/codelldb.git
 	branch = master
+[submodule "extensions/vscode-copilot-chat"]
+	path = extensions/vscode-copilot-chat
+	url = https://github.com/Unbroken/vscode-copilot-chat

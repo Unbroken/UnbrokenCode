@@ -32,6 +32,7 @@ module.exports.all = [
 	'!extensions/malterlib/**',
 	'!extensions/codelldb/**',
 	'!extensions/vscode-clangd/**',
+	'!extensions/vscode-copilot-chat/**',
 ];
 
 module.exports.unicodeFilter = [

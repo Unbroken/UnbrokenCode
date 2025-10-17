@@ -553,6 +553,7 @@ const esbuildMediaScripts = [
     'simple-browser/esbuild-preview.mjs',
     'malterlib/esbuild.mjs',
     'vscode-clangd/esbuild.mjs',
+    'vscode-copilot-chat/esbuild.mjs',
 ];
 async function webpackExtensions(taskName, isWatch, webpackConfigLocations) {
     const webpack = require('webpack');

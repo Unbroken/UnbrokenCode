@@ -21,6 +21,7 @@ WINDOWS_ENV_INITIALIZED=false
 WINDOWS_DIST_INITIALIZED=false
 WINDOWS_DIST_DIR=""
 WINDOWS_RUST_READY=false
+USE_NPM_CI=${USE_NPM_CI:-true}
 
 # Helper to evaluate truthy environment/flag values (accepts 1, true, yes, on)
 function is_truthy()
@@ -618,7 +619,7 @@ function Run_Windows_Gulp_Build()
 
 	echo "Building Windows $arch..."
 
-	npm_config_arch=$arch NPM_ARCH=$arch VSCODE_ARCH=$arch npm ci --cpu=$arch
+	$USE_NPM_CI && npm_config_arch=$arch NPM_ARCH=$arch VSCODE_ARCH=$arch npm ci --cpu=$arch
 
 	# Temporarily rename node_modules/.bin/rc to avoid conflict with Windows Resource Compiler
 	if [ -f "node_modules/.bin/rc" ]; then
@@ -836,7 +837,7 @@ function Build_Linux()
 	if ! $SKIP_GULP_BUILD; then
 		# Build for current architecture (non-minified)
 		echo "Building Linux $BUILD_ARCH (native)..."
-		npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm ci
+		$USE_NPM_CI && npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm ci
 		npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH
 	fi
 
@@ -1010,7 +1011,7 @@ function Build_macOS()
 		export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
 
 		if $BUILD_MACOS_X64; then
-			npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu x64
+			$USE_NPM_CI && npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu x64
 			npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-darwin-x64
 			touch "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app"
 
@@ -1024,7 +1025,7 @@ function Build_macOS()
 		fi
 
 		if $BUILD_MACOS_ARM64; then
-			npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
+			$USE_NPM_CI && npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
 			npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
 			touch "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app"
 

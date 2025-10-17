@@ -954,8 +954,8 @@ function Build_Linux()
 function Build_macOS()
 {
 	DO_BUILD=true
-	DO_SIGN=true
-	DO_NOTARIZE=true
+	DO_SIGN=${DO_SIGN:-true}
+	DO_NOTARIZE=${DO_NOTARIZE:-$DO_SIGN}
 
 	if $SKIP_GULP_BUILD; then
 		echo "Skipping gulp build, only creating universal binary..."

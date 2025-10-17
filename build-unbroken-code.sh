@@ -12,6 +12,8 @@ REGENERATE_DMG=false
 GENERATE_RELEASE_DESCRIPTION=false
 BUILD_WINDOWS=false
 BUILD_MACOS=true
+BUILD_MACOS_X64=true
+BUILD_MACOS_ARM64=true
 BUILD_LINUX=false
 IGNORE_SUBMODULE_CHECK=false
 WINDOWS_BUILD_ARCHES=()
@@ -217,6 +219,23 @@ for arg in "$@"; do
 			BUILD_LINUX=false
 			shift
 			;;
+		--macos-arch=*)
+			BUILD_MACOS=true
+			BUILD_WINDOWS=false
+			BUILD_LINUX=false
+			MACOS_ARCH="${arg#--macos-arch=}"
+			if [ "$MACOS_ARCH" = "x64" ]; then
+				BUILD_MACOS_X64=true
+				BUILD_MACOS_ARM64=false
+			elif [ "$MACOS_ARCH" = "arm64" ]; then
+				BUILD_MACOS_X64=false
+				BUILD_MACOS_ARM64=true
+			else
+				echo "Error: Invalid macOS architecture '$MACOS_ARCH'. Use 'x64' or 'arm64'."
+				exit 1
+			fi
+			shift
+			;;
 		--linux)
 			BUILD_LINUX=true
 			BUILD_WINDOWS=false
@@ -247,6 +266,7 @@ for arg in "$@"; do
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
 			echo "  --windows-arch=<arch>  Build only the specified Windows architecture (x64 or arm64)"
 			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
+			echo "  --macos-arch=<arch>    Build only the specified macOS architecture (x64 or arm64)"
 			echo "  --linux          Build Linux binaries (x64, arm64, deb, rpm, tar.gz, CLI)"
 			echo "  --all-platforms  Build for all platforms (macOS, Windows, and Linux)"
 			echo "  --ignore-submodule-check  Skip checking if submodules have new commits"
@@ -271,6 +291,9 @@ for arg in "$@"; do
 			echo "  $0                           # Build for current platform"
 			echo "  $0 --new-version             # Update version only"
 			echo "  $0 --release                 # Build and create/update draft release"
+			echo "  $0 --macos-arch=arm64        # Build only macOS arm64"
+			echo "  $0 --macos-arch=x64          # Build only macOS x64"
+			echo "  $0 --windows-arch=x64        # Build only Windows x64"
 			exit 0
 			;;
 		*)
@@ -962,127 +985,154 @@ function Build_macOS()
 	fi
 
 	# Add macOS targets
-	rustup target add x86_64-apple-darwin
-	rustup target add aarch64-apple-darwin
+	if $BUILD_MACOS_X64; then
+		rustup target add x86_64-apple-darwin
+	fi
+	if $BUILD_MACOS_ARM64; then
+		rustup target add aarch64-apple-darwin
+	fi
 
 	# Build CLI for x64
-	echo "Building CLI for macOS x64..."
-	(cd cli && cargo build --release --target x86_64-apple-darwin)
+	if $BUILD_MACOS_X64; then
+		echo "Building CLI for macOS x64..."
+		(cd cli && cargo build --release --target x86_64-apple-darwin)
+	fi
 
 	# Build CLI for arm64
-	echo "Building CLI for macOS arm64..."
-	(cd cli && cargo build --release --target aarch64-apple-darwin)
+	if $BUILD_MACOS_ARM64; then
+		echo "Building CLI for macOS arm64..."
+		(cd cli && cargo build --release --target aarch64-apple-darwin)
+	fi
 
 	# Build both architectures with the same date
 	if $DO_BUILD; then
 		# Set environment variable to build directly to .dist directory
 		export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
 
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu x64
-		npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-darwin-x64
+		if $BUILD_MACOS_X64; then
+			npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm ci --cpu x64
+			npm_config_arch=x64 NPM_ARCH=x64 VSCODE_ARCH=x64 npm run gulp vscode-darwin-x64
+			touch "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app"
 
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
-		npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/binding.Makefile"
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/gyp-mac-tool"
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/extensions/vscode-copilot-chat/dist/test-"*
+			rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/extensions/vscode-copilot-chat/dist/sanity-test-"*
+		fi
 
-		touch "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app"
-		touch "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app"
+		if $BUILD_MACOS_ARM64; then
+			npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm ci --cpu arm64
+			npm_config_arch=arm64 NPM_ARCH=arm64 VSCODE_ARCH=arm64 npm run gulp vscode-darwin-arm64
+			touch "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app"
 
-		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
-		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"
-		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
-		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/binding.Makefile"
-		rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/gyp-mac-tool"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/binding.Makefile"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/gyp-mac-tool"
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/extensions/vscode-copilot-chat/dist/test-"*
+			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/extensions/vscode-copilot-chat/dist/sanity-test-"*
+		fi
 
-		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Makefile"
-		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/config.gypi"
-		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/Release/obj.target"
-		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/binding.Makefile"
-		rm -rf "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/keytar/build/gyp-mac-tool"
-
-		cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/Assets.car" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/"
-
-		cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-arm64" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
-		cp -r "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-x64" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
+		# Only copy files between architectures if both are being built
+		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
+			cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/Assets.car" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/"
+			cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-arm64" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
+			cp -r "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode/vsce-sign-darwin-x64" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@vscode"
+		fi
 	fi
 
 	# Integrate CLI into the main applications
 	if true; then
-		echo "Integrating CLI into macOS x64 application..."
+		if $BUILD_MACOS_X64; then
+			echo "Integrating CLI into macOS x64 application..."
 
-		# Get the tunnel application name from product.json
-		CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+			# Get the tunnel application name from product.json
+			CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
 
-		# Create bin directory if it doesn't exist
-		mkdir -p "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin"
+			# Create bin directory if it doesn't exist
+			mkdir -p "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin"
 
-		# Copy CLI binary to the application's bin directory
-		cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
-		chmod +x "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+			# Copy CLI binary to the application's bin directory
+			cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+			chmod +x "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
 
-		echo "CLI integrated as $CLI_APP_NAME (x64)"
+			echo "CLI integrated as $CLI_APP_NAME (x64)"
+		fi
 
-		echo "Integrating CLI into macOS arm64 application..."
+		if $BUILD_MACOS_ARM64; then
+			echo "Integrating CLI into macOS arm64 application..."
 
-		# Get the tunnel application name from product.json
-		CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+			# Get the tunnel application name from product.json
+			CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
 
-		# Create bin directory if it doesn't exist
-		mkdir -p "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin"
+			# Create bin directory if it doesn't exist
+			mkdir -p "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin"
 
-		# Copy CLI binary to the application's bin directory
-		cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
-		chmod +x "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+			# Copy CLI binary to the application's bin directory
+			cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
+			chmod +x "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/bin/$CLI_APP_NAME"
 
-		echo "CLI integrated as $CLI_APP_NAME (arm64)"
+			echo "CLI integrated as $CLI_APP_NAME (arm64)"
+		fi
 	fi
 
 	if true; then
 		# Create standalone CLI binary packages
-		echo "Creating CLI binary packages..."
+		if $BUILD_MACOS_X64; then
+			echo "Creating CLI binary package for x64..."
 
-		# Create temporary directory for CLI packaging
-		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_x64"
-		mkdir -p "$CLI_TEMP_DIR"
+			# Create temporary directory for CLI packaging
+			CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_x64"
+			mkdir -p "$CLI_TEMP_DIR"
 
-		# Copy CLI binary with Unbroken Code name
-		cp "cli/target/x86_64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
-		chmod +x "$CLI_TEMP_DIR/unbroken-code"
+			# Copy CLI binary with Unbroken Code name
+			cp "cli/target/x86_64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
+			chmod +x "$CLI_TEMP_DIR/unbroken-code"
 
-		# Create zip package (remove existing to avoid appending)
-		rm -f "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip"
-		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip" .)
+			# Create zip package (remove existing to avoid appending)
+			rm -f "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip"
+			(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_x64_cli.zip" .)
 
-		# Copy standalone binary
-		cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-x64"
+			# Copy standalone binary
+			cp "cli/target/x86_64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-x64"
 
-		# Cleanup temp directory
-		rm -rf "$CLI_TEMP_DIR"
+			# Cleanup temp directory
+			rm -rf "$CLI_TEMP_DIR"
 
-		echo "Created unbroken_code_cli_darwin_x64_cli.zip"
+			echo "Created unbroken_code_cli_darwin_x64_cli.zip"
+		fi
 
-		# Create temporary directory for CLI packaging
-		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_arm64"
-		mkdir -p "$CLI_TEMP_DIR"
+		if $BUILD_MACOS_ARM64; then
+			echo "Creating CLI binary package for arm64..."
 
-		# Copy CLI binary with Unbroken Code name
-		cp "cli/target/aarch64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
-		chmod +x "$CLI_TEMP_DIR/unbroken-code"
+			# Create temporary directory for CLI packaging
+			CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_arm64"
+			mkdir -p "$CLI_TEMP_DIR"
 
-		# Create zip package (remove existing to avoid appending)
-		rm -f "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip"
-		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip" .)
+			# Copy CLI binary with Unbroken Code name
+			cp "cli/target/aarch64-apple-darwin/release/code" "$CLI_TEMP_DIR/unbroken-code"
+			chmod +x "$CLI_TEMP_DIR/unbroken-code"
 
-		# Copy standalone binary
-		cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-arm64"
+			# Create zip package (remove existing to avoid appending)
+			rm -f "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip"
+			(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_arm64_cli.zip" .)
 
-		# Cleanup temp directory
-		rm -rf "$CLI_TEMP_DIR"
+			# Copy standalone binary
+			cp "cli/target/aarch64-apple-darwin/release/code" "$DIST_DIR/unbroken-code-cli-darwin-arm64"
 
-		echo "Created unbroken_code_cli_darwin_arm64_cli.zip"
+			# Cleanup temp directory
+			rm -rf "$CLI_TEMP_DIR"
+
+			echo "Created unbroken_code_cli_darwin_arm64_cli.zip"
+		fi
 	fi
 
-	# Create universal binary (even when skipping gulp build)
-	if true; then
+	# Create universal binary (even when skipping gulp build) - only if both architectures are built
+	if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
 		VSCODE_ARCH=universal node build/darwin/create-universal-app.js "$DIST_DIR"
 
 		# Create universal CLI binary if both architectures exist
@@ -1121,18 +1171,30 @@ function Build_macOS()
 
 	# Sign all architectures
 	if $DO_SIGN; then
-		VSCODE_ARCH=arm64 node build/darwin/sign.js "$DIST_DIR" &
-		VSCODE_ARCH=x64 node build/darwin/sign.js "$DIST_DIR" &
-		VSCODE_ARCH=universal node build/darwin/sign.js "$DIST_DIR" &
+		if $BUILD_MACOS_ARM64; then
+			VSCODE_ARCH=arm64 node build/darwin/sign.js "$DIST_DIR" &
+		fi
+		if $BUILD_MACOS_X64; then
+			VSCODE_ARCH=x64 node build/darwin/sign.js "$DIST_DIR" &
+		fi
+		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
+			VSCODE_ARCH=universal node build/darwin/sign.js "$DIST_DIR" &
+		fi
 		WaitWithErrorPropagation "signing macOS architectures"
 	fi
 
 	# Notarize and staple all architectures
 	if $DO_NOTARIZE; then
 		echo "Starting notarization process..."
-		VSCODE_ARCH=arm64 node build/darwin/notarize.js "$DIST_DIR" &
-		VSCODE_ARCH=x64 node build/darwin/notarize.js "$DIST_DIR" &
-		VSCODE_ARCH=universal node build/darwin/notarize.js "$DIST_DIR" &
+		if $BUILD_MACOS_ARM64; then
+			VSCODE_ARCH=arm64 node build/darwin/notarize.js "$DIST_DIR" &
+		fi
+		if $BUILD_MACOS_X64; then
+			VSCODE_ARCH=x64 node build/darwin/notarize.js "$DIST_DIR" &
+		fi
+		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
+			VSCODE_ARCH=universal node build/darwin/notarize.js "$DIST_DIR" &
+		fi
 		WaitWithErrorPropagation "notarizing macOS architectures"
 	fi
 }

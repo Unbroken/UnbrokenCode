@@ -31,6 +31,7 @@ const dirs = [
 	'extensions/json-language-features/server',
 	'extensions/malterlib',
 	'extensions/vscode-clangd',
+	'extensions/vscode-copilot-chat',
 	'extensions/codelldb',
 	'extensions/markdown-language-features',
 	'extensions/markdown-math',

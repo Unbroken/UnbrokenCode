@@ -151,6 +151,10 @@
 	display: none;
 }
 
+.markers-panel .monaco-action-bar .actions-container {
+	height: 16px;
+}
+
 .markers-panel .monaco-list-row:hover .monaco-tl-contents > .marker-icon.quickFix,
 .markers-panel .monaco-list-row.selected .monaco-tl-contents > .marker-icon.quickFix,
 .markers-panel .monaco-list-row.focused .monaco-tl-contents > .marker-icon.quickFix {

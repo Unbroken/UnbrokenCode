@@ -49,7 +49,9 @@ suite('MarkerDecorationsService', () => {
 
 	async function changeMarkers(model: ITextModel, count: number, owner = 'test', isTruncated = false): Promise<void> {
 		const changed = Event.toPromise(markerService.onMarkerChanged);
-		markerService.changeOne(owner, model.uri, createMarkers(count), { isTruncated });
+		// Each owner gets its own columns, as similar markers of different owners at one location are deduplicated
+		const column = owner === 'test' ? 1 : 2;
+		markerService.changeOne(owner, model.uri, createMarkers(count).map(marker => ({ ...marker, startColumn: column, endColumn: column + 1 })), { isTruncated });
 		await changed;
 	}
 

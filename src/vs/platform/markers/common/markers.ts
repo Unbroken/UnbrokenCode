@@ -214,6 +214,160 @@ export namespace IMarkerData {
 		result.push(emptyString);
 		return result.join('¦');
 	}
+
+}
+
+/**
+ * Count the total number of sub-problems across all categories in a marker
+ */
+export function getSubProblemCount(markerData: IMarker): number {
+	if (!markerData.subProblems) {
+		return 0;
+	}
+	return markerData.subProblems.reduce((total, category) => total + category.problems.length, 0);
+}
+
+/**
+ * Create a location-based key using resource and start position (end position may differ between sources)
+ */
+export function makeLocationKey(marker: IMarker): string {
+	return `${marker.resource.toString()}:${marker.startLineNumber}:${marker.startColumn}`;
+}
+
+/**
+ * Check if two marker messages are similar enough to be considered duplicates.
+ * Uses fuzzy matching based on word overlap and substring matching.
+ */
+export function messagesAreSimilar(msg1: string, msg2: string): boolean {
+	// Normalize messages
+	const normalize = (msg: string) => msg.toLowerCase().trim().replace(/\s+/g, ' ');
+	const norm1 = normalize(msg1);
+	const norm2 = normalize(msg2);
+
+	// Exact match after normalization
+	if (norm1 === norm2) {
+		return true;
+	}
+
+	// Extract meaningful words (alphanumeric sequences of 3+ chars)
+	const extractWords = (msg: string) => {
+		const words = msg.match(/\b\w{3,}\b/g) || [];
+		return new Set(words);
+	};
+
+	const words1 = extractWords(norm1);
+	const words2 = extractWords(norm2);
+
+	if (words1.size === 0 && words2.size === 0) {
+		return norm1 === norm2;
+	}
+
+	// Calculate word overlap
+	let commonWords = 0;
+	for (const word of words1) {
+		if (words2.has(word)) {
+			commonWords++;
+		}
+	}
+
+	// Consider similar if they share at least 50% of words
+	const minWords = Math.min(words1.size, words2.size);
+	if (minWords === 0) {
+		return false;
+	}
+
+	// Similar if: high overlap ratio OR one message is substring of other
+	const overlapRatio = commonWords / minWords;
+	const substringMatch = norm1.includes(norm2) || norm2.includes(norm1);
+
+	return overlapRatio >= 0.5 || substringMatch;
+}
+
+/**
+ * Deduplicate markers at the same location with similar messages.
+ * Prefers markers with more subProblems when duplicates are found.
+ */
+export function deduplicateMarkers(markers: IMarker[]): IMarker[] {
+	if (markers.length === 0) {
+		return markers;
+	}
+
+	// Group markers by location
+	const markersByLocation = new Map<string, IMarker[]>();
+	for (const marker of markers) {
+		const locationKey = makeLocationKey(marker);
+		const existing = markersByLocation.get(locationKey);
+		if (!existing) {
+			markersByLocation.set(locationKey, [marker]);
+		} else {
+			existing.push(marker);
+		}
+	}
+
+	// Deduplicate markers at the same location with similar messages
+	const deduplicated: IMarker[] = [];
+	for (const [, markersAtLocation] of markersByLocation) {
+		if (markersAtLocation.length === 1) {
+			// No duplicates at this location
+			deduplicated.push(markersAtLocation[0]);
+		} else {
+			// Multiple markers at same location - check for similar messages
+			const kept: IMarker[] = [];
+			for (const marker of markersAtLocation) {
+				let foundSimilar = false;
+				for (let i = 0; i < kept.length; i++) {
+					const existing = kept[i];
+					if (messagesAreSimilar(marker.message, existing.message)) {
+						// Similar messages - keep the one with more subProblems
+						const markerSubProblems = getSubProblemCount(marker);
+						const existingSubProblems = getSubProblemCount(existing);
+
+						if (markerSubProblems > existingSubProblems) {
+							// New marker has more subProblems, use it
+							kept[i] = marker;
+						} else if (markerSubProblems === existingSubProblems) {
+							// Same number of subProblems - use deterministic ordering as tie-breaker
+							// Compare by: owner, then resourceSequenceNumber, then sequenceNumber
+							const ownerCompare = (marker.owner || '').localeCompare(existing.owner || '');
+
+							if (ownerCompare !== 0) {
+								// Different owners - keep the one that's lexicographically later
+								if (ownerCompare > 0) {
+									kept[i] = marker;
+								}
+							} else {
+								// Same owner, compare by resourceSequenceNumber
+								const markerRSeq = marker.resourceSequenceNumber || 0;
+								const existingRSeq = existing.resourceSequenceNumber || 0;
+
+								if (markerRSeq !== existingRSeq) {
+									// Keep the one with higher resourceSequenceNumber (more recent)
+									if (markerRSeq > existingRSeq) {
+										kept[i] = marker;
+									}
+								} else {
+									// Same resourceSequenceNumber, use sequenceNumber as final tie-breaker
+									if (marker.sequenceNumber > existing.sequenceNumber) {
+										kept[i] = marker;
+									}
+								}
+							}
+						}
+						// If existing has more subProblems, keep existing (do nothing)
+
+						foundSimilar = true;
+						break;
+					}
+				}
+				if (!foundSimilar) {
+					kept.push(marker);
+				}
+			}
+			deduplicated.push(...kept);
+		}
+	}
+
+	return deduplicated;
 }
 
 export const IMarkerService = createDecorator<IMarkerService>('markerService');

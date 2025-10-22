@@ -142,7 +142,7 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 					orderLoop: for (let i = 0; i < 4; i++) {
 						for (const diagnostic of diagnostics) {
 							if (diagnostic.severity === order[i]) {
-								const len = marker.push({ ...converter.Diagnostic.from(diagnostic), modelVersionId: this._modelVersionIdProvider(uri) });
+								const len = marker.push({ ...converter.Diagnostic.from(diagnostic, resourceSequence, markerSequence++), modelVersionId: this._modelVersionIdProvider(uri) });
 								if (len === this._maxDiagnosticsPerFile) {
 									break orderLoop;
 								}
@@ -150,7 +150,6 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 						}
 					}
 
-					++markerSequence;
 					// add 'signal' marker for showing omitted errors/warnings
 					marker.push({
 						severity: MarkerSeverity.Info,
@@ -160,11 +159,11 @@ export class DiagnosticCollection implements vscode.DiagnosticCollection {
 						endLineNumber: marker[marker.length - 1].endLineNumber,
 						endColumn: marker[marker.length - 1].endColumn,
 						resourceSequenceNumber: resourceSequence,
-						sequenceNumber: markerSequence
+						sequenceNumber: markerSequence++
 
 					});
 				} else {
-					marker = diagnostics.map(diag => ({ ...converter.Diagnostic.from(diag), modelVersionId: this._modelVersionIdProvider(uri) }));
+					marker = diagnostics.map(diag => ({ ...converter.Diagnostic.from(diag, resourceSequence, markerSequence++), modelVersionId: this._modelVersionIdProvider(uri) }));
 				}
 			}
 

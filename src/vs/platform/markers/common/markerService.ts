@@ -11,7 +11,7 @@ import { ResourceMap, ResourceSet } from '../../../base/common/map.js';
 import { Schemas } from '../../../base/common/network.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
-import { IMarker, IMarkerData, IMarkerReadOptions, IMarkerService, IResourceMarker, MarkerSeverity, MarkerStatistics } from './markers.js';
+import { IMarker, IMarkerData, IMarkerReadOptions, IMarkerService, IResourceMarker, MarkerSeverity, MarkerStatistics, deduplicateMarkers } from './markers.js';
 
 export const unsupportedSchemas = new Set([
 	Schemas.inMemory,
@@ -369,7 +369,8 @@ export class MarkerService implements IMarkerService {
 					result.push(marker);
 				}
 			}
-			return result;
+			// Deduplicate even from single owner (in case owner reports duplicates)
+			return deduplicateMarkers(result);
 
 		} else {
 			// of one resource OR owner
@@ -398,7 +399,9 @@ export class MarkerService implements IMarkerService {
 					}
 				}
 			}
-			return result;
+			// Deduplicate markers from different sources (e.g., clangd and compiler)
+			// when aggregating across owners
+			return deduplicateMarkers(result);
 		}
 	}
 

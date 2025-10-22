@@ -854,9 +854,14 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 		state: IPatternProcessingState,
 	): { needMoreLines: boolean; failed: boolean } {
 		let anySuccess = false;
+		let anyNonOptional = false;
 
 		for (let patternIndex = 0; patternIndex < patterns.length; patternIndex++) {
 			const pattern = patterns[patternIndex];
+
+			if (!pattern.optional) {
+				anyNonOptional = true;
+			}
 
 			// Handle loop patterns
 			if (pattern.loop) {
@@ -893,7 +898,7 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 			}
 		}
 
-		return { needMoreLines: false, failed: !anySuccess };
+		return { needMoreLines: false, failed: !anySuccess && anyNonOptional };
 	}
 
 	private handleMultiLineMessagePattern(pattern: IProblemPattern, lines: string[], start: number, data: IProblemData): { consumedLines: number; needMoreLines: boolean } {
@@ -1050,7 +1055,7 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 		// Handle nested patterns (sub-patterns) last - after all current pattern processing is complete
 		if (pattern.pattern && pattern.pattern.length > 0) {
 			if (pattern.loopPattern) {
-				let totalConsumed = 0;
+				let anySuccess = false;
 				while (true) {
 					const savedLineIndex = state.currentLineIndex;
 					const savedTotalConsumed = state.totalConsumedLines;
@@ -1068,17 +1073,17 @@ class AdvancedLineMatcher extends AbstractLineMatcher {
 						break;
 					}
 
+					anySuccess = true;
+
 					const consumed = state.currentLineIndex - savedLineIndex;
 					if (consumed === 0) {
 						// No lines consumed, avoid infinite loop
 						break;
 					}
-
-					totalConsumed += consumed;
 				}
 
 				return {
-					success: totalConsumed > 0,
+					success: anySuccess,
 					needMoreLines: false
 				};
 
@@ -2554,11 +2559,11 @@ export class ProblemMatcherParser extends Parser {
 		function copyProperty(result: IAdvancedProblemPattern, source: Config.IAdvancedProblemPattern, resultKey: keyof IAdvancedProblemPattern, sourceKey: keyof Config.IAdvancedProblemPattern) {
 			const value = source[sourceKey];
 			if (typeof value === 'number') {
-				(result as any)[resultKey] = value;
+				(result as Record<string, any>)[resultKey] = value;
 			} else if (typeof value === 'boolean') {
-				(result as any)[resultKey] = value;
+				(result as Record<string, any>)[resultKey] = value;
 			} else if (typeof value === 'string') {
-				(result as any)[resultKey] = value;
+				(result as Record<string, any>)[resultKey] = value;
 			}
 		}
 

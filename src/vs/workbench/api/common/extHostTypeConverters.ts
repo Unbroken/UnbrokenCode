@@ -234,7 +234,7 @@ export namespace DiagnosticTag {
 }
 
 export namespace Diagnostic {
-	export function from(value: vscode.Diagnostic): IMarkerData {
+	export function from(value: vscode.Diagnostic, resourceSequenceNumber: number, sequenceNumber: number): IMarkerData {
 		let code: string | { value: string; target: URI } | undefined;
 
 		if (value.code) {
@@ -254,7 +254,7 @@ export namespace Diagnostic {
 				category: categoryGroup.category,
 				problems: categoryGroup.problems.map((item: { resource: vscode.Uri; diagnostic: vscode.Diagnostic }) => ({
 					resource: URI.from(item.resource),
-					marker: Diagnostic.from(item.diagnostic)
+					marker: Diagnostic.from(item.diagnostic, resourceSequenceNumber, sequenceNumber)
 				}))
 			}));
 		}
@@ -268,8 +268,8 @@ export namespace Diagnostic {
 			relatedInformation: value.relatedInformation && value.relatedInformation.map(DiagnosticRelatedInformation.from),
 			tags: Array.isArray(value.tags) ? coalesce(value.tags.map(DiagnosticTag.from)) : undefined,
 			subProblems,
-			resourceSequenceNumber: 0,
-			sequenceNumber: 0
+			resourceSequenceNumber: resourceSequenceNumber,
+			sequenceNumber: sequenceNumber
 		};
 	}
 

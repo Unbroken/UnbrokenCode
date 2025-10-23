@@ -46,6 +46,7 @@ export class TerminalLinkManager extends DisposableStore {
 	private readonly _linkProvidersDisposables: IDisposable[] = [];
 	private readonly _externalLinkProviders: IDisposable[] = [];
 	private readonly _openers: Map<TerminalLinkType, ITerminalLinkOpener> = new Map();
+	private _activeTooltipHoverDisposable: IDisposable | undefined;
 
 	externalProvideLinksCb?: OmitFirstArg<ITerminalExternalLinkProvider['provideLinks']>;
 
@@ -102,6 +103,7 @@ export class TerminalLinkManager extends DisposableStore {
 			dispose(this._externalLinkProviders);
 			activeHoverDisposable?.dispose();
 			activeTooltipScheduler?.dispose();
+			this._activeTooltipHoverDisposable?.dispose();
 		}));
 		this._xterm.options.linkHandler = {
 			allowNonHttpProtocols: true,
@@ -350,6 +352,10 @@ export class TerminalLinkManager extends DisposableStore {
 			return;
 		}
 
+		// Dispose old hover before creating new one
+		this._activeTooltipHoverDisposable?.dispose();
+		this._activeTooltipHoverDisposable = undefined;
+
 		interface XtermWithCore extends Terminal {
 			_core: IXtermCore;
 		}
@@ -364,7 +370,7 @@ export class TerminalLinkManager extends DisposableStore {
 		};
 
 		// Don't pass the mouse event as this avoids the modifier check
-		this._showHover({
+		this._activeTooltipHoverDisposable = this._showHover({
 			viewportRange,
 			cellDimensions,
 			terminalDimensions,
@@ -383,8 +389,11 @@ export class TerminalLinkManager extends DisposableStore {
 		if (this._widgetManager) {
 			const widget = this._instantiationService.createInstance(TerminalHover, targetOptions, text, actions, linkHandler);
 			const attached = this._widgetManager.attachWidget(widget);
-			if (attached) {
-				link?.onInvalidated(() => attached.dispose());
+			if (attached && link) {
+				const store = new DisposableStore();
+				store.add(attached);
+				store.add(link.onInvalidated(() => attached.dispose()));
+				return store;
 			}
 			return attached;
 		}

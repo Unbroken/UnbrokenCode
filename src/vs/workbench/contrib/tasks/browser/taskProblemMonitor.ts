@@ -29,7 +29,7 @@ export class TaskProblemMonitor extends Disposable {
 			markers: new Map<string, Map<string, IMarkerData>>()
 		});
 
-		const store = new DisposableStore();
+		const store = this._register(new DisposableStore());
 		this.terminalDisposables.set(terminal.instanceId, store);
 
 		store.add(terminal.onDisposed(() => {

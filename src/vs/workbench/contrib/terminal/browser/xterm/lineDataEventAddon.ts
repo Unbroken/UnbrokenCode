@@ -73,6 +73,27 @@ export class LineDataEventAddon extends Disposable implements ITerminalAddon {
 		}
 	}
 
+	/**
+	 * Reset line tracking state. This should be called when the terminal buffer is cleared.
+	 */
+	reset(): void {
+		// Flush any buffered data before resetting
+		if (this._xterm && this._highestChangedLineIndex !== undefined) {
+			const buffer = this._xterm.buffer;
+			this._sendLineDataImpl(buffer.active, this._highestChangedLineIndex, true);
+		}
+
+		// Clear any pending force commit timer
+		if (this._forceCommitTimer) {
+			clearTimeout(this._forceCommitTimer);
+			this._forceCommitTimer = undefined;
+		}
+
+		// Reset tracking indices
+		this._lastCommitedLineIndex = undefined;
+		this._highestChangedLineIndex = undefined;
+	}
+
 	private _sendLineData(buffer: IBuffer, lastLineIndex: number): void {
 		this._highestChangedLineIndex = Math.max(this._highestChangedLineIndex || 0, lastLineIndex);
 		this._sendLineDataImpl(buffer, lastLineIndex, false);

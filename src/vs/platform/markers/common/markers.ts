@@ -228,10 +228,10 @@ export function getSubProblemCount(markerData: IMarker): number {
 }
 
 /**
- * Create a location-based key using only start position (end position may differ between sources)
+ * Create a location-based key using resource and start position (end position may differ between sources)
  */
 export function makeLocationKey(marker: IMarker): string {
-	return `${marker.startLineNumber}:${marker.startColumn}`;
+	return `${marker.resource.toString()}:${marker.startLineNumber}:${marker.startColumn}`;
 }
 
 /**
@@ -319,9 +319,42 @@ export function deduplicateMarkers(markers: IMarker[]): IMarker[] {
 					const existing = kept[i];
 					if (messagesAreSimilar(marker.message, existing.message)) {
 						// Similar messages - keep the one with more subProblems
-						if (getSubProblemCount(marker) > getSubProblemCount(existing)) {
+						const markerSubProblems = getSubProblemCount(marker);
+						const existingSubProblems = getSubProblemCount(existing);
+
+						if (markerSubProblems > existingSubProblems) {
+							// New marker has more subProblems, use it
 							kept[i] = marker;
+						} else if (markerSubProblems === existingSubProblems) {
+							// Same number of subProblems - use deterministic ordering as tie-breaker
+							// Compare by: owner, then resourceSequenceNumber, then sequenceNumber
+							const ownerCompare = (marker.owner || '').localeCompare(existing.owner || '');
+
+							if (ownerCompare !== 0) {
+								// Different owners - keep the one that's lexicographically later
+								if (ownerCompare > 0) {
+									kept[i] = marker;
+								}
+							} else {
+								// Same owner, compare by resourceSequenceNumber
+								const markerRSeq = marker.resourceSequenceNumber || 0;
+								const existingRSeq = existing.resourceSequenceNumber || 0;
+
+								if (markerRSeq !== existingRSeq) {
+									// Keep the one with higher resourceSequenceNumber (more recent)
+									if (markerRSeq > existingRSeq) {
+										kept[i] = marker;
+									}
+								} else {
+									// Same resourceSequenceNumber, use sequenceNumber as final tie-breaker
+									if (marker.sequenceNumber > existing.sequenceNumber) {
+										kept[i] = marker;
+									}
+								}
+							}
 						}
+						// If existing has more subProblems, keep existing (do nothing)
+
 						foundSimilar = true;
 						break;
 					}

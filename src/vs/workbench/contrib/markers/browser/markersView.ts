@@ -367,8 +367,8 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 				if (markerOrChange instanceof Marker) {
 					this.widget.updateMarker(markerOrChange);
 				} else {
-					if (markerOrChange.added.size || markerOrChange.removed.size) {
-						// Reset complete widget
+					if (markerOrChange.added.size || markerOrChange.removed.size || markerOrChange.resourceSequenceNumberChanged) {
+						// Reset complete widget when resources are added/removed or resource order has changed
 						this.resetWidget();
 					} else {
 						// Update resource

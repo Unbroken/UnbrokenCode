@@ -227,6 +227,7 @@ export interface MarkerChangesEvent {
 	readonly added: Set<ResourceMarkers>;
 	readonly removed: Set<ResourceMarkers>;
 	readonly updated: Set<ResourceMarkers>;
+	resourceSequenceNumberChanged: boolean;
 }
 
 export class MarkersModel {
@@ -267,7 +268,8 @@ export class MarkersModel {
 			this._onDidChange.fire({
 				added: allResources,
 				removed: allResources,
-				updated: new Set<ResourceMarkers>()
+				updated: new Set<ResourceMarkers>(),
+				resourceSequenceNumberChanged: false
 			});
 		}
 	}
@@ -279,7 +281,7 @@ export class MarkersModel {
 		}
 		this.resourcesByUri.clear();
 		this._total = 0;
-		this._onDidChange.fire({ removed, added: new Set<ResourceMarkers>(), updated: new Set<ResourceMarkers>() });
+		this._onDidChange.fire({ removed, added: new Set<ResourceMarkers>(), updated: new Set<ResourceMarkers>(), resourceSequenceNumberChanged: false });
 	}
 
 	private _total: number = 0;
@@ -292,7 +294,7 @@ export class MarkersModel {
 	}
 
 	setResourceMarkers(resourcesMarkers: [URI, IMarker[]][]): void {
-		const change: MarkerChangesEvent = { added: new Set(), removed: new Set(), updated: new Set() };
+		const change: MarkerChangesEvent = { added: new Set(), removed: new Set(), updated: new Set(), resourceSequenceNumberChanged: false };
 		for (const [resource, rawMarkers] of resourcesMarkers) {
 
 			if (unsupportedSchemas.has(resource.scheme)) {
@@ -340,6 +342,16 @@ export class MarkersModel {
 
 					return marker;
 				});
+
+				// Check if resourceSequenceNumber has changed (only for updated resources)
+				if (change.updated.has(resourceMarkers) && this._sortOrder === MarkerSortOrder.OutputOrder) {
+					const oldFirstMarker = resourceMarkers.markers[0];
+					const newFirstMarker = markers[0];
+					if (oldFirstMarker && newFirstMarker &&
+						oldFirstMarker.marker.resourceSequenceNumber !== newFirstMarker.marker.resourceSequenceNumber) {
+						change.resourceSequenceNumberChanged = true;
+					}
+				}
 
 				this._total -= resourceMarkers.total;
 				resourceMarkers.set(resource, markers);

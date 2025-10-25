@@ -44,8 +44,8 @@ function compareResourceMarkersByOutputOrder(a: ResourceMarkers, b: ResourceMark
 	const [firstMarkerOfB] = b.markers;
 	if (firstMarkerOfA && firstMarkerOfB) {
 		// Compare by resource sequence number first
-		const rseqA = firstMarkerOfA.marker.resourceSequenceNumber;
-		const rseqB = firstMarkerOfB.marker.resourceSequenceNumber;
+		const rseqA = firstMarkerOfA.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+		const rseqB = firstMarkerOfB.marker.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
 		if (rseqA !== rseqB) {
 			return rseqA - rseqB;
 		}

@@ -28,8 +28,8 @@ export class MarkerCoordinate {
 
 function compareResourceMarkersByOutputOrder(a: IMarker, b: IMarker): number {
 	// Compare by resource sequence number first
-	const rseqA = a.resourceSequenceNumber;
-	const rseqB = b.resourceSequenceNumber;
+	const rseqA = a.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
+	const rseqB = b.resourceSequenceNumber || Number.MAX_SAFE_INTEGER;
 	if (rseqA !== rseqB) {
 		return rseqA - rseqB;
 	}

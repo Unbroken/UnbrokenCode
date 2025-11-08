@@ -25,7 +25,8 @@ function getMockTheme(type: ColorScheme): IColorTheme {
 		getTokenStyleMetadata: () => undefined,
 		tokenColorMap: [],
 		semanticHighlighting: false,
-		highlightingColorSpace: null as RGBColorSpace
+		highlightingColorSpace: null as RGBColorSpace,
+		colorSpace: null as RGBColorSpace
 	};
 	return theme;
 }

@@ -8,6 +8,7 @@ import { ExtensionsRegistry } from '../../extensions/common/extensionsRegistry.j
 import { IColorRegistry, Extensions as ColorRegistryExtensions } from '../../../../platform/theme/common/colorRegistry.js';
 import { Color } from '../../../../base/common/color.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { COLOR_VALUE_PATTERN } from '../../../../platform/theme/common/colorUtils.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Extensions, IExtensionFeatureTableRenderer, IExtensionFeaturesRegistry, IRenderedData, IRowData, ITableData } from '../../extensionManagement/common/extensionFeatures.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -47,35 +48,35 @@ const configurationExtPoint = ExtensionsRegistry.registerExtensionPoint<IColorEx
 					type: 'object',
 					properties: {
 						light: {
-							description: nls.localize('contributes.defaults.light', 'The default color for light themes. Either a color value in hex (#RRGGBB[AA]) or the identifier of a themable color which provides the default.'),
+							description: nls.localize('contributes.defaults.light', 'The default color for light themes. Either a color value in hex (#RRGGBB[AA]), color() function, or the identifier of a themable color which provides the default.'),
 							type: 'string',
 							anyOf: [
 								colorReferenceSchema,
-								{ type: 'string', format: 'color-hex' }
+								{ type: 'string', pattern: COLOR_VALUE_PATTERN }
 							]
 						},
 						dark: {
-							description: nls.localize('contributes.defaults.dark', 'The default color for dark themes. Either a color value in hex (#RRGGBB[AA]) or the identifier of a themable color which provides the default.'),
+							description: nls.localize('contributes.defaults.dark', 'The default color for dark themes. Either a color value in hex (#RRGGBB[AA]), color() function, or the identifier of a themable color which provides the default.'),
 							type: 'string',
 							anyOf: [
 								colorReferenceSchema,
-								{ type: 'string', format: 'color-hex' }
+								{ type: 'string', pattern: COLOR_VALUE_PATTERN }
 							]
 						},
 						highContrast: {
-							description: nls.localize('contributes.defaults.highContrast', 'The default color for high contrast dark themes. Either a color value in hex (#RRGGBB[AA]) or the identifier of a themable color which provides the default. If not provided, the `dark` color is used as default for high contrast dark themes.'),
+							description: nls.localize('contributes.defaults.highContrast', 'The default color for high contrast dark themes. Either a color value in hex (#RRGGBB[AA]), color() function, or the identifier of a themable color which provides the default. If not provided, the `dark` color is used as default for high contrast dark themes.'),
 							type: 'string',
 							anyOf: [
 								colorReferenceSchema,
-								{ type: 'string', format: 'color-hex' }
+								{ type: 'string', pattern: COLOR_VALUE_PATTERN }
 							]
 						},
 						highContrastLight: {
-							description: nls.localize('contributes.defaults.highContrastLight', 'The default color for high contrast light themes. Either a color value in hex (#RRGGBB[AA]) or the identifier of a themable color which provides the default. If not provided, the `light` color is used as default for high contrast light themes.'),
+							description: nls.localize('contributes.defaults.highContrastLight', 'The default color for high contrast light themes. Either a color value in hex (#RRGGBB[AA]), color() function, or the identifier of a themable color which provides the default. If not provided, the `light` color is used as default for high contrast light themes.'),
 							type: 'string',
 							anyOf: [
 								colorReferenceSchema,
-								{ type: 'string', format: 'color-hex' }
+								{ type: 'string', pattern: COLOR_VALUE_PATTERN }
 							]
 						}
 					},
@@ -100,11 +101,13 @@ export class ColorExtensionPoint {
 				}
 				const parseColorValue = (s: string, name: string) => {
 					if (s.length > 0) {
-						if (s[0] === '#') {
-							return Color.Format.CSS.parseHex(s);
-						} else {
-							return s;
+						// Try to parse as a color value (hex, rgb, rgba, color() function, etc.)
+						const parsed = Color.Format.CSS.parse(s);
+						if (parsed) {
+							return parsed;
 						}
+						// If parsing failed, assume it's a color identifier reference
+						return s;
 					}
 					collector.error(nls.localize('invalid.default.colorType', "{0} must be either a color value in hex (#RRGGBB[AA] or #RGB[A]) or the identifier of a themable color which provides the default.", name));
 					return Color.red;

@@ -40,6 +40,7 @@ export class TestColorTheme implements IColorTheme {
 	}
 
 	public readonly highlightingColorSpace = null;
+	public readonly colorSpace = null;
 }
 
 class TestFileIconTheme implements IFileIconTheme {

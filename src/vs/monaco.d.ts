@@ -1186,6 +1186,7 @@ declare namespace monaco.editor {
 		encodedTokensColors?: string[];
 		colors: IColors;
 		highlightingColorSpace: RGBColorSpace;
+		colorSpace: RGBColorSpace;
 	}
 
 	export type IColors = {

@@ -15,7 +15,7 @@ import { BuiltinTheme, IStandaloneTheme, IStandaloneThemeData, IStandaloneThemeS
 import { hc_black, hc_light, vs, vs_dark } from '../common/themes.js';
 import { IEnvironmentService } from '../../../platform/environment/common/environment.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
-import { asCssVariableName, ColorIdentifier, Extensions, IColorRegistry } from '../../../platform/theme/common/colorRegistry.js';
+import { asCssVariableName, ColorIdentifier, Extensions, IColorRegistry, ensureColorSpace } from '../../../platform/theme/common/colorRegistry.js';
 import { Extensions as ThemingExtensions, ICssStyleCollector, IFileIconTheme, IProductIconTheme, IThemingRegistry, ITokenStyle } from '../../../platform/theme/common/themeService.js';
 import { IDisposable, Disposable } from '../../../base/common/lifecycle.js';
 import { ColorScheme, isDark, isHighContrast } from '../../../platform/theme/common/theme.js';
@@ -35,6 +35,7 @@ class StandaloneTheme implements IStandaloneTheme {
 	public readonly id: string;
 	public readonly themeName: string;
 	public highlightingColorSpace: RGBColorSpace;
+	public colorSpace: RGBColorSpace;
 
 	private readonly themeData: IStandaloneThemeData;
 	private colors: Map<string, Color> | null;
@@ -59,6 +60,7 @@ class StandaloneTheme implements IStandaloneTheme {
 		this.defaultColors = Object.create(null);
 		this._tokenTheme = null;
 		this.highlightingColorSpace = standaloneThemeData.highlightingColorSpace;
+		this.colorSpace = standaloneThemeData.colorSpace;
 	}
 
 	public get label(): string {
@@ -98,10 +100,10 @@ class StandaloneTheme implements IStandaloneTheme {
 	public getColor(colorId: ColorIdentifier, useDefault?: boolean): Color | undefined {
 		const color = this.getColors().get(colorId);
 		if (color) {
-			return color;
+			return ensureColorSpace(color, this);
 		}
 		if (useDefault !== false) {
-			return this.getDefault(colorId);
+			return ensureColorSpace(this.getDefault(colorId), this);
 		}
 		return undefined;
 	}

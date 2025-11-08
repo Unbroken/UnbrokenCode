@@ -20,6 +20,7 @@ export interface IStandaloneThemeData {
 	encodedTokensColors?: string[];
 	colors: IColors;
 	highlightingColorSpace: RGBColorSpace;
+	colorSpace: RGBColorSpace;
 }
 
 export interface IStandaloneTheme extends IColorTheme {

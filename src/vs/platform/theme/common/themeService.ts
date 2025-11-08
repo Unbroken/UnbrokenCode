@@ -79,6 +79,11 @@ export interface IColorTheme {
 	 * Preferred RGB color space to use for syntax highlighting when this theme is active.
 	 */
 	readonly highlightingColorSpace: RGBColorSpace;
+
+	/**
+	 * Preferred RGB color space to use for UI/workbench colors when this theme is active.
+	 */
+	readonly colorSpace: RGBColorSpace;
 }
 
 export interface IFileIconTheme {

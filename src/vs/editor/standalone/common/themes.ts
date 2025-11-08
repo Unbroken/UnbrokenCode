@@ -12,6 +12,7 @@ export const vs: IStandaloneThemeData = {
 	base: 'vs',
 	inherit: false,
 	highlightingColorSpace: null,
+	colorSpace: null,
 	rules: [
 		{ token: '', foreground: '000000', background: 'fffffe' },
 		{ token: 'invalid', foreground: 'cd3131' },
@@ -85,6 +86,7 @@ export const vs_dark: IStandaloneThemeData = {
 	base: 'vs-dark',
 	inherit: false,
 	highlightingColorSpace: null,
+	colorSpace: null,
 	rules: [
 		{ token: '', foreground: 'D4D4D4', background: '1E1E1E' },
 		{ token: 'invalid', foreground: 'f44747' },
@@ -158,6 +160,7 @@ export const hc_black: IStandaloneThemeData = {
 	base: 'hc-black',
 	inherit: false,
 	highlightingColorSpace: null,
+	colorSpace: null,
 	rules: [
 		{ token: '', foreground: 'FFFFFF', background: '000000' },
 		{ token: 'invalid', foreground: 'f44747' },
@@ -218,6 +221,7 @@ export const hc_light: IStandaloneThemeData = {
 	base: 'hc-light',
 	inherit: false,
 	highlightingColorSpace: null,
+	colorSpace: null,
 	rules: [
 		{ token: '', foreground: '292929', background: 'FFFFFF' },
 		{ token: 'invalid', foreground: 'B5200D' },

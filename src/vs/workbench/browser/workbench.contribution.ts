@@ -727,6 +727,20 @@ const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Con
 				default: 'default',
 				description: localize('workbench.highlightingColorSpace', "Controls the color space used for syntax highlighting.")
 			},
+			'workbench.colorSpace': {
+				type: 'string',
+				enum: ['default', 'srgb', 'display-p3', 'a98-rgb', 'prophoto-rgb', 'rec2020'],
+				enumDescriptions: [
+					localize('colorSpace.default', "Use the theme's color space for UI colors."),
+					localize('colorSpace.srgb', "Use sRGB color space for UI colors."),
+					localize('colorSpace.display-p3', "Use Display P3 color space for UI colors."),
+					localize('colorSpace.a98-rgb', "Use Adobe RGB (1998) color space for UI colors."),
+					localize('colorSpace.prophoto-rgb', "Use ProPhoto RGB color space for UI colors."),
+					localize('colorSpace.rec2020', "Use Rec. 2020 color space for UI colors.")
+				],
+				default: 'default',
+				description: localize('workbench.colorSpace', "Controls the color space used for workbench and UI colors.")
+			},
 		}
 	});
 

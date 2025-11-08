@@ -55,6 +55,12 @@ export const TERMINAL_COMMAND_DECORATION_ERROR_BACKGROUND_COLOR = registerColor(
 	hcDark: '#F14C4C',
 	hcLight: '#B5200D'
 }, nls.localize('terminalCommandDecoration.errorBackground', 'The terminal command decoration background color for error commands.'));
+export const TERMINAL_TASK_SUCCESS_ICON_COLOR = registerColor('terminalTaskStatus.successIcon', {
+	dark: '#00ff00',
+	light: '#388A34',
+	hcDark: '#00ff00',
+	hcLight: '#216700'
+}, nls.localize('terminalTaskStatus.successIcon', 'The icon color for successful tasks in terminal tabs.'));
 export const TERMINAL_OVERVIEW_RULER_CURSOR_FOREGROUND_COLOR = registerColor('terminalOverviewRuler.cursorForeground', '#A0A0A0CC', nls.localize('terminalOverviewRuler.cursorForeground', 'The overview ruler cursor color.'));
 export const TERMINAL_BORDER_COLOR = registerColor('terminal.border', PANEL_BORDER, nls.localize('terminal.border', 'The color of the border that separates split panes within the terminal. This defaults to panel.border.'));
 export const TERMINAL_OVERVIEW_RULER_BORDER_COLOR = registerColor('terminalOverviewRuler.border', editorOverviewRulerBorder, nls.localize('terminalOverviewRuler.border', 'The overview ruler left-side border color.'));

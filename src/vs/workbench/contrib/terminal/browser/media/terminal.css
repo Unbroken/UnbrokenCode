@@ -433,6 +433,21 @@
 	color: inherit;
 }
 
+/* Preserve icon badge colors (like green checkmark) even when selected */
+.monaco-workbench .pane-body.integrated-terminal .tabs-list .terminal-tabs-entry.has-success-status .monaco-icon-label::after {
+	color: var(--vscode-terminalTaskStatus-successIcon) !important;
+}
+
+/* Apply green color to success checkmark when tabs are collapsed (no text, icon-only mode) */
+.monaco-workbench .pane-body.integrated-terminal .tabs-container:not(.has-text) .terminal-tabs-entry.has-success-status .codicon-check {
+	color: var(--vscode-terminalTaskStatus-successIcon) !important;
+}
+
+/* Apply green color to success checkmark in title actions */
+.monaco-action-bar .action-item .single-terminal-tab.has-success-status .codicon-check {
+	color: var(--vscode-terminalTaskStatus-successIcon) !important;
+}
+
 .monaco-workbench .pane-body.integrated-terminal .tabs-container:not(.has-text) .monaco-icon-description-container {
 	/* The description element doesn't go away once created sometimes so force hide */
 	display: none;

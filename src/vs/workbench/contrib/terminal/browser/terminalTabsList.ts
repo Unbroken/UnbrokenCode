@@ -355,6 +355,14 @@ class TerminalTabsRenderer implements IListRenderer<ITerminalInstance, ITerminal
 		template.element.classList.toggle('has-text', hasText);
 		template.element.classList.toggle('is-active', this._terminalGroupService.activeInstance === instance);
 
+		// Add class for successful task status (green checkmark)
+		const primaryStatus = instance.statusList.primary;
+		const isSuccessfulTask = primaryStatus?.id === 'task_terminal_status' &&
+			primaryStatus.severity === Severity.Info &&
+			ThemeIcon.isThemeIcon(primaryStatus.icon) &&
+			primaryStatus.icon.id === Codicon.check.id;
+		template.element.classList.toggle('has-success-status', isSuccessfulTask);
+
 		let prefix: string = '';
 		if (group.terminalInstances.length > 1) {
 			const terminalIndex = group.terminalInstances.indexOf(instance);
@@ -835,9 +843,15 @@ class TabDecorationsProvider extends Disposable implements IDecorationsProvider 
 			return undefined;
 		}
 
+		// Apply green color to checkmark icon for successful tasks
+		let icon = primaryStatus.icon;
+		if (primaryStatus.id === 'task_terminal_status' && primaryStatus.severity === Severity.Info && ThemeIcon.isThemeIcon(primaryStatus.icon) && primaryStatus.icon.id === Codicon.check.id) {
+			icon = { id: primaryStatus.icon.id, color: { id: 'terminalTaskStatus.successIcon' } };
+		}
+
 		return {
 			color: getColorForSeverity(primaryStatus.severity),
-			letter: primaryStatus.icon,
+			letter: icon,
 			tooltip: primaryStatus.tooltip
 		};
 	}

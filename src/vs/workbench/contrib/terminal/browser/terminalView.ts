@@ -8,6 +8,7 @@ import * as dom from '../../../../base/browser/dom.js';
 import * as domStylesheetsJs from '../../../../base/browser/domStylesheets.js';
 import * as cssJs from '../../../../base/browser/cssValue.js';
 import { Action, IAction } from '../../../../base/common/actions.js';
+import { Codicon } from '../../../../base/common/codicons.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -504,8 +505,16 @@ class SingleTerminalTabActionViewItem extends MenuEntryActionViewItem {
 				return;
 			}
 			label.classList.add('single-terminal-tab');
-			let colorStyle = '';
+
+			// Add class for successful task status (green checkmark)
 			const primaryStatus = instance.statusList.primary;
+			const isSuccessfulTask = primaryStatus?.id === 'task_terminal_status' &&
+				primaryStatus.severity === Severity.Info &&
+				ThemeIcon.isThemeIcon(primaryStatus.icon) &&
+				primaryStatus.icon.id === Codicon.check.id;
+			label.classList.toggle('has-success-status', isSuccessfulTask);
+
+			let colorStyle = '';
 			if (primaryStatus) {
 				const colorKey = getColorForSeverity(primaryStatus.severity);
 				this._themeService.getColorTheme();

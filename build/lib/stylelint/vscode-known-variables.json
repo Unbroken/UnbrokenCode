@@ -843,6 +843,7 @@
 		"--vscode-terminalSymbolIcon-symbolicLinkFileForeground",
 		"--vscode-terminalSymbolIcon-symbolicLinkFolderForeground",
 		"--vscode-terminalSymbolIcon-tagForeground",
+		"--vscode-terminalTaskStatus-successIcon",
 		"--vscode-testing-coverCountBadgeBackground",
 		"--vscode-testing-coverCountBadgeForeground",
 		"--vscode-testing-coveredBackground",

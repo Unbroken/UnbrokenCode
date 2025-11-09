@@ -38,6 +38,7 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - **Compatible 'code' command** - works with all your existing tools and workflows
 - **GitHub Copilot Chat** - bundled as an integrated extension for modern AI-assisted development
 - **'isUnbroken' context key** - create custom keybindings specific to Unbroken Code, useful when switching between editors
+- **Extension Quarantine Security** - automatic protection against supply chain attacks by quarantining newly released extension versions (default: 7 days, configurable)
 
 ### 🎨 Clean, Efficient Interface
 - Waste less space in UI - every pixel counts

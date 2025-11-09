@@ -24,6 +24,7 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - **Silent Find Commands** - navigate search matches without opening the find widget for a cleaner, less intrusive search experience
 - **Better Search Result Navigation** - keyboard shortcuts that actually work as expected
 - **Git Repository Filtering** - hide unchanged repos because clutter is the enemy
+- **External Git UI Integration** - seamlessly launch Sublime Merge, Sourcetree, GitKraken, Tower, or GitHub Desktop directly from the editor with commands for repository, file history, line history, and blame views
 - **More items in title bar** - use that space for something useful
 - **Minimal layout by default** - less chrome, more code
 - **Better Navigation**

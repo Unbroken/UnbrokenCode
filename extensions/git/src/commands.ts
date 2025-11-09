@@ -19,6 +19,7 @@ import { GitTimelineItem } from './timelineProvider';
 import { ApiRepository } from './api/api1';
 import { getRemoteSourceActions, pickRemoteSource } from './remoteSource';
 import { RemoteSourceAction } from './typings/git-base';
+import { ExternalGitUIManager, ExternalGitUITool } from './externalGitUI';
 
 abstract class CheckoutCommandItem implements QuickPickItem {
 	abstract get label(): string;
@@ -766,6 +767,7 @@ export class CommandCenter {
 
 	private disposables: Disposable[];
 	private commandErrors = new CommandErrorOutputTextDocumentContentProvider();
+	private externalGitUIManager: ExternalGitUIManager;
 
 	private static readonly WORKTREE_ROOT_KEY = 'worktreeRoot';
 
@@ -776,12 +778,20 @@ export class CommandCenter {
 		private logger: LogOutputChannel,
 		private telemetryReporter: TelemetryReporter
 	) {
+		this.externalGitUIManager = new ExternalGitUIManager();
 		this.disposables = Commands.map(({ commandId, key, method, options }) => {
 			const command = this.createCommand(commandId, key, method, options);
 			return commands.registerCommand(commandId, command);
 		});
 
 		this.disposables.push(workspace.registerTextDocumentContentProvider('git-output', this.commandErrors));
+
+		// Initialize external git UI detection
+		this.updateExternalGitUIContextKeys();
+	}
+
+	private async updateExternalGitUIContextKeys(): Promise<void> {
+		await this.externalGitUIManager.updateContextKeys();
 	}
 
 	@command('git.showOutput')
@@ -5208,6 +5218,168 @@ export class CommandCenter {
 	@command('git.blame.toggleStatusBarItem')
 	toggleBlameStatusBarItem(): void {
 		this._toggleBlameSetting('blame.statusBarItem.enabled');
+	}
+
+	@command('git.openRepositoryInSublimeMerge', { repository: true })
+	async openRepositoryInSublimeMerge(repository: Repository): Promise<void> {
+		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge);
+	}
+
+	@command('git.fileHistoryInSublimeMerge', { repository: true })
+	async fileHistoryInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
+		await this._fileHistoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	}
+
+	@command('git.lineHistoryInSublimeMerge', { repository: true })
+	async lineHistoryInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
+		await this._lineHistoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	}
+
+	@command('git.blameInSublimeMerge', { repository: true })
+	async blameInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
+		await this._blameInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	}
+
+	@command('git.openRepositoryInSourcetree', { repository: true })
+	async openRepositoryInSourcetree(repository: Repository): Promise<void> {
+		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.Sourcetree);
+	}
+
+	@command('git.openRepositoryInGitKraken', { repository: true })
+	async openRepositoryInGitKraken(repository: Repository): Promise<void> {
+		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.GitKraken);
+	}
+
+	@command('git.openRepositoryInTower', { repository: true })
+	async openRepositoryInTower(repository: Repository): Promise<void> {
+		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.Tower);
+	}
+
+	@command('git.openRepositoryInGitHubDesktop', { repository: true })
+	async openRepositoryInGitHubDesktop(repository: Repository): Promise<void> {
+		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.GitHubDesktop);
+	}
+
+	private async _openRepositoryInExternalGitUI(repository: Repository, tool: ExternalGitUITool): Promise<void> {
+		try {
+			await this.externalGitUIManager.openRepository(tool, repository.root);
+			this.telemetryReporter.sendTelemetryEvent('git.openRepositoryInExternalGitUI', { tool });
+		} catch (err) {
+			const toolName = this.externalGitUIManager.getToolDisplayName(tool);
+			const openSettings = l10n.t('Open Settings');
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			const result = await window.showErrorMessage(
+				l10n.t('{0} could not be opened. {1}', toolName, errorMessage),
+				openSettings
+			);
+			if (result === openSettings) {
+				commands.executeCommand('workbench.action.openSettings', `git.externalGitUI.${tool}.enabled`);
+			}
+		}
+	}
+
+	private async _fileHistoryInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+		try {
+			const fileUri = uri || window.activeTextEditor?.document.uri;
+			if (!fileUri) {
+				window.showWarningMessage(l10n.t('No file is currently open.'));
+				return;
+			}
+
+			const filePath = fileUri.fsPath;
+
+			// Find the git repository root by walking up the file system
+			const repositoryRoot = await this.externalGitUIManager.findRepositoryRoot(filePath);
+			if (!repositoryRoot) {
+				window.showWarningMessage(l10n.t('The file is not in a git repository.'));
+				return;
+			}
+
+			await this.externalGitUIManager.openFileHistory(tool, repositoryRoot, filePath);
+			this.telemetryReporter.sendTelemetryEvent('git.fileHistoryInExternalGitUI', { tool });
+		} catch (err) {
+			const toolName = this.externalGitUIManager.getToolDisplayName(tool);
+			const openSettings = l10n.t('Open Settings');
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			const result = await window.showErrorMessage(
+				l10n.t('{0} could not be opened. {1}', toolName, errorMessage),
+				openSettings
+			);
+			if (result === openSettings) {
+				commands.executeCommand('workbench.action.openSettings', `git.externalGitUI.${tool}.enabled`);
+			}
+		}
+	}
+
+	private async _lineHistoryInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+		try {
+			const fileUri = uri || window.activeTextEditor?.document.uri;
+			if (!fileUri) {
+				window.showWarningMessage(l10n.t('No file is currently open.'));
+				return;
+			}
+
+			const filePath = fileUri.fsPath;
+
+			// Find the git repository root by walking up the file system
+			const repositoryRoot = await this.externalGitUIManager.findRepositoryRoot(filePath);
+			if (!repositoryRoot) {
+				window.showWarningMessage(l10n.t('The file is not in a git repository.'));
+				return;
+			}
+
+			const selection = window.activeTextEditor?.selection;
+			const startLine = selection?.start.line ?? 0;
+			const endLine = selection?.end.line ?? startLine;
+			await this.externalGitUIManager.openLineHistory(tool, repositoryRoot, filePath, startLine, endLine);
+			this.telemetryReporter.sendTelemetryEvent('git.lineHistoryInExternalGitUI', { tool });
+		} catch (err) {
+			const toolName = this.externalGitUIManager.getToolDisplayName(tool);
+			const openSettings = l10n.t('Open Settings');
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			const result = await window.showErrorMessage(
+				l10n.t('{0} could not be opened. {1}', toolName, errorMessage),
+				openSettings
+			);
+			if (result === openSettings) {
+				commands.executeCommand('workbench.action.openSettings', `git.externalGitUI.${tool}.enabled`);
+			}
+		}
+	}
+
+	private async _blameInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+		try {
+			const fileUri = uri || window.activeTextEditor?.document.uri;
+			if (!fileUri) {
+				window.showWarningMessage(l10n.t('No file is currently open.'));
+				return;
+			}
+
+			const filePath = fileUri.fsPath;
+
+			// Find the git repository root by walking up the file system
+			const repositoryRoot = await this.externalGitUIManager.findRepositoryRoot(filePath);
+			if (!repositoryRoot) {
+				window.showWarningMessage(l10n.t('The file is not in a git repository.'));
+				return;
+			}
+
+			const selection = window.activeTextEditor?.selection;
+			const line = selection?.start.line ?? 0;
+			await this.externalGitUIManager.openBlame(tool, repositoryRoot, filePath, line);
+			this.telemetryReporter.sendTelemetryEvent('git.blameInExternalGitUI', { tool });
+		} catch (err) {
+			const toolName = this.externalGitUIManager.getToolDisplayName(tool);
+			const openSettings = l10n.t('Open Settings');
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			const result = await window.showErrorMessage(
+				l10n.t('{0} could not be opened. {1}', toolName, errorMessage),
+				openSettings
+			);
+			if (result === openSettings) {
+				commands.executeCommand('workbench.action.openSettings', `git.externalGitUI.${tool}.enabled`);
+			}
+		}
 	}
 
 	private _toggleBlameSetting(setting: string): void {

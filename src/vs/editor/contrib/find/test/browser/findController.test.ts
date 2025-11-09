@@ -13,7 +13,7 @@ import { EditOperation } from '../../../../common/core/editOperation.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
-import { CommonFindController, FindStartFocusAction, IFindStartOptions, NextMatchFindAction, NextSelectionMatchFindAction, StartFindAction, StartFindReplaceAction, StartFindWithSelectionAction } from '../../browser/findController.js';
+import { CommonFindController, FindStartFocusAction, IFindStartOptions, NextMatchFindAction, NextMatchFindActionNoWidget, NextSelectionMatchFindAction, PreviousMatchFindActionNoWidget, StartFindAction, StartFindReplaceAction, StartFindWithArgsAction, StartFindWithSelectionAction, StartFindWithSelectionActionNoWidget } from '../../browser/findController.js';
 import { CONTEXT_FIND_INPUT_FOCUSED } from '../../browser/findModel.js';
 import { withAsyncTestCodeEditor } from '../../../../test/browser/testCodeEditor.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
@@ -665,6 +665,263 @@ suite('FindController query options persistence', () => {
 			});
 
 			assert.deepStrictEqual(findController.getState().searchScope, [new Selection(1, 6, 2, 1)]);
+		});
+	});
+
+	test('No widget navigation: widget remains hidden on next match', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC',
+			'XYZ',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Verify widget is not revealed initially
+			assert.strictEqual(findState.isRevealed, false);
+
+			// Execute silent next match action (should initialize find with "ABC" from cursor position)
+			await editor.runAction(NextMatchFindActionNoWidget);
+
+			// Widget should remain hidden
+			assert.strictEqual(findState.isRevealed, false);
+
+			// Should highlight the current match at line 1 (cursor is already on ABC)
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [1, 1, 1, 4]);
+			assert.strictEqual(findState.searchString, 'ABC');
+
+			// Execute again - should move to line 2
+			await editor.runAction(NextMatchFindActionNoWidget);
+			assert.strictEqual(findState.isRevealed, false);
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [2, 1, 2, 4]);
+
+			// Execute again - should move to line 4
+			await editor.runAction(NextMatchFindActionNoWidget);
+			assert.strictEqual(findState.isRevealed, false);
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [4, 1, 4, 4]);
+
+			findController.dispose();
+		});
+	});
+
+	test('No widget navigation: widget remains hidden on previous match', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC',
+			'XYZ',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Move cursor to line 4
+			editor.setSelection(new Selection(4, 1, 4, 1));
+
+			// Execute silent previous match action
+			await editor.runAction(PreviousMatchFindActionNoWidget);
+
+			// Widget should remain hidden
+			assert.strictEqual(findState.isRevealed, false);
+
+			// Should navigate to line 2
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [2, 1, 2, 4]);
+
+			// Execute again
+			await editor.runAction(PreviousMatchFindActionNoWidget);
+			assert.strictEqual(findState.isRevealed, false);
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [1, 1, 1, 4]);
+
+			findController.dispose();
+		});
+	});
+
+	test('No widget navigation: findWithSelection remains silent', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'XYZ ABC',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Select "ABC" on line 1
+			editor.setSelection(new Selection(1, 1, 1, 4));
+
+			// Execute silent find with selection
+			await executeAction(instantiationService, editor, new StartFindWithSelectionActionNoWidget());
+
+			// Widget should remain hidden
+			assert.strictEqual(findState.isRevealed, false);
+
+			// Should have search string set (selection remains unchanged, just like the regular version)
+			assert.strictEqual(findState.searchString, 'ABC');
+			assert.deepStrictEqual(fromSelection(editor.getSelection()!), [1, 1, 1, 4]);
+
+			findController.dispose();
+		});
+	});
+
+	test('No widget navigation: shouldRevealWidget parameter works', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Test with shouldRevealWidget: false
+			await findController.start({
+				forceRevealReplace: false,
+				seedSearchStringFromSelection: 'single',
+				seedSearchStringFromNonEmptySelection: false,
+				seedSearchStringFromGlobalClipboard: false,
+				shouldFocus: FindStartFocusAction.NoFocusChange,
+				shouldAnimate: false,
+				updateSearchScope: false,
+				loop: true,
+				shouldRevealWidget: false
+			});
+
+			assert.strictEqual(findState.isRevealed, false);
+			assert.strictEqual(findState.searchString, 'ABC');
+
+			// Test with shouldRevealWidget: true (explicit)
+			await findController.start({
+				forceRevealReplace: false,
+				seedSearchStringFromSelection: 'single',
+				seedSearchStringFromNonEmptySelection: false,
+				seedSearchStringFromGlobalClipboard: false,
+				shouldFocus: FindStartFocusAction.NoFocusChange,
+				shouldAnimate: false,
+				updateSearchScope: false,
+				loop: true,
+				shouldRevealWidget: true
+			});
+
+			assert.strictEqual(findState.isRevealed, true);
+
+			findController.dispose();
+		});
+	});
+
+	test('No widget navigation: default behavior unchanged (backward compatibility)', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Test without shouldRevealWidget (should default to true for backward compatibility)
+			await findController.start({
+				forceRevealReplace: false,
+				seedSearchStringFromSelection: 'single',
+				seedSearchStringFromNonEmptySelection: false,
+				seedSearchStringFromGlobalClipboard: false,
+				shouldFocus: FindStartFocusAction.NoFocusChange,
+				shouldAnimate: false,
+				updateSearchScope: false,
+				loop: true
+			});
+
+			// Should default to revealed (backward compatible behavior)
+			assert.strictEqual(findState.isRevealed, true);
+
+			findController.dispose();
+		});
+	});
+
+	test('No widget navigation: regular actions still show widget', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Execute regular (non-silent) next match action
+			await editor.runAction(NextMatchFindAction);
+
+			// Widget SHOULD be revealed for regular action
+			assert.strictEqual(findState.isRevealed, true);
+
+			findController.dispose();
+		});
+	});
+
+	test('StartFindWithArgsAction: revealWidget argument controls visibility', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'ABC'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Test with revealWidget: false
+			await executeAction(instantiationService, editor, new StartFindWithArgsAction(), {
+				searchString: 'ABC',
+				revealWidget: false
+			});
+
+			// Widget should remain hidden
+			assert.strictEqual(findState.isRevealed, false);
+			assert.strictEqual(findState.searchString, 'ABC');
+
+			// Reset state
+			findController.closeFindWidget();
+
+			// Test with revealWidget: true (explicit)
+			await executeAction(instantiationService, editor, new StartFindWithArgsAction(), {
+				searchString: 'ABC',
+				revealWidget: true
+			});
+
+			// Widget should be revealed
+			assert.strictEqual(findState.isRevealed, true);
+			assert.strictEqual(findState.searchString, 'ABC');
+
+			// Reset state
+			findController.closeFindWidget();
+
+			// Test without revealWidget (default behavior - should reveal)
+			await executeAction(instantiationService, editor, new StartFindWithArgsAction(), {
+				searchString: 'ABC'
+			});
+
+			// Widget should be revealed by default
+			assert.strictEqual(findState.isRevealed, true);
+			assert.strictEqual(findState.searchString, 'ABC');
+
+			findController.dispose();
+		});
+	});
+
+	test('StartFindWithArgsAction: revealWidget false with other arguments', async () => {
+		await withAsyncTestCodeEditor([
+			'ABC',
+			'DEF'
+		], { serviceCollection: serviceCollection }, async (editor, _, instantiationService) => {
+			const findController = editor.registerAndInstantiateContribution(TestFindController.ID, TestFindController);
+			const findState = findController.getState();
+
+			// Test combining revealWidget with other find options
+			await executeAction(instantiationService, editor, new StartFindWithArgsAction(), {
+				searchString: 'ABC',
+				isCaseSensitive: true,
+				matchWholeWord: true,
+				revealWidget: false
+			});
+
+			// Widget should remain hidden
+			assert.strictEqual(findState.isRevealed, false);
+
+			// Search string and case sensitivity should be applied
+			assert.strictEqual(findState.searchString, 'ABC');
+			assert.strictEqual(findState.matchCase, true);
+			assert.strictEqual(findState.wholeWord, true);
+
+			findController.dispose();
 		});
 	});
 });

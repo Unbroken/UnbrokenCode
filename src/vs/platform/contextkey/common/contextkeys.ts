@@ -16,6 +16,8 @@ export const IsMacNativeContext = new RawContextKey<boolean>('isMacNative', isMa
 export const IsIOSContext = new RawContextKey<boolean>('isIOS', isIOS, localize('isIOS', "Whether the operating system is iOS"));
 export const IsMobileContext = new RawContextKey<boolean>('isMobile', isMobile, localize('isMobile', "Whether the platform is a mobile web browser"));
 
+export const IsUnbrokenContext = new RawContextKey<boolean>('isUnbroken', true, localize('isUnbroken', "Whether this is Unbroken Code"));
+
 export const IsDevelopmentContext = new RawContextKey<boolean>('isDevelopment', false, true);
 export const ProductQualityContext = new RawContextKey<string>('productQualityType', '', localize('productQualityType', "Quality type of VS Code"));
 

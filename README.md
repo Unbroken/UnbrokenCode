@@ -29,6 +29,7 @@ Let's be honest - VS Code is great, but when you're deep in C++ development, you
 - **Better Navigation**
 	- Consistent word based navigation: Search for SingleSeparator in keyboard shortcuts
 	- Consistent navigation around decorations such as inlay hints
+	- **File Explorer Leaf Navigation** - jump directly to next/previous file (skipping folders) with optional auto-expand for seamless tree traversal
 
 #### **Developer Experience First**
 - **Telemetry OFF by default** - your code is your business

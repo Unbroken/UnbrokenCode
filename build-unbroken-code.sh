@@ -8,6 +8,8 @@ CREATE_RELEASE=false
 PUBLISH_RELEASE=false
 SKIP_BUILD=false
 SKIP_GULP_BUILD=false
+SKIP_EXTENSIONS=false
+EXTENSIONS_ONLY=false
 REGENERATE_DMG=false
 GENERATE_RELEASE_DESCRIPTION=false
 BUILD_WINDOWS=false
@@ -21,6 +23,7 @@ WINDOWS_ENV_INITIALIZED=false
 WINDOWS_DIST_INITIALIZED=false
 WINDOWS_DIST_DIR=""
 WINDOWS_RUST_READY=false
+RUST_SETUP_DONE=false
 USE_NPM_CI=${USE_NPM_CI:-true}
 
 # Helper to evaluate truthy environment/flag values (accepts 1, true, yes, on)
@@ -80,6 +83,78 @@ function ensure_windows_rust()
 	fi
 
 	WINDOWS_RUST_READY=true
+}
+
+# Unified rust setup for building extensions and CLI
+# Installs Rust if needed and adds all necessary targets for the platforms being built
+function ensure_rust_setup()
+{
+	# Return early if rust setup has already been completed
+	if $RUST_SETUP_DONE; then
+		return 0
+	fi
+
+	echo "Setting up Rust for extension builds..."
+
+	# Check if Rust is installed
+	if ! command -v cargo &> /dev/null; then
+		echo "Installing Rust..."
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+		source "$HOME/.cargo/env"
+	fi
+
+	# Add rustup targets for all platforms being built
+	if $BUILD_WINDOWS; then
+		echo "Adding Windows Rust targets..."
+		local win_arches=("${WINDOWS_BUILD_ARCHES[@]}")
+		if [ ${#win_arches[@]} -eq 0 ]; then
+			win_arches=(x64 arm64)
+		fi
+		for arch in "${win_arches[@]}"; do
+			case "$arch" in
+				x64|amd64|X64)
+					rustup target add x86_64-pc-windows-msvc
+					;;
+				arm64|aarch64|ARM64)
+					rustup target add aarch64-pc-windows-msvc
+					;;
+			esac
+		done
+	fi
+
+	if $BUILD_MACOS; then
+		echo "Adding macOS Rust targets..."
+		if $BUILD_MACOS_X64; then
+			rustup target add x86_64-apple-darwin
+		fi
+		if $BUILD_MACOS_ARM64; then
+			rustup target add aarch64-apple-darwin
+		fi
+	fi
+
+	if $BUILD_LINUX; then
+		echo "Adding Linux Rust targets..."
+		# Determine which architectures to build for
+		if [ -n "${LINUX_BUILD_ARCH:-}" ]; then
+			LINUX_ARCHES=("$LINUX_BUILD_ARCH")
+		else
+			LINUX_ARCHES=("x64" "arm64")
+		fi
+
+		for arch in "${LINUX_ARCHES[@]}"; do
+			case "$arch" in
+				x64|amd64|X64)
+					rustup target add x86_64-unknown-linux-gnu
+					;;
+				arm64|aarch64|ARM64)
+					rustup target add aarch64-unknown-linux-gnu
+					;;
+			esac
+		done
+	fi
+
+	RUST_SETUP_DONE=true
+	echo "Rust setup complete"
 }
 
 # Install platform-specific prerequisites when enabled
@@ -151,6 +226,368 @@ function ensure_node_version_matches()
 	fi
 }
 
+# Extension build functions
+
+# Build malterlib extension as VSIX
+function build_extension_malterlib()
+{
+	local ext_dir="$PWD/extensions/malterlib"
+
+	if [ ! -d "$ext_dir" ]; then
+		echo "Warning: malterlib extension directory not found at $ext_dir" >&2
+		return 1
+	fi
+
+	echo "Building malterlib extension..."
+
+	# Create temporary build directory outside the main project to avoid parent node_modules
+	local temp_build_dir=$(mktemp -d)
+	echo "Building in isolated directory: $temp_build_dir"
+
+	# Ensure cleanup on exit (success or failure)
+	trap "rm -rf '$temp_build_dir'" EXIT
+
+	# Copy extension to temp directory, excluding .git and node_modules
+	# Using tar instead of rsync for cross-platform compatibility
+	(cd "$ext_dir" && tar cf - --exclude='.git' --exclude='node_modules' --exclude='AGENTS.md' .) | (cd "$temp_build_dir" && mkdir -p malterlib && cd malterlib && tar xf -)
+	cd "$temp_build_dir/malterlib"
+
+	# Update version to match CURRENT_VERSION and add " (Unbroken)" suffix to displayName
+	echo "Setting malterlib version to $CURRENT_VERSION and updating displayName..."
+	node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));pkg.version='$CURRENT_VERSION';if(pkg.displayName&&!pkg.displayName.includes('(Unbroken)'))pkg.displayName+=' (Unbroken)';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');"
+
+	# Install dependencies fresh (keeping package-lock.json for reproducibility)
+	echo "Installing malterlib dependencies..."
+	npm ci
+
+	# Build and package
+	npx vsce package --out "$PWD/malterlib.vsix"
+
+	if [ ! -f "malterlib.vsix" ]; then
+		echo "Error: Failed to build malterlib.vsix" >&2
+		cd - > /dev/null
+		return 1
+	fi
+
+	# Copy VSIX to temp directory
+	cp "malterlib.vsix" "$VSIX_TEMP_DIR/malterlib.vsix"
+	echo "Successfully built malterlib.vsix"
+
+	# Return to original directory and cleanup will happen via trap
+	cd - > /dev/null
+	trap - EXIT  # Remove trap before normal exit
+	rm -rf "$temp_build_dir"
+}
+
+# Build vscode-clangd extension as VSIX
+function build_extension_vscode_clangd()
+{
+	local ext_dir="$PWD/extensions/vscode-clangd"
+
+	if [ ! -d "$ext_dir" ]; then
+		echo "Warning: vscode-clangd extension directory not found at $ext_dir" >&2
+		return 1
+	fi
+
+	echo "Building vscode-clangd extension..."
+
+	# Create temporary build directory outside the main project to avoid parent node_modules
+	local temp_build_dir=$(mktemp -d)
+	echo "Building in isolated directory: $temp_build_dir"
+
+	# Ensure cleanup on exit (success or failure)
+	trap "rm -rf '$temp_build_dir'" EXIT
+
+	# Copy extension to temp directory, excluding .git and node_modules
+	# Using tar instead of rsync for cross-platform compatibility
+	(cd "$ext_dir" && tar cf - --exclude='.git' --exclude='node_modules' .) | (cd "$temp_build_dir" && mkdir -p vscode-clangd && cd vscode-clangd && tar xf -)
+	cd "$temp_build_dir/vscode-clangd"
+
+	# Update version to match CURRENT_VERSION and add " (Unbroken)" suffix to displayName
+	echo "Setting vscode-clangd version to $CURRENT_VERSION and updating displayName..."
+	node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));pkg.version='$CURRENT_VERSION';if(pkg.displayName&&!pkg.displayName.includes('(Unbroken)'))pkg.displayName+=' (Unbroken)';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');"
+
+	# Install dependencies fresh (keeping package-lock.json for reproducibility)
+	echo "Installing vscode-clangd dependencies..."
+	npm ci
+
+	# Build and package with custom base images URL
+	npx vsce package --baseImagesUrl https://raw.githubusercontent.com/Unbroken/vscode-clangd/master/ --out "$PWD/vscode-clangd.vsix"
+
+	if [ ! -f "vscode-clangd.vsix" ]; then
+		echo "Error: Failed to build vscode-clangd.vsix" >&2
+		cd - > /dev/null
+		return 1
+	fi
+
+	# Copy VSIX to temp directory
+	cp "vscode-clangd.vsix" "$VSIX_TEMP_DIR/vscode-clangd.vsix"
+	echo "Successfully built vscode-clangd.vsix"
+
+	# Return to original directory and cleanup will happen via trap
+	cd - > /dev/null
+	trap - EXIT  # Remove trap before normal exit
+	rm -rf "$temp_build_dir"
+}
+
+# Build codelldb extension as VSIX using the existing build script
+function build_extension_codelldb()
+{
+	local platform="$1"  # darwin, win32, or linux
+	local arch="$2"      # x64 or arm64
+	local ext_dir="$PWD/extensions/codelldb"
+
+	if [ ! -d "$ext_dir" ]; then
+		echo "Warning: codelldb extension directory not found at $ext_dir" >&2
+		return 1
+	fi
+
+	echo "Building codelldb extension for $platform-$arch..."
+
+	# Create temporary build directory outside the main project to avoid parent node_modules
+	local temp_build_dir=$(mktemp -d)
+	echo "Building in isolated directory: $temp_build_dir"
+
+	# Ensure cleanup on exit (success or failure)
+	trap "rm -rf '$temp_build_dir'" EXIT
+
+	# Copy extension to temp directory, excluding .git, node_modules, and build
+	# Using tar instead of rsync for cross-platform compatibility
+	(cd "$ext_dir" && tar cf - --exclude='.git' --exclude='node_modules' --exclude='build' .) | (cd "$temp_build_dir" && mkdir -p codelldb && cd codelldb && tar xf -)
+	cd "$temp_build_dir/codelldb"
+
+	# Update displayName in package.json to add " (Unbroken)" suffix
+	echo "Setting codelldb displayName..."
+	node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));if(pkg.displayName&&!pkg.displayName.includes('(Unbroken)'))pkg.displayName+=' (Unbroken)';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');"
+
+	# Update VERSION in CMakeLists.txt to match CURRENT_VERSION
+	echo "Setting codelldb VERSION in CMakeLists.txt to $CURRENT_VERSION..."
+	sed -i.bak "s/^set(VERSION \"[^\"]*\") # Base version/set(VERSION \"$CURRENT_VERSION\") # Base version/" CMakeLists.txt
+
+	# Set environment variables for the build script
+	export VSCODE_ARCH="$arch"
+	export CODELLDB_BUILD_TARGET="vsix_full"
+
+	# Run the existing build script
+	local build_script="scripts/build-native.mjs"
+
+	if [ ! -f "$build_script" ]; then
+		echo "Error: Build script not found at $build_script" >&2
+		cd - > /dev/null
+		unset VSCODE_ARCH
+		unset CODELLDB_BUILD_TARGET
+		return 1
+	fi
+
+	# Execute the build script
+	if ! node "$build_script"; then
+		echo "Error: codelldb build failed for $platform-$arch" >&2
+		cd - > /dev/null
+		unset VSCODE_ARCH
+		unset CODELLDB_BUILD_TARGET
+		return 1
+	fi
+
+	# Find the generated VSIX in the build directory
+	local build_dir="build"
+	local vsix_file
+	vsix_file=$(find "$build_dir" -name "*.vsix" -type f | head -n 1)
+
+	if [ -z "$vsix_file" ] || [ ! -f "$vsix_file" ]; then
+		echo "Error: Failed to find codelldb.vsix after build in $build_dir" >&2
+		cd - > /dev/null
+		unset VSCODE_ARCH
+		unset CODELLDB_BUILD_TARGET
+		return 1
+	fi
+
+	# Copy VSIX to temp directory with standardized name
+	cp "$vsix_file" "$VSIX_TEMP_DIR/codelldb-$platform-$arch.vsix"
+	echo "Successfully built codelldb-$platform-$arch.vsix"
+
+	# Return to original directory and cleanup will happen via trap
+	cd - > /dev/null
+	unset VSCODE_ARCH
+	unset CODELLDB_BUILD_TARGET
+	trap - EXIT  # Remove trap before normal exit
+	rm -rf "$temp_build_dir"
+}
+
+# Package extensions into a ZIP file for a specific platform and architecture
+function package_extensions()
+{
+	local version="$1"
+	local platform="$2"  # darwin, win32, or linux
+	local arch="$3"      # x64 or arm64
+	local output_dir="$4"
+
+	echo "Packaging extensions for $platform-$arch..."
+
+	local temp_dir="$output_dir/extensions-temp-$platform-$arch"
+	mkdir -p "$temp_dir"
+
+	# VSIX files are stored in .dist/temp directory
+	local vsix_source_dir="$output_dir/temp"
+
+	# Copy universal extensions (malterlib and vscode-clangd)
+	local malterlib_vsix="$vsix_source_dir/malterlib.vsix"
+	local clangd_vsix="$vsix_source_dir/vscode-clangd.vsix"
+
+	if [ -f "$malterlib_vsix" ]; then
+		cp "$malterlib_vsix" "$temp_dir/"
+		echo "  Added malterlib.vsix"
+	else
+		echo "  Warning: malterlib.vsix not found, skipping"
+	fi
+
+	if [ -f "$clangd_vsix" ]; then
+		cp "$clangd_vsix" "$temp_dir/"
+		echo "  Added vscode-clangd.vsix"
+	else
+		echo "  Warning: vscode-clangd.vsix not found, skipping"
+	fi
+
+	# Copy platform/arch-specific codelldb
+	local codelldb_vsix="$vsix_source_dir/codelldb-$platform-$arch.vsix"
+
+	if [ -f "$codelldb_vsix" ]; then
+		# Rename to just codelldb.vsix in the package
+		cp "$codelldb_vsix" "$temp_dir/codelldb.vsix"
+		echo "  Added codelldb.vsix ($platform-$arch)"
+	else
+		echo "  Warning: codelldb-$platform-$arch.vsix not found, skipping"
+	fi
+
+	# Create ZIP file
+	local zip_name="unbroken-code-extensions-$version-$platform-$arch.zip"
+	local zip_path="$output_dir/$zip_name"
+
+	cd "$temp_dir"
+	# Use PowerShell on Windows for compatibility
+	if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+		local win_temp_dir
+		win_temp_dir=$(cygpath -w "$temp_dir")
+		local win_zip_path
+		win_zip_path=$(cygpath -w "$zip_path")
+		if powershell -Command "Compress-Archive -Path '$win_temp_dir\*.vsix' -DestinationPath '$win_zip_path' -Force"; then
+			echo "Successfully created $zip_name"
+		else
+			echo "Error: Failed to create ZIP file for extensions" >&2
+			cd - > /dev/null
+			rm -rf "$temp_dir"
+			return 1
+		fi
+	else
+		if zip -r "$zip_path" *.vsix; then
+			echo "Successfully created $zip_name"
+		else
+			echo "Error: Failed to create ZIP file for extensions" >&2
+			cd - > /dev/null
+			rm -rf "$temp_dir"
+			return 1
+		fi
+	fi
+
+	# Generate SHA256 checksum
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$zip_path" | awk '{print $1}' > "$zip_path.sha256"
+	elif command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$zip_path" | awk '{print $1}' > "$zip_path.sha256"
+	fi
+
+	cd - > /dev/null
+
+	# Clean up temp directory
+	rm -rf "$temp_dir"
+
+	return 0
+}
+
+# Build all extensions for configured platforms
+function build_all_extensions()
+{
+	echo ""
+	echo "==================================="
+	echo "Building Extensions"
+	echo "==================================="
+
+	# Ensure Rust is set up for all platforms being built
+	# This is needed for codelldb extension which has native Rust code
+	ensure_rust_setup
+
+	# Get version from package.json
+	CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+	# Determine output directory for extension packages
+	EXTENSIONS_OUTPUT_DIR="$PWD/.dist"
+	mkdir -p "$EXTENSIONS_OUTPUT_DIR"
+
+	# Create temporary directory for VSIX files
+	VSIX_TEMP_DIR="$EXTENSIONS_OUTPUT_DIR/temp"
+	mkdir -p "$VSIX_TEMP_DIR"
+	echo "VSIX files will be stored in: $VSIX_TEMP_DIR"
+
+	# Build universal extensions (malterlib and vscode-clangd) once
+	echo ""
+	echo "Building universal extensions..."
+	build_extension_malterlib
+	build_extension_vscode_clangd
+
+	# Build and package extensions for each built platform/architecture
+	echo ""
+	echo "Building platform-specific extensions and creating packages..."
+
+	# macOS extensions
+	if $BUILD_MACOS; then
+		if $BUILD_MACOS_X64; then
+			echo ""
+			echo "Building codelldb for macOS x64..."
+			build_extension_codelldb "darwin" "x64"
+			package_extensions "$CURRENT_VERSION" "darwin" "x64" "$EXTENSIONS_OUTPUT_DIR"
+		fi
+
+		if $BUILD_MACOS_ARM64; then
+			echo ""
+			echo "Building codelldb for macOS arm64..."
+			build_extension_codelldb "darwin" "arm64"
+			package_extensions "$CURRENT_VERSION" "darwin" "arm64" "$EXTENSIONS_OUTPUT_DIR"
+		fi
+	fi
+
+	# Windows extensions
+	if $BUILD_WINDOWS; then
+		local win_ext_arches=("${WINDOWS_BUILD_ARCHES[@]}")
+		if [ ${#win_ext_arches[@]} -eq 0 ]; then
+			win_ext_arches=(x64 arm64)
+		fi
+		for arch in "${win_ext_arches[@]}"; do
+			echo ""
+			echo "Building codelldb for Windows $arch..."
+			build_extension_codelldb "win32" "$arch"
+			package_extensions "$CURRENT_VERSION" "win32" "$arch" "$EXTENSIONS_OUTPUT_DIR"
+		done
+	fi
+
+	# Linux extensions
+	if $BUILD_LINUX; then
+		# Detect architecture or use both
+		if [ -n "${LINUX_BUILD_ARCH:-}" ]; then
+			LINUX_ARCHES=("$LINUX_BUILD_ARCH")
+		else
+			LINUX_ARCHES=("x64" "arm64")
+		fi
+
+		for arch in "${LINUX_ARCHES[@]}"; do
+			echo ""
+			echo "Building codelldb for Linux $arch..."
+			build_extension_codelldb "linux" "$arch"
+			package_extensions "$CURRENT_VERSION" "linux" "$arch" "$EXTENSIONS_OUTPUT_DIR"
+		done
+	fi
+
+	echo "Extension building completed!"
+}
+
 # Auto-detect platform if no explicit platform flags are given
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
 	# We're on Windows (Git Bash), default to Windows build
@@ -190,6 +627,15 @@ for arg in "$@"; do
 			;;
 		--skip-gulp-build)
 			SKIP_GULP_BUILD=true
+			shift
+			;;
+		--skip-extensions)
+			SKIP_EXTENSIONS=true
+			shift
+			;;
+		--extensions-only)
+			EXTENSIONS_ONLY=true
+			SKIP_BUILD=true
 			shift
 			;;
 		--regenerate-dmg)
@@ -262,6 +708,8 @@ for arg in "$@"; do
 			echo "  --publish        Publish the GitHub release (make it public)"
 			echo "  --skip-build     Skip the build process (only for release-related operations)"
 			echo "  --skip-gulp-build Skip gulp build, only create installers/universal binary"
+			echo "  --skip-extensions Skip building and packaging extensions (malterlib, vscode-clangd, codelldb)"
+			echo "  --extensions-only Build only extensions, skip main application build"
 			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
 			echo "  --generate-release-description  Update the draft release description without uploading assets"
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
@@ -304,6 +752,16 @@ for arg in "$@"; do
 			;;
 	esac
 done
+
+if $BUILD_LINUX; then
+	# Determine which architectures to build for
+	CURRENT_ARCH=$(uname -m)
+	if [ "$CURRENT_ARCH" = "aarch64" ]; then
+		LINUX_BUILD_ARCH="arm64"
+	else
+		LINUX_BUILD_ARCH="x64"
+	fi
+fi
 
 # Function to check if submodules have new commits on master
 function Check_Submodule_Updates()
@@ -673,14 +1131,15 @@ function Build_Windows_Arch()
 	echo "Downloading Explorer dlls for Windows $arch..."
 	VSCODE_ARCH=$arch node build/win32/explorer-dll-fetcher .build/win32/appx
 
-	ensure_windows_rust
+	# Ensure Rust is set up
+	ensure_rust_setup
+
 	local cargo_target
 	if [ "$arch" = "x64" ]; then
 		cargo_target="x86_64-pc-windows-msvc"
 	else
 		cargo_target="aarch64-pc-windows-msvc"
 	fi
-	rustup target add "$cargo_target" >/dev/null 2>&1 || true
 
 	echo "Building CLI for Windows $arch..."
 	(cd cli && cargo build --release --target "$cargo_target")
@@ -826,55 +1285,42 @@ function Build_Linux()
 		echo "Continuing with available build targets..."
 	fi
 
-	# Determine which architecture to build for
-	CURRENT_ARCH=$(uname -m)
-	if [ "$CURRENT_ARCH" = "aarch64" ]; then
-		BUILD_ARCH="arm64"
-	else
-		BUILD_ARCH="x64"
-	fi
-
 	if ! $SKIP_GULP_BUILD; then
 		# Build for current architecture (non-minified)
-		echo "Building Linux $BUILD_ARCH (native)..."
-		$USE_NPM_CI && npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm ci
-		npm_config_arch=$BUILD_ARCH NPM_ARCH=$BUILD_ARCH VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH
+		echo "Building Linux $LINUX_BUILD_ARCH (native)..."
+		$USE_NPM_CI && npm_config_arch=$LINUX_BUILD_ARCH NPM_ARCH=$LINUX_BUILD_ARCH VSCODE_ARCH=$LINUX_BUILD_ARCH npm ci
+		npm_config_arch=$LINUX_BUILD_ARCH NPM_ARCH=$LINUX_BUILD_ARCH VSCODE_ARCH=$LINUX_BUILD_ARCH npm run gulp vscode-linux-$LINUX_BUILD_ARCH
 	fi
 
 	# Build CLI for Linux
 	echo "Building Linux CLI..."
 
-	# Check if Rust is installed
-	if ! command -v cargo &> /dev/null; then
-		echo "Installing Rust for CLI build..."
-		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-		source "$HOME/.cargo/env"
-	fi
+	# Ensure Rust is set up
+	ensure_rust_setup
 
 	# Build CLI for current architecture
-	echo "Building CLI for Linux $BUILD_ARCH..."
+	echo "Building CLI for Linux $LINUX_BUILD_ARCH..."
 
-	if [ "$BUILD_ARCH" = "arm64" ]; then
+	if [ "$LINUX_BUILD_ARCH" = "arm64" ]; then
 		CLI_TARGET="aarch64-unknown-linux-gnu"
 	else
 		CLI_TARGET="x86_64-unknown-linux-gnu"
 	fi
 
-	rustup target add $CLI_TARGET
 	(cd cli && cargo build --release --target $CLI_TARGET)
 
 	# Integrate CLI into the main application (like VS Code does)
 	echo "Integrating CLI into main application..."
 
 	# Get the tunnel application name from product.json
-	CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-linux-$BUILD_ARCH/resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
+	CLI_APP_NAME=$(node -p "require('$DIST_DIR/VSCode-linux-$LINUX_BUILD_ARCH/resources/app/product.json').tunnelApplicationName || 'code-tunnel'")
 
 	# Create bin directory if it doesn't exist
-	mkdir -p "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin"
+	mkdir -p "$DIST_DIR/VSCode-linux-$LINUX_BUILD_ARCH/bin"
 
 	# Copy CLI binary to the application's bin directory
-	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin/$CLI_APP_NAME"
-	chmod +x "$DIST_DIR/VSCode-linux-$BUILD_ARCH/bin/$CLI_APP_NAME"
+	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/VSCode-linux-$LINUX_BUILD_ARCH/bin/$CLI_APP_NAME"
+	chmod +x "$DIST_DIR/VSCode-linux-$LINUX_BUILD_ARCH/bin/$CLI_APP_NAME"
 
 	echo "CLI integrated as $CLI_APP_NAME"
 
@@ -883,11 +1329,11 @@ function Build_Linux()
 
 	# Build .deb packages
 	if command -v dpkg-deb &> /dev/null; then
-		echo "Building .deb package for $BUILD_ARCH..."
+		echo "Building .deb package for $LINUX_BUILD_ARCH..."
 
 		# Prepare and build deb for current architecture
-		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-prepare-deb
-		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-build-deb
+		VSCODE_ARCH=$LINUX_BUILD_ARCH npm run gulp vscode-linux-$LINUX_BUILD_ARCH-prepare-deb
+		VSCODE_ARCH=$LINUX_BUILD_ARCH npm run gulp vscode-linux-$LINUX_BUILD_ARCH-build-deb
 
 		echo "DEB package created successfully!"
 	else
@@ -896,11 +1342,11 @@ function Build_Linux()
 
 	# Build .rpm packages
 	if command -v rpmbuild &> /dev/null; then
-		echo "Building .rpm package for $BUILD_ARCH..."
+		echo "Building .rpm package for $LINUX_BUILD_ARCH..."
 
 		# Prepare and build rpm for current architecture
-		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-prepare-rpm
-		VSCODE_ARCH=$BUILD_ARCH npm run gulp vscode-linux-$BUILD_ARCH-build-rpm
+		VSCODE_ARCH=$LINUX_BUILD_ARCH npm run gulp vscode-linux-$LINUX_BUILD_ARCH-prepare-rpm
+		VSCODE_ARCH=$LINUX_BUILD_ARCH npm run gulp vscode-linux-$LINUX_BUILD_ARCH-build-rpm
 
 		echo "RPM package created successfully!"
 	else
@@ -908,25 +1354,25 @@ function Build_Linux()
 	fi
 
 	# Create tar.gz archive for current architecture
-	echo "Creating tar.gz archive for $BUILD_ARCH..."
+	echo "Creating tar.gz archive for $LINUX_BUILD_ARCH..."
 
 	# Create archive with renamed folder for current architecture
-	if [ -d "$DIST_DIR/VSCode-linux-$BUILD_ARCH" ]; then
-		tar -czf "$DIST_DIR/UnbrokenCode-linux-$BUILD_ARCH.tar.gz" -C "$DIST_DIR" --transform "s/^VSCode-linux-$BUILD_ARCH/UnbrokenCode-linux-$BUILD_ARCH/" "VSCode-linux-$BUILD_ARCH"
-		echo "Created UnbrokenCode-linux-$BUILD_ARCH.tar.gz"
+	if [ -d "$DIST_DIR/VSCode-linux-$LINUX_BUILD_ARCH" ]; then
+		tar -czf "$DIST_DIR/UnbrokenCode-linux-$LINUX_BUILD_ARCH.tar.gz" -C "$DIST_DIR" --transform "s/^VSCode-linux-$LINUX_BUILD_ARCH/UnbrokenCode-linux-$LINUX_BUILD_ARCH/" "VSCode-linux-$LINUX_BUILD_ARCH"
+		echo "Created UnbrokenCode-linux-$LINUX_BUILD_ARCH.tar.gz"
 	fi
 
 	# Create standalone CLI binary package
 	echo "Creating CLI binary package..."
 
-	if [ "$BUILD_ARCH" = "arm64" ]; then
+	if [ "$LINUX_BUILD_ARCH" = "arm64" ]; then
 		CLI_TARGET="aarch64-unknown-linux-gnu"
 	else
 		CLI_TARGET="x86_64-unknown-linux-gnu"
 	fi
 
 	# Create temporary directory for CLI packaging
-	CLI_TEMP_DIR="$DIST_DIR/temp_cli_linux_$BUILD_ARCH"
+	CLI_TEMP_DIR="$DIST_DIR/temp_cli_linux_$LINUX_BUILD_ARCH"
 	mkdir -p "$CLI_TEMP_DIR"
 
 	# Copy CLI binary with Unbroken Code name
@@ -934,15 +1380,15 @@ function Build_Linux()
 	chmod +x "$CLI_TEMP_DIR/unbroken-code"
 
 	# Create tar.gz package
-	(cd "$CLI_TEMP_DIR" && tar -czf "$DIST_DIR/unbroken_code_cli_linux_${BUILD_ARCH}_cli.tar.gz" .)
+	(cd "$CLI_TEMP_DIR" && tar -czf "$DIST_DIR/unbroken_code_cli_linux_${LINUX_BUILD_ARCH}_cli.tar.gz" .)
 
 	# Copy standalone binary
-	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/unbroken-code-cli-linux-$BUILD_ARCH"
+	cp "cli/target/$CLI_TARGET/release/code" "$DIST_DIR/unbroken-code-cli-linux-$LINUX_BUILD_ARCH"
 
 	# Cleanup temp directory
 	rm -rf "$CLI_TEMP_DIR"
 
-	echo "Created unbroken_code_cli_linux_${BUILD_ARCH}_cli.tar.gz"
+	echo "Created unbroken_code_cli_linux_${LINUX_BUILD_ARCH}_cli.tar.gz"
 
 	if $SKIP_GULP_BUILD; then
 		echo "Linux packages created successfully!"
@@ -978,20 +1424,8 @@ function Build_macOS()
 	# Build CLI for macOS
 	echo "Building macOS CLI..."
 
-	# Check if Rust is installed
-	if ! command -v cargo &> /dev/null; then
-		echo "Installing Rust for CLI build..."
-		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-		source "$HOME/.cargo/env"
-	fi
-
-	# Add macOS targets
-	if $BUILD_MACOS_X64; then
-		rustup target add x86_64-apple-darwin
-	fi
-	if $BUILD_MACOS_ARM64; then
-		rustup target add aarch64-apple-darwin
-	fi
+	# Ensure Rust is set up
+	ensure_rust_setup
 
 	# Build CLI for x64
 	if $BUILD_MACOS_X64; then
@@ -1235,8 +1669,25 @@ if ! $SKIP_BUILD; then
 		echo "No build platforms selected. Use --help for options."
 		exit 1
 	fi
+
+	# Build extensions if not skipped
+	if ! $SKIP_EXTENSIONS; then
+		build_all_extensions
+	else
+		echo ""
+		echo "Skipping extension building (--skip-extensions flag set)"
+	fi
 else
-	echo "Skipping build process (--skip-build flag set)"
+	if $EXTENSIONS_ONLY; then
+		echo "Skipping main build (--extensions-only flag set)"
+	else
+		echo "Skipping build process (--skip-build flag set)"
+	fi
+fi
+
+# Build extensions separately if --extensions-only is set
+if $EXTENSIONS_ONLY && ! $SKIP_EXTENSIONS; then
+	build_all_extensions
 fi
 
 # Create GitHub release if --release flag is set

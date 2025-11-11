@@ -61,6 +61,7 @@ interface PlatformManifest {
 	quality: string;
 	timestamp: number;
 	assets: Record<string, ManifestAsset>;
+	extensions?: string[];
 }
 
 type ManifestMap = Map<PlatformKey, PlatformManifest>;
@@ -741,6 +742,54 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 	}
 
 	releaseBodyParts.push('', '---', '## Downloads', '', ...rows);
+
+	// Add Bundled Extensions Downloads section
+	const extensionRows: string[] = [];
+	const extensionTableHeader = '| Platform | x64 | arm64 |';
+	const extensionTableDivider = '|----------|-----|-------|';
+	extensionRows.push(extensionTableHeader, extensionTableDivider);
+
+	// Extract version from tag name (format: release/1.2.3 -> 1.2.3)
+	const versionMatch = tagName.match(/release\/(.+)/);
+	const releaseVersion = versionMatch ? versionMatch[1] : '';
+
+	// Check for extension packages in manifests (not local filesystem)
+	let hasExtensions = false;
+
+	const platformExtensions = [
+		{ platform: 'darwin', emoji: '🖥️', name: 'macOS', manifestPlatform: 'macos' },
+		{ platform: 'win32', emoji: '💻', name: 'Windows', manifestPlatform: 'windows' },
+		{ platform: 'linux', emoji: '🐧', name: 'Linux', manifestPlatform: 'linux' }
+	];
+
+	for (const { platform, emoji, name, manifestPlatform } of platformExtensions) {
+		const x64ExtName = `unbroken-code-extensions-${releaseVersion}-${platform}-x64.zip`;
+		const arm64ExtName = `unbroken-code-extensions-${releaseVersion}-${platform}-arm64.zip`;
+
+		// Check manifests instead of filesystem
+		const x64PlatformKey = `${manifestPlatform}-x64` as PlatformKey;
+		const arm64PlatformKey = `${manifestPlatform}-arm64` as PlatformKey;
+
+		const x64Manifest = manifestMap.get(x64PlatformKey);
+		const arm64Manifest = manifestMap.get(arm64PlatformKey);
+
+		const x64Exists = x64Manifest?.extensions?.includes(x64ExtName) ?? false;
+		const arm64Exists = arm64Manifest?.extensions?.includes(arm64ExtName) ?? false;
+
+		if (x64Exists || arm64Exists) {
+			const x64Cell = x64Exists ? `[zip](${generateDownloadLink(x64ExtName)})` : '';
+			const arm64Cell = arm64Exists ? `[zip](${generateDownloadLink(arm64ExtName)})` : '';
+			extensionRows.push(`| **${emoji} ${name}** | ${x64Cell} | ${arm64Cell} |`);
+			hasExtensions = true;
+		}
+	}
+
+	if (hasExtensions) {
+		releaseBodyParts.push('', '---', '## Bundled Extensions Downloads', '',
+			'These bundled extensions are for installing in other Visual Studio Code based IDEs.',
+			...extensionRows);
+	}
+
 	releaseBodyParts.push('', '## Installation Instructions', '',
 		'### 🖥️ macOS',
 		'- **App**: Download dmg for easy installation or zip for portable use',
@@ -1635,6 +1684,46 @@ async function main() {
 				});
 				console.log(`  Added Linux ${arch} CLI package`);
 				manifest.assets['cli'] = makeAssetEntry(tagName, cliPackageName, cliPackagePath, false);
+			}
+		}
+	}
+
+	// Process extension packages
+	console.log('Processing extension packages...');
+	const extensionAssets: { platform: string; arch: string; filename: string }[] = [];
+
+	// Collect all extension ZIPs that were built
+	const extensionPlatforms = [
+		{ platform: 'darwin', displayName: 'macOS', manifestPlatform: 'macos' as const },
+		{ platform: 'win32', displayName: 'Windows', manifestPlatform: 'windows' as const },
+		{ platform: 'linux', displayName: 'Linux', manifestPlatform: 'linux' as const }
+	];
+	const extensionArchs: Array<'x64' | 'arm64'> = ['x64', 'arm64'];
+
+	for (const { platform, displayName, manifestPlatform } of extensionPlatforms) {
+		for (const arch of extensionArchs) {
+			const extensionZipName = `unbroken-code-extensions-${version}-${platform}-${arch}.zip`;
+			const extensionZipPath = path.join(distDir, extensionZipName);
+
+			if (fs.existsSync(extensionZipPath)) {
+				assets.push({
+					name: extensionZipName,
+					path: extensionZipPath,
+					contentType: 'application/zip'
+				});
+				extensionAssets.push({ platform, arch, filename: extensionZipName });
+				console.log(`  Added ${displayName} ${arch} extensions package`);
+
+				// Add to corresponding manifest
+				const platformKey = `${manifestPlatform}-${arch}` as PlatformKey;
+				const manifest = localManifestMap.get(platformKey);
+				if (manifest) {
+					if (!manifest.extensions) {
+						manifest.extensions = [];
+					}
+					manifest.extensions.push(extensionZipName);
+					debugLog(`Added extension ${extensionZipName} to ${platformKey} manifest`);
+				}
 			}
 		}
 	}

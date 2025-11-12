@@ -677,15 +677,21 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 		if (filename.includes('.exe')) { return 'exe'; }
 		return '';
 	};
-	const createDownloadCell = (filename: string | null): string => {
+	const createDownloadCell = (filename: string | null, label?: string): string => {
 		if (!filename) { return ''; }
-		const extension = getFileExtension(filename);
+		const extension = label || getFileExtension(filename);
 		return `[${extension}](${generateDownloadLink(filename)})`;
 	};
-	const createMultiDownloadCell = (filenames: (string | null)[]): string => {
+	const createMultiDownloadCell = (filenames: (string | null | { filename: string | null; label: string })[]): string => {
 		const links = filenames
-			.filter((f): f is string => !!f)
-			.map(f => createDownloadCell(f))
+			.map(f => {
+				if (typeof f === 'string') {
+					return createDownloadCell(f);
+				} else if (f && typeof f === 'object') {
+					return createDownloadCell(f.filename, f.label);
+				}
+				return '';
+			})
 			.filter(link => link !== '');
 		return links.join(' ');
 	};
@@ -735,7 +741,7 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 		rows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
 	}
 	if (winAppX64Zip || winAppX64User || winAppX64System || winAppArm64Zip || winAppArm64User || winAppArm64System || winCliX64 || winCliArm64) {
-		rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([winAppX64User, winAppX64System, winAppX64Zip])} | ${createMultiDownloadCell([winAppArm64User, winAppArm64System, winAppArm64Zip])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
+		rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([{ filename: winAppX64User, label: 'user' }, { filename: winAppX64System, label: 'system' }, { filename: winAppX64Zip, label: 'zip' }])} | ${createMultiDownloadCell([{ filename: winAppArm64User, label: 'user' }, { filename: winAppArm64System, label: 'system' }, { filename: winAppArm64Zip, label: 'zip' }])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
 	}
 	if (linuxAppX64Tar || linuxAppX64Deb || linuxAppX64Rpm || linuxAppArm64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxCliX64 || linuxCliArm64) {
 		rows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);

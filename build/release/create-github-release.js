@@ -628,17 +628,24 @@ function buildReleaseBody(manifestMap, tagName, commit, releaseNotes) {
         }
         return '';
     };
-    const createDownloadCell = (filename) => {
+    const createDownloadCell = (filename, label) => {
         if (!filename) {
             return '';
         }
-        const extension = getFileExtension(filename);
+        const extension = label || getFileExtension(filename);
         return `[${extension}](${generateDownloadLink(filename)})`;
     };
     const createMultiDownloadCell = (filenames) => {
         const links = filenames
-            .filter((f) => !!f)
-            .map(f => createDownloadCell(f))
+            .map(f => {
+            if (typeof f === 'string') {
+                return createDownloadCell(f);
+            }
+            else if (f && typeof f === 'object') {
+                return createDownloadCell(f.filename, f.label);
+            }
+            return '';
+        })
             .filter(link => link !== '');
         return links.join(' ');
     };
@@ -682,7 +689,7 @@ function buildReleaseBody(manifestMap, tagName, commit, releaseNotes) {
         rows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
     }
     if (winAppX64Zip || winAppX64User || winAppX64System || winAppArm64Zip || winAppArm64User || winAppArm64System || winCliX64 || winCliArm64) {
-        rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([winAppX64User, winAppX64System, winAppX64Zip])} | ${createMultiDownloadCell([winAppArm64User, winAppArm64System, winAppArm64Zip])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
+        rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([{ filename: winAppX64User, label: 'user' }, { filename: winAppX64System, label: 'system' }, { filename: winAppX64Zip, label: 'zip' }])} | ${createMultiDownloadCell([{ filename: winAppArm64User, label: 'user' }, { filename: winAppArm64System, label: 'system' }, { filename: winAppArm64Zip, label: 'zip' }])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
     }
     if (linuxAppX64Tar || linuxAppX64Deb || linuxAppX64Rpm || linuxAppArm64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxCliX64 || linuxCliArm64) {
         rows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
@@ -721,7 +728,7 @@ function buildReleaseBody(manifestMap, tagName, commit, releaseNotes) {
         }
     }
     if (hasExtensions) {
-        releaseBodyParts.push('', '---', '## Bundled Extensions Downloads', '', 'These bundled extensions are for installing in other Visual Studio Code based IDEs. They include:', '- **malterlib** - C++ semantic highlighting', '- **vscode-clangd** - Clangd language server client', '- **codelldb** - LLDB debugger adapter', '', ...extensionRows);
+        releaseBodyParts.push('', '---', '## Bundled Extensions Downloads', '', 'These bundled extensions are for installing in other Visual Studio Code based IDEs.', ...extensionRows);
     }
     releaseBodyParts.push('', '## Installation Instructions', '', '### 🖥️ macOS', '- **App**: Download dmg for easy installation or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', '### 💻 Windows', '- **App**: Download exe for installer or zip for portable use', '- **CLI**: Download CLI package and add to PATH', '', '### 🐧 Linux', '- **Debian/Ubuntu**: Download deb and run `sudo dpkg -i UnbrokenCode-*.deb`', '- **RedHat/Fedora**: Download rpm and run `sudo rpm -i UnbrokenCode-*.rpm`', '- **Other**: Download tar.gz and extract', '- **CLI**: Download CLI package and add to PATH', '', '## 🔄 Auto-Update', 'This release supports automatic updates. Once installed, Unbroken Code will check for updates automatically.');
     return releaseBodyParts.join('\n');

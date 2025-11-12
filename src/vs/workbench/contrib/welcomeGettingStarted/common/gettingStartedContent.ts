@@ -261,6 +261,13 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		content: {
 			type: 'steps',
 			steps: [
+				{
+					id: 'unbrokenOnboarding',
+					title: localize('gettingStarted.unbrokenOnboarding.title', "Customize your editor"),
+					description: localize('gettingStarted.unbrokenOnboarding.description.interpolated', "Start with the essentials: set up your font size and other editor preferences to make coding comfortable.\n{0}", Button(localize('openSetup', "Open Setup Wizard"), 'command:workbench.action.openUnbrokenOnboarding')),
+					completionEvents: ['onCommand:workbench.action.openUnbrokenOnboarding'],
+					media: { type: 'svg', altText: 'Unbroken Code Setup', path: 'learn.svg' },
+				},
 				createCopilotSetupStep('CopilotSetupAnonymous', CopilotAnonymousButton, 'chatAnonymous && !chatSetupInstalled', true),
 				createCopilotSetupStep('CopilotSetupSignedOut', CopilotSignedOutButton, 'chatEntitlementSignedOut && !chatAnonymous', false),
 				createCopilotSetupStep('CopilotSetupComplete', CopilotCompleteButton, 'chatSetupInstalled && !chatSetupDisabled && (chatAnonymous || chatPlanPro || chatPlanProPlus || chatPlanBusiness || chatPlanEnterprise || chatPlanFree)', false),

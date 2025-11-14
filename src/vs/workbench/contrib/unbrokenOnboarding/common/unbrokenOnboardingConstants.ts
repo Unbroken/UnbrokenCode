@@ -72,14 +72,14 @@ namespace NTest
 {
 	template
 	<
-		typename t_CType                                // Template type parameter distinguisable
+		typename t_CType                                // Template type parameter distinguishable
 		, int t_NonType
 	>
 	struct TCType                                       // Generic types
 	{
 		template
 		<
-			typename tf_CTest                           // Template function type parameter distinguisable
+			typename tf_CTest                           // Template function type parameter distinguishable
 		>
 		void f_TestParameters
 			(
@@ -92,10 +92,10 @@ namespace NTest
 
 		void f_TestVariables()
 		{
-			auto pAutoVar = nullptr;                    // Local variables have distict color
+			auto pAutoVar = nullptr;                    // Local variables have distinct color
 
 			m_VariablePublic = 0;                       // Public member variable
-			mp_VariablePrivate = 0;                     // Private/protected variables easly distinguishable
+			mp_VariablePrivate = 0;                     // Private/protected variables easily distinguishable
 
 			bool bValue         = true;                 // All public constant values have the same color
 			ETest EnumValue     = ETest_Value;          // Enum type distinguishable from enum values
@@ -115,7 +115,7 @@ namespace NTest
 			f_FunctionPublic();                         // Member functions
 			fs_StaticFunctionPublic();
 
-			fp_FunctionPrivate();                       // Private/protected member functions distinguishable public
+			fp_FunctionPrivate();                       // Private/protected member functions distinguishable from public
 			fsp_StaticFunctionPrivate();
 
 			fg_GlobalFunction();                        // Global functions distinguishable from member functions
@@ -133,7 +133,7 @@ namespace NTest
 			;
 
 			o_fFunctor = fFunctor;
-														// All 5 functor types distinguisable from each other
+														// All 5 functor types distinguishable from each other
 			m_fFunctor();                               // Member variable
 			mp_fFunctor();                              // Private member variable
 			fFunctor();                                 // Local variable

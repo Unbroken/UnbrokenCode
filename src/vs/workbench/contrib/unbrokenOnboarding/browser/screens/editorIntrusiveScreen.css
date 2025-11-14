@@ -7,10 +7,32 @@
 .editor-intrusive-screen {
 	display: flex;
 	flex-direction: column;
-	max-width: 900px;
+	max-width: 1400px;
 	margin: 0 auto;
 	width: 100%;
 	height: 100%;
+}
+
+/* Side-by-side layout for options and preview */
+.editor-intrusive-content-split {
+	display: flex;
+	gap: 24px;
+	flex: 1;
+	min-height: 0;
+}
+
+.editor-intrusive-options-column {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.editor-intrusive-preview-column {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 /* Editor intrusive selector */
@@ -89,4 +111,27 @@
 	color: var(--vscode-descriptionForeground);
 	font-style: italic;
 	user-select: none;
+}
+
+/* Preview editor styles */
+.editor-intrusive-preview-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	height: 100%;
+}
+
+.editor-intrusive-preview-header {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.editor-intrusive-preview-editor {
+	flex: 1;
+	min-height: 0;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	overflow: hidden;
+	background-color: var(--vscode-editor-background);
 }

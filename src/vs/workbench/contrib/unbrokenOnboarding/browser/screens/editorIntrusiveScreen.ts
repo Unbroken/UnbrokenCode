@@ -12,6 +12,7 @@ import { ILanguageService } from '../../../../../editor/common/languages/languag
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { ITextModel } from '../../../../../editor/common/model.js';
 
 interface IntrusiveOption {
 	readonly id: string;
@@ -22,6 +23,13 @@ interface IntrusiveOption {
 }
 
 const INTRUSIVE_OPTIONS: IntrusiveOption[] = [
+	{
+		id: 'keep-current',
+		label: 'Keep my current settings',
+		description: 'No Changes',
+		byline: 'Keep your existing editor configuration. You can always change this later in Settings.',
+		settings: {}
+	},
 	{
 		id: 'default',
 		label: 'Chaos',
@@ -34,14 +42,12 @@ const INTRUSIVE_OPTIONS: IntrusiveOption[] = [
 			'editor.autoClosingDelete': undefined,
 			'editor.autoClosingOvertype': undefined,
 			'editor.autoClosingComments': undefined,
-			'editor.dragAndDrop': undefined,
 			'editor.acceptSuggestionOnCommitCharacter': undefined,
 			'editor.suggest.selectionMode': undefined,
 
 			'editor.parameterHints.enabled': undefined,
 			'editor.quickSuggestions': undefined,
 			'editor.suggestOnTriggerCharacters': undefined,
-			'editor.stickyScroll.enabled': undefined,
 			'editor.find.cursorMoveOnType': undefined,
 			'[yaml]': {
 				'editor.quickSuggestions': undefined
@@ -73,14 +79,12 @@ const INTRUSIVE_OPTIONS: IntrusiveOption[] = [
 			'editor.autoClosingDelete': 'never',
 			'editor.autoClosingOvertype': 'never',
 			'editor.autoClosingComments': 'never',
-			'editor.dragAndDrop': false,
 			'editor.acceptSuggestionOnCommitCharacter': false,
 			'editor.suggest.selectionMode': 'never',
 
 			'editor.parameterHints.enabled': undefined,
 			'editor.quickSuggestions': undefined,
 			'editor.suggestOnTriggerCharacters': undefined,
-			'editor.stickyScroll.enabled': undefined,
 			'editor.find.cursorMoveOnType': undefined,
 			'[yaml]': {
 				'editor.quickSuggestions': undefined
@@ -112,14 +116,12 @@ const INTRUSIVE_OPTIONS: IntrusiveOption[] = [
 			'editor.autoClosingDelete': 'never',
 			'editor.autoClosingOvertype': 'never',
 			'editor.autoClosingComments': 'never',
-			'editor.dragAndDrop': false,
 			'editor.acceptSuggestionOnCommitCharacter': false,
 			'editor.suggest.selectionMode': 'never',
 
 			'editor.parameterHints.enabled': false,
 			'editor.quickSuggestions': { other: 'off', comments: 'off', strings: 'off' },
 			'editor.suggestOnTriggerCharacters': false,
-			'editor.stickyScroll.enabled': false,
 			'editor.find.cursorMoveOnType': false,
 			'[yaml]': {
 				'editor.quickSuggestions': {
@@ -157,6 +159,8 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 
 	private selectedOptionId: string;
 	private optionElements: Map<string, HTMLElement> = new Map();
+	private settingsPreviewModel: ITextModel | undefined;
+	private previewColumn: HTMLElement | undefined;
 
 	constructor(
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -177,8 +181,8 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 			lifecycleService
 		);
 
-		// Initialize with default option
-		this.selectedOptionId = 'default';
+		// Initialize with keep-current option
+		this.selectedOptionId = 'keep-current';
 	}
 
 	get title(): string {
@@ -201,11 +205,19 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 		// Create content area
 		const content = append(this.container, $('.onboarding-screen-content'));
 
-		// Create option selector
-		this.createOptionSelector(content);
+		// Create side-by-side layout
+		const splitContainer = append(content, $('.editor-intrusive-content-split'));
+
+		// Create option selector (left side)
+		const optionsColumn = append(splitContainer, $('.editor-intrusive-options-column'));
+		this.createOptionSelector(optionsColumn);
+
+		// Create preview editor (right side)
+		this.previewColumn = append(splitContainer, $('.editor-intrusive-preview-column'));
+		this.createSettingsPreviewEditor(this.previewColumn);
 
 		// Create footer with navigation
-		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Finish' });
+		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Finish', settingsApplyMode: 'onfinish' });
 	}
 
 	private createOptionSelector(parent: HTMLElement): void {
@@ -245,6 +257,7 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 			this._register(this.addDisposableListener(radio, 'change', () => {
 				if (radio.checked) {
 					this.selectedOptionId = option.id;
+					this.updatePreviewContent();
 				}
 			}));
 
@@ -252,11 +265,102 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 			this._register(this.addDisposableListener(optionElement, 'click', () => {
 				radio.checked = true;
 				this.selectedOptionId = option.id;
+				this.updatePreviewContent();
 			}));
 		});
 	}
 
+	private createSettingsPreviewEditor(parent: HTMLElement): void {
+		// Use the base class method to create the preview editor
+		super.createPreviewEditor(parent, {
+			languages: [
+				{
+					language: 'JSON',
+					languageId: 'json',
+					code: '{\n  "loading": "settings preview..."\n}',
+					uri: 'inmemory://onboarding/settings-preview.json'
+				}
+			],
+			defaultLanguage: 'json',
+			readOnly: true
+		});
+
+		// Store reference to the model for dynamic updates
+		this.settingsPreviewModel = this.previewEditor?.getModel() as ITextModel;
+
+		// Update with actual settings content
+		this.updatePreviewContent();
+
+		// Re-layout when content changes
+		if (this.settingsPreviewModel) {
+			this._register(this.settingsPreviewModel.onDidChangeContent(() => {
+				this.layoutEditor();
+			}));
+		}
+	}
+
+	private updatePreviewContent(): void {
+		// Toggle preview column visibility based on selection
+		if (this.previewColumn) {
+			if (this.selectedOptionId === 'keep-current') {
+				this.previewColumn.style.visibility = 'hidden';
+			} else {
+				this.previewColumn.style.visibility = 'visible';
+			}
+		}
+
+		if (!this.settingsPreviewModel) {
+			return;
+		}
+
+		// Don't update preview content for keep-current option
+		if (this.selectedOptionId === 'keep-current') {
+			return;
+		}
+
+		// Find the selected option
+		const selectedOption = INTRUSIVE_OPTIONS.find(opt => opt.id === this.selectedOptionId);
+		if (!selectedOption) {
+			return;
+		}
+
+		// Filter out undefined values and empty objects to show only changed settings
+		const filteredSettings: Record<string, any> = {};
+		for (const [key, value] of Object.entries(selectedOption.settings)) {
+			if (value !== undefined) {
+				// Skip empty objects
+				if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+					const hasNonUndefinedValues = Object.values(value).some(v => v !== undefined);
+					if (hasNonUndefinedValues) {
+						// Filter the nested object to remove undefined values
+						const filteredNestedObj: Record<string, any> = {};
+						for (const [nestedKey, nestedValue] of Object.entries(value)) {
+							if (nestedValue !== undefined) {
+								filteredNestedObj[nestedKey] = nestedValue;
+							}
+						}
+						filteredSettings[key] = filteredNestedObj;
+					}
+				} else {
+					filteredSettings[key] = value;
+				}
+			}
+		}
+
+		// Format as pretty JSON
+		const jsonContent = JSON.stringify(filteredSettings, null, 2);
+
+		// Update the model content
+		this.settingsPreviewModel.setValue(jsonContent);
+	}
+
+
 	override async applySettings(): Promise<void> {
+		// Skip applying settings if keep-current is selected
+		if (this.selectedOptionId === 'keep-current') {
+			return;
+		}
+
 		// Find the selected option
 		const selectedOption = INTRUSIVE_OPTIONS.find(opt => opt.id === this.selectedOptionId);
 

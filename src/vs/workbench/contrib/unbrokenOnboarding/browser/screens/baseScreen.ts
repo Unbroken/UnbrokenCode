@@ -35,6 +35,7 @@ export interface IPreviewEditorConfig {
 	languages: ILanguageSample[];
 	defaultLanguage?: string;
 	configOverrides?: Record<string, any>;
+	readOnly?: boolean;
 }
 
 export abstract class BaseOnboardingScreen extends Disposable {
@@ -125,15 +126,24 @@ export abstract class BaseOnboardingScreen extends Disposable {
 		showSkip?: boolean;
 		showPrevious?: boolean;
 		nextLabel?: string;
+		settingsApplyMode?: 'realtime' | 'onfinish';
 	} = {}): void {
 		const footer = append(parent, $('.onboarding-screen-footer'));
 
 		if (options.showSkip) {
 			const skipButton = append(footer, $('button.onboarding-button.secondary'));
-			skipButton.textContent = 'Skip';
+			skipButton.textContent = 'Exit Setup';
 			this._register(this.addDisposableListener(skipButton, 'click', () => {
 				this.navigate('skip');
 			}));
+		}
+
+		// Add settings apply note if mode is specified
+		if (options.settingsApplyMode) {
+			const note = append(footer, $('.onboarding-footer-note'));
+			note.textContent = options.settingsApplyMode === 'realtime'
+				? 'Try it out - changes save instantly'
+				: 'Review your choices, then click Finish to apply';
 		}
 
 		const buttonGroup = append(footer, $('.onboarding-button-group'));
@@ -164,13 +174,13 @@ export abstract class BaseOnboardingScreen extends Disposable {
 	/**
 	 * Get editor options with user font settings from configuration
 	 */
-	private getEditorOptions(): IEditorOptions {
+	private getEditorOptions(previewConfig: IPreviewEditorConfig): IEditorOptions {
 		// Read ALL editor settings from user configuration
 		const config = deepClone(this.configurationService.getValue<IEditorOptions>('editor'));
 		return {
 			...isObject(config) ? config : Object.create(null),
 			// Override specific options for the preview editor
-			readOnly: true,
+			readOnly: previewConfig.readOnly ?? false,
 			minimap: { enabled: false },
 			lineNumbers: 'on',
 			scrollBeyondLastLine: false,
@@ -179,9 +189,10 @@ export abstract class BaseOnboardingScreen extends Disposable {
 				vertical: 'auto',
 				horizontal: 'auto'
 			},
-			renderLineHighlight: 'none',
+			renderLineHighlight: previewConfig.readOnly ? 'line' : 'none',
 			occurrencesHighlight: 'off',
-			selectionHighlight: false
+			selectionHighlight: false,
+			stickyScroll: { enabled: false },
 		};
 	}
 
@@ -261,7 +272,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 		this.previewEditor = this.instantiationService.createInstance(
 			CodeEditorWidget,
 			this.editorContainer,
-			this.getEditorOptions(),
+			this.getEditorOptions(config),
 			{}
 		);
 
@@ -289,7 +300,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 		// Listen for configuration changes to update editor font settings
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (e.affectsConfiguration('editor') && this.previewEditor) {
-				this.previewEditor.updateOptions(this.getEditorOptions());
+				this.previewEditor.updateOptions(this.getEditorOptions(config));
 			}
 		}));
 

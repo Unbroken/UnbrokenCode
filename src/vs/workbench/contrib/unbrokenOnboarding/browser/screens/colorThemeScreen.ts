@@ -107,7 +107,7 @@ export class ColorThemeScreen extends BaseOnboardingScreen {
 		this.createPreviewEditorWithLanguages(content);
 
 		// Create footer with navigation
-		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Continue' });
+		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Continue', settingsApplyMode: 'realtime' });
 	}
 
 	private async loadThemes(): Promise<void> {

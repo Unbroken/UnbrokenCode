@@ -89,7 +89,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		this.createPreviewEditorWithComparisonButton(content);
 
 		// Create footer with navigation
-		this.createFooter(this.container, { showSkip: true, nextLabel: 'Continue' });
+		this.createFooter(this.container, { showSkip: true, nextLabel: 'Continue', settingsApplyMode: 'realtime' });
 	}
 
 	private createFontSmoothingWarning(parent: HTMLElement): void {
@@ -261,7 +261,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 			if (previewHeader) {
 				// Add comparison table button
 				const comparisonButton = append(previewHeader as HTMLElement, $('button.font-size-comparison-button')) as HTMLButtonElement;
-				comparisonButton.textContent = 'Compare Resolutions';
+				comparisonButton.textContent = 'Compare for different screen sizes';
 				comparisonButton.type = 'button';
 				this._register(this.addDisposableListener(comparisonButton, 'click', () => {
 					this.showComparisonTable();
@@ -363,7 +363,12 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		// Table header
 		const thead = append(table, $('thead'));
 		const headerRow = append(thead, $('tr'));
-		append(headerRow, $('th')).textContent = 'Font Size';
+		function appendHeaderCell() {
+			const element = append(headerRow, $('th'));
+			element.style.textAlign = 'center';
+			return element;
+		}
+		appendHeaderCell().textContent = '';
 
 		// Get current screen resolution
 		// In fullscreen mode, only the notch reduces available space, not the menu bar
@@ -445,7 +450,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		const currentResIndex = resolutions.findIndex(res => res.width === currentWidth && res.height === currentHeight);
 
 		resolutions.forEach((res, index) => {
-			const th = append(headerRow, $('th'));
+			const th = appendHeaderCell();
 			th.textContent = res.label;
 			if (index === currentResIndex) {
 				th.classList.add('current-resolution');
@@ -462,9 +467,10 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		];
 
 		fontSizes.forEach(font => {
-			const row = append(tbody, $('tr'));
+			const row = append(tbody, $(`tr.font-size-${font.size}`));
 			const fontCell = append(row, $('td.font-size-label-cell'));
 			fontCell.textContent = `${font.size}px`;
+			fontCell.style.textAlign = 'center';
 
 			resolutions.forEach((res, index) => {
 				const cell = append(row, $('td'));
@@ -478,6 +484,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 				const lines = Math.floor(usableHeight / font.size);
 
 				cell.textContent = `${columns} × ${lines}`;
+				cell.style.textAlign = 'center';
 
 				// Highlight current resolution column
 				if (index === currentResIndex) {

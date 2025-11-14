@@ -364,6 +364,15 @@
 	border-top: 1px solid var(--vscode-editorWidget-border);
 }
 
+.onboarding-footer-note {
+	flex: 1;
+	text-align: center;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	padding: 0 16px;
+}
+
 .onboarding-button-group {
 	display: flex;
 	gap: 12px;
@@ -492,22 +501,41 @@
 	margin-top: 12px;
 }
 
+.monaco-workbench .font-size-comparison-table table {
+	font-size: 10px;
+	font-family: UnbrokenEmbedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+	font-weight: normal;
+}
+
 .font-size-comparison-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 13px;
+	font-size: 10px;
+	font-weight: normal;
+	font-family: UnbrokenEmbedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
 }
 
 .font-size-comparison-table th,
 .font-size-comparison-table td {
 	padding: 10px 16px;
+	font-size: 10px;
+	font-weight: normal;
 	text-align: left;
 	border: 1px solid var(--vscode-editorWidget-border);
 }
 
+.font-size-comparison-table tr.font-size-12 td {
+	font-size: 12px;
+	font-family: Unbroken12Embedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+}
+
+.font-size-comparison-table tr.font-size-15 td {
+	font-size: 15px;
+	font-family: Unbroken10Embedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+}
+
 .font-size-comparison-table th {
 	background-color: var(--vscode-editor-background);
-	font-weight: 600;
 	color: var(--vscode-foreground);
 }
 
@@ -516,7 +544,6 @@
 }
 
 .font-size-comparison-table td.font-size-label-cell {
-	font-weight: 600;
 	background-color: var(--vscode-editor-background);
 }
 
@@ -527,7 +554,6 @@
 .font-size-comparison-table th.current-resolution,
 .font-size-comparison-table td.current-resolution {
 	background-color: var(--vscode-list-inactiveSelectionBackground);
-	font-weight: 600;
 }
 
 .font-size-comparison-table th.current-resolution {
@@ -536,8 +562,6 @@
 
 .font-size-comparison-table th.current-resolution::after {
 	content: ' (Current)';
-	font-weight: normal;
-	font-size: 11px;
 	color: var(--vscode-descriptionForeground);
 }
 

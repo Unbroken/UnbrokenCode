@@ -5220,49 +5220,64 @@ export class CommandCenter {
 		this._toggleBlameSetting('blame.statusBarItem.enabled');
 	}
 
-	@command('git.openRepositoryInSublimeMerge', { repository: true })
-	async openRepositoryInSublimeMerge(repository: Repository): Promise<void> {
-		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge);
+	@command('git.openRepositoryInSublimeMerge')
+	async openRepositoryInSublimeMerge(uri: Uri): Promise<void> {
+		await this._openRepositoryInExternalGitUI(ExternalGitUITool.SublimeMerge, uri);
 	}
 
-	@command('git.fileHistoryInSublimeMerge', { repository: true })
-	async fileHistoryInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
-		await this._fileHistoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	@command('git.fileHistoryInSublimeMerge')
+	async fileHistoryInSublimeMerge(uri: Uri): Promise<void> {
+		await this._fileHistoryInExternalGitUI(ExternalGitUITool.SublimeMerge, uri);
 	}
 
-	@command('git.lineHistoryInSublimeMerge', { repository: true })
-	async lineHistoryInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
-		await this._lineHistoryInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	@command('git.lineHistoryInSublimeMerge')
+	async lineHistoryInSublimeMerge(uri: Uri): Promise<void> {
+		await this._lineHistoryInExternalGitUI(ExternalGitUITool.SublimeMerge, uri);
 	}
 
-	@command('git.blameInSublimeMerge', { repository: true })
-	async blameInSublimeMerge(repository: Repository, uri?: Uri): Promise<void> {
-		await this._blameInExternalGitUI(repository, ExternalGitUITool.SublimeMerge, uri);
+	@command('git.blameInSublimeMerge')
+	async blameInSublimeMerge(uri: Uri): Promise<void> {
+		await this._blameInExternalGitUI(ExternalGitUITool.SublimeMerge, uri);
 	}
 
-	@command('git.openRepositoryInSourcetree', { repository: true })
-	async openRepositoryInSourcetree(repository: Repository): Promise<void> {
-		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.Sourcetree);
+	@command('git.openRepositoryInSourcetree')
+	async openRepositoryInSourcetree(uri: Uri): Promise<void> {
+		await this._openRepositoryInExternalGitUI(ExternalGitUITool.Sourcetree, uri);
 	}
 
-	@command('git.openRepositoryInGitKraken', { repository: true })
-	async openRepositoryInGitKraken(repository: Repository): Promise<void> {
-		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.GitKraken);
+	@command('git.openRepositoryInGitKraken')
+	async openRepositoryInGitKraken(uri: Uri): Promise<void> {
+		await this._openRepositoryInExternalGitUI(ExternalGitUITool.GitKraken, uri);
 	}
 
-	@command('git.openRepositoryInTower', { repository: true })
-	async openRepositoryInTower(repository: Repository): Promise<void> {
-		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.Tower);
+	@command('git.openRepositoryInTower')
+	async openRepositoryInTower(uri: Uri): Promise<void> {
+		await this._openRepositoryInExternalGitUI(ExternalGitUITool.Tower, uri);
 	}
 
-	@command('git.openRepositoryInGitHubDesktop', { repository: true })
-	async openRepositoryInGitHubDesktop(repository: Repository): Promise<void> {
-		await this._openRepositoryInExternalGitUI(repository, ExternalGitUITool.GitHubDesktop);
+	@command('git.openRepositoryInGitHubDesktop')
+	async openRepositoryInGitHubDesktop(uri: Uri): Promise<void> {
+		await this._openRepositoryInExternalGitUI(ExternalGitUITool.GitHubDesktop, uri);
 	}
 
-	private async _openRepositoryInExternalGitUI(repository: Repository, tool: ExternalGitUITool): Promise<void> {
+	private async _openRepositoryInExternalGitUI(tool: ExternalGitUITool, uri?: Uri): Promise<void> {
 		try {
-			await this.externalGitUIManager.openRepository(tool, repository.root);
+			const fileUri = uri || window.activeTextEditor?.document.uri;
+			if (!fileUri) {
+				window.showWarningMessage(l10n.t('No file is currently open.'));
+				return;
+			}
+
+			const filePath = fileUri.fsPath;
+
+			// Find the git repository root by walking up the file system
+			const repositoryRoot = await this.externalGitUIManager.findRepositoryRoot(filePath);
+			if (!repositoryRoot) {
+				window.showWarningMessage(l10n.t('The repository root could not be found.'));
+				return;
+			}
+
+			await this.externalGitUIManager.openRepository(tool, repositoryRoot);
 			this.telemetryReporter.sendTelemetryEvent('git.openRepositoryInExternalGitUI', { tool });
 		} catch (err) {
 			const toolName = this.externalGitUIManager.getToolDisplayName(tool);
@@ -5278,7 +5293,7 @@ export class CommandCenter {
 		}
 	}
 
-	private async _fileHistoryInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+	private async _fileHistoryInExternalGitUI(tool: ExternalGitUITool, uri?: Uri): Promise<void> {
 		try {
 			const fileUri = uri || window.activeTextEditor?.document.uri;
 			if (!fileUri) {
@@ -5311,7 +5326,7 @@ export class CommandCenter {
 		}
 	}
 
-	private async _lineHistoryInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+	private async _lineHistoryInExternalGitUI(tool: ExternalGitUITool, uri?: Uri): Promise<void> {
 		try {
 			const fileUri = uri || window.activeTextEditor?.document.uri;
 			if (!fileUri) {
@@ -5347,7 +5362,7 @@ export class CommandCenter {
 		}
 	}
 
-	private async _blameInExternalGitUI(_repository: Repository, tool: ExternalGitUITool, uri?: Uri): Promise<void> {
+	private async _blameInExternalGitUI(tool: ExternalGitUITool, uri?: Uri): Promise<void> {
 		try {
 			const fileUri = uri || window.activeTextEditor?.document.uri;
 			if (!fileUri) {

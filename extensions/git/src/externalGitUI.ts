@@ -294,8 +294,10 @@ export class ExternalGitUIManager {
 	}
 
 	private escapeSublimeMergeSearchQuery(value: string): string {
-		// Escape backslashes and quotes for Sublime Merge search query syntax
-		return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+		// Sublime Merge expects forward slashes even on Windows
+		const normalizedPath = value.replace(/\\/g, '/');
+		// Escape quotes for Sublime Merge search query syntax
+		return normalizedPath.replace(/"/g, '\\"');
 	}
 
 	private getOpenRepositoryArgs(tool: ExternalGitUITool, repositoryPath: string, toolPath: string): { args: string[]; cwd: string } {
@@ -364,10 +366,13 @@ export class ExternalGitUIManager {
 		const relativePath = path.relative(repositoryPath, filePath);
 
 		switch (tool) {
-			case ExternalGitUITool.SublimeMerge:
+			case ExternalGitUITool.SublimeMerge: {
 				// smerge blame <file> [line]
 				// Line numbers are 1-based in Sublime Merge
-				return { args: ['blame', relativePath, String(line + 1)], cwd };
+				// Sublime Merge expects forward slashes even on Windows
+				const normalizedPath = relativePath.replace(/\\/g, '/');
+				return { args: ['blame', normalizedPath, String(line + 1)], cwd };
+			}
 			default:
 				throw new Error('Not supported');
 		}

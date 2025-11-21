@@ -32,8 +32,6 @@ import { AuxiliaryBarMaximizedContext } from '../../../common/contextkeys.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { isWeb } from '../../../../base/common/platform.js';
-import { IOnboardingService } from '../../welcomeOnboarding/common/onboardingService.js';
-import { ONBOARDING_STORAGE_KEY } from '../../welcomeOnboarding/common/onboardingTypes.js';
 
 export const restoreWalkthroughsConfigurationKey = 'workbench.welcomePage.restorableWalkthroughs';
 export type RestoreWalkthroughsConfigurationValue = { folder: string; category?: string; step?: string };
@@ -69,7 +67,7 @@ export class StartupPageEditorResolverContribution extends Disposable implements
 						editor: this.instantiationService.createInstance(GettingStartedInput, options as GettingStartedEditorOptions),
 						options: {
 							...options,
-							pinned: false
+							pinned: options?.pinned ?? false
 						}
 					};
 				}
@@ -94,7 +92,6 @@ export class StartupPageRunnerContribution extends Disposable implements IWorkbe
 		@IStorageService private readonly storageService: IStorageService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
-		@IOnboardingService private readonly onboardingService: IOnboardingService,
 	) {
 		super();
 
@@ -240,9 +237,9 @@ export class StartupPageRunnerContribution extends Disposable implements IWorkbe
 			return; // not supported on web (e.g. codespaces, github.dev)
 		}
 
-		if (!this.configurationService.getValue<boolean>('workbench.welcomePage.experimentalOnboarding')) {
-			return; // experimental onboarding is disabled
-		}
+		return; // experimental onboarding is disabled
+
+		/*
 
 		if (!this.storageService.isNew(StorageScope.APPLICATION)) {
 			return; // only show onboarding for new users who have never used the product before
@@ -259,6 +256,8 @@ export class StartupPageRunnerContribution extends Disposable implements IWorkbe
 		this._register(this.onboardingService.onDidDismiss(() => {
 			this.storageService.store(ONBOARDING_STORAGE_KEY, true, StorageScope.APPLICATION, StorageTarget.USER);
 		}));
+
+		*/
 	}
 }
 

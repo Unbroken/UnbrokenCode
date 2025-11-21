@@ -199,7 +199,10 @@ import './contrib/encryption/electron-browser/encryption.contribution.js';
 import './contrib/emergencyAlert/electron-browser/emergencyAlert.contribution.js';
 
 // Font Smoothing
-import './contrib/fontSmoothing/browser/fontSmoothing.contribution.js';
+import './contrib/fontSmoothing/electron-browser/fontSmoothing.contribution.js';
+
+// Unbroken Code Onboarding
+import './contrib/unbrokenOnboarding/electron-browser/unbrokenOnboarding.contribution.js';
 
 // MCP
 import './contrib/mcp/electron-browser/mcp.contribution.js';

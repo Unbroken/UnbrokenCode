@@ -279,6 +279,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/unbrokenOnboarding",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/watermark",
 			"project": "vscode-workbench"
 		},

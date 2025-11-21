@@ -1,0 +1,172 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Editor intrusive screen layout */
+.editor-intrusive-screen {
+	display: flex;
+	flex-direction: column;
+	max-width: 1400px;
+	margin: 0 auto;
+	width: 100%;
+	height: 100%;
+}
+
+/* Side-by-side layout for options and preview */
+.editor-intrusive-content-split {
+	display: flex;
+	gap: 24px;
+	flex: 1;
+	min-height: 0;
+}
+
+.editor-intrusive-options-column {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.editor-intrusive-preview-column {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Editor intrusive selector */
+.editor-intrusive-selector {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.editor-intrusive-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.editor-intrusive-options {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.editor-intrusive-option {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px 20px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	background-color: var(--vscode-editor-background);
+	position: relative;
+}
+
+.editor-intrusive-option:hover {
+	background-color: var(--vscode-list-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.editor-intrusive-option:has(input:checked) {
+	background-color: var(--vscode-list-activeSelectionBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.editor-intrusive-radio {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+	margin: 0;
+}
+
+.editor-intrusive-option-text {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+}
+
+.editor-intrusive-option-label {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+	user-select: none;
+}
+
+.editor-intrusive-option-description {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+	user-select: none;
+}
+
+.editor-intrusive-option-byline {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+	user-select: none;
+}
+
+/* AI Suggestions checkbox section */
+.ai-suggestions-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 12px;
+	padding: 16px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	background-color: var(--vscode-editor-background);
+}
+
+.ai-suggestions-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.ai-suggestions-checkbox-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ai-suggestions-checkbox-label {
+	font-size: 13px;
+	color: var(--vscode-foreground);
+	cursor: pointer;
+	user-select: none;
+}
+
+.ai-suggestions-checkbox-label:hover {
+	color: var(--vscode-textLink-foreground);
+}
+
+/* Preview editor styles */
+.editor-intrusive-preview-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	height: 100%;
+}
+
+.editor-intrusive-preview-header {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.editor-intrusive-preview-editor {
+	flex: 1;
+	min-height: 0;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	overflow: hidden;
+	background-color: var(--vscode-editor-background);
+}

@@ -30,7 +30,8 @@ import { localize } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr, IContextKey, IContextKeyService, IScopedContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { computeSize, FilterType, IExtensionGalleryService, IGalleryExtension, ILocalExtension } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { computeSize, FilterType, IExtensionGalleryService, IGalleryExtension, ILocalExtension, QuarantineDaysConfigKey } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { areSameExtensions } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
 import { ExtensionType, IExtensionManifest } from '../../../../platform/extensions/common/extensions.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -1067,6 +1068,7 @@ class AdditionalDetailsWidget extends Disposable {
 		@IUriIdentityService private readonly uriIdentityService: IUriIdentityService,
 		@IExtensionsWorkbenchService private readonly extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@IExtensionGalleryManifestService private readonly extensionGalleryManifestService: IExtensionGalleryManifestService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this.render(extension);
@@ -1075,6 +1077,16 @@ class AdditionalDetailsWidget extends Disposable {
 				this.render(e);
 			}
 		}));
+	}
+
+	private isQuarantined(publishedDate: number): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		if (quarantineDays === 0) {
+			return false;
+		}
+		const quarantineMs = quarantineDays * 24 * 60 * 60 * 1000;
+		const now = Date.now();
+		return (now - publishedDate) < quarantineMs;
 	}
 
 	private render(extension: IExtension): void {
@@ -1255,10 +1267,12 @@ class AdditionalDetailsWidget extends Disposable {
 						$('div.more-info-entry-name', undefined, localize('id', "Identifier")),
 						$('code', undefined, extension.identifier.id)
 					));
+				const isQuarantined = this.isQuarantined(gallery.lastUpdated);
+				const versionText = isQuarantined ? `${gallery.version} (${localize('quarantined', "quarantined")})` : gallery.version;
 				append(moreInfo,
 					$('.more-info-entry', undefined,
 						$('div.more-info-entry-name', undefined, localize('Version', "Version")),
-						$('code', undefined, gallery.version)
+						$('code', undefined, versionText)
 					)
 				);
 			}

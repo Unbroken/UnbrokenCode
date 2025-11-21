@@ -41,7 +41,7 @@ suite('CenteredViewLayout', () => {
 				onDidChange: grid.onDidChange,
 				layout: (width, height, top, left) => grid.layout(width, height, top, left),
 			};
-			const centered = store.add(new CenteredViewLayout($('.container'), gridView, undefined, fixedWidth));
+			const centered = store.add(new CenteredViewLayout($('.container'), gridView, undefined, fixedWidth, () => ({ rulers: [100], typicalCharWidth: 8, contentLeft: 0 }), () => 2400));
 			centered.layout(2400, 70, 0, 0);
 			const initial = [left, right].map(view => [view.width, view.height, view.proportionalLayout]);
 
@@ -49,7 +49,8 @@ suite('CenteredViewLayout', () => {
 
 			assert.deepStrictEqual({ initial, widths: [left.width, right.width] }, {
 				initial: [[1200, 70, false], [1200, 70, false]],
-				widths: fixedWidth ? [220, 680] : [220, 1264],
+				// Without a fixed width, the centered width follows the editor's ruler rather than margin ratios
+				widths: fixedWidth ? [220, 680] : [220, 1380],
 			});
 		});
 	}

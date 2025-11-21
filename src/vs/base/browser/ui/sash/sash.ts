@@ -256,6 +256,7 @@ export class Sash extends Disposable {
 	private size: number;
 	private hoverDelay = globalHoverDelay;
 	private hoverDelayer = this._register(new Delayer(this.hoverDelay));
+	public maxDragMargin?: number = undefined;
 
 	private _state: SashState = SashState.Enabled;
 	private readonly classNameLeases = new Map<string, { count: number; removeOnRelease: boolean }>();

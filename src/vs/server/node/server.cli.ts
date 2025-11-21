@@ -72,6 +72,7 @@ const isSupportedForPipe = (optionId: keyof RemoteParsedArgs) => {
 		case 'update-extensions':
 		case 'list-extensions':
 		case 'force':
+		case 'include-quarantined':
 		case 'do-not-include-pack-dependencies':
 		case 'show-versions':
 		case 'category':
@@ -239,7 +240,7 @@ export async function main(desc: ProductDescription, args: string[]): Promise<vo
 			const cmdLine: string[] = [];
 			parsedArgs['install-extension']?.forEach(id => cmdLine.push('--install-extension', id));
 			parsedArgs['uninstall-extension']?.forEach(id => cmdLine.push('--uninstall-extension', id));
-			['list-extensions', 'force', 'show-versions', 'category'].forEach(opt => {
+			['list-extensions', 'force', 'include-quarantined', 'show-versions', 'category'].forEach(opt => {
 				const value = parsedArgs[<keyof NativeParsedArgs>opt];
 				if (value !== undefined) {
 					cmdLine.push(`--${opt}=${value}`);
@@ -324,7 +325,8 @@ export async function main(desc: ProductDescription, args: string[]): Promise<vo
 				list: parsedArgs['list-extensions'] ? { showVersions: parsedArgs['show-versions'], category: parsedArgs['category'] } : undefined,
 				install: asExtensionIdOrVSIX(parsedArgs['install-extension']),
 				uninstall: asExtensionIdOrVSIX(parsedArgs['uninstall-extension']),
-				force: parsedArgs['force']
+				force: parsedArgs['force'],
+				includeQuarantined: parsedArgs['include-quarantined']
 			}, verbose).then((res: string) => {
 				console.log(res);
 			}).catch(e => {

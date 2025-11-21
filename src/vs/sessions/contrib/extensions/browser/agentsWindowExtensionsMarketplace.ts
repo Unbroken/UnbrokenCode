@@ -281,7 +281,7 @@ export class MarketplaceExtensionRowRenderer implements IListRenderer<IAgentsWin
 		templateDisposables.add(actionBar.onDidRun(({ error }) => error && this.notificationService.error(error)));
 
 		// Installs the preferred version that the extension has, and offers the other version in a menu.
-		const installAction = templateDisposables.add(this.instantiationService.createInstance(InstallDropdownAction));
+		const installAction = templateDisposables.add(this.instantiationService.createInstance(InstallDropdownAction, false));
 		// The Agents window has no Extensions editor, so the extension stays in the Extensions section of Agent Customizations.
 		installAction.opensExtensionEditor = false;
 		// Users install extensions here to use them here, and extensions that don't support the Agents window are disabled

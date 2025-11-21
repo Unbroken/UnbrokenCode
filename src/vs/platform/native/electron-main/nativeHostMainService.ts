@@ -545,7 +545,7 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 
 	private async getShellCommandLink(): Promise<{ readonly source: string; readonly target: string }> {
 		const target = resolve(this.environmentMainService.appRoot, 'bin', 'code');
-		const source = `/usr/local/bin/code`;
+		const source = `/usr/local/bin/${this.productService.applicationName}`;
 
 		// Ensure source exists
 		const sourceExists = await Promises.exists(target);
@@ -796,7 +796,7 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 		// Windows
 		if (isWindows) {
 			if (this.environmentMainService.isBuilt) {
-				return join(dirname(process.execPath), 'bin', 'code.cmd');
+				return join(dirname(process.execPath), 'bin', `${this.productService.applicationName}.cmd`);
 			}
 
 			return join(this.environmentMainService.appRoot, 'scripts', 'code-cli.bat');

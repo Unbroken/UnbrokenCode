@@ -1,0 +1,72 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+
+permissions:
+  contents: write
+
+jobs:
+  authorize:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Authorize Trigger
+    runs-on: ubuntu-24.04
+    outputs:
+      generate_description: ${{ inputs.generate_description }}
+    steps:
+      - name: Ensure triggering actor is allowed
+        env:
+          ACTOR: ${{ github.actor }}
+          ALLOWED_ACTORS: ${{ vars.RELEASE_BUILD_ADMINS || github.repository_owner }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra allowed_list <<< "$ALLOWED_ACTORS"
+          authorized=false
+          for user in "${allowed_list[@]}"; do
+            trimmed="$(echo "$user" | xargs)"
+            [ -z "$trimmed" ] && continue
+            if [ "$ACTOR" = "$trimmed" ]; then
+              authorized=true
+              break
+            fi
+          done
+          if [ "$authorized" != "true" ]; then
+            echo "Current actor: $ACTOR" >&2
+            echo "This workflow may only be triggered by: $ALLOWED_ACTORS" >&2
+            exit 1
+          fi
+          echo "Authorized actor: $ACTOR"
+
+  publish:
+    needs: authorize
+    runs-on: ubuntu-24.04
+    environment: Build Deploy
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch upstream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/microsoft/vscode.git
+          git fetch --all
+        shell: bash
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          (cd build && npm ci)
+          ./build-unbroken-code.sh --publish
+        shell: bash

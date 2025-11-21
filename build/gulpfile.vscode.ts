@@ -375,6 +375,8 @@ async function compileDarwinAssetCatalog(resourcesDir: string, options: CompileD
 		if (stderr && stderr.trim()) {
 			console.log(stderr.trim());
 		}
+	} catch (error) {
+		console.error('Failed to generate Assets.car exception', error);
 	} finally {
 		try {
 			await fs.promises.rm(tmpDir, { recursive: true, force: true });
@@ -388,7 +390,9 @@ async function compileDarwinAssetCatalog(resourcesDir: string, options: CompileD
 }
 
 function packageTask(platform: string, arch: string, sourceFolderName: string, destinationFolderName: string, _opts?: { stats?: boolean }) {
-	const destination = path.join(path.dirname(root), destinationFolderName);
+	// Allow overriding build output directory via environment variable
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const destination = path.join(buildOutputDir, destinationFolderName);
 	platform = platform || process.platform;
 
 	const task = async () => {
@@ -661,7 +665,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				result = es.merge(result, gulp.src('resources/win32/versioned/bin/code.cmd', { base: 'resources/win32/versioned' })
 					.pipe(replace('@@NAME@@', product.nameShort))
 					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
-					.pipe(rename(function (f) { f.basename = 'code'; })));
+					.pipe(rename(function (f) { f.basename = product.applicationName; })));
 
 				result = es.merge(result, gulp.src('resources/win32/versioned/bin/code.sh', { base: 'resources/win32/versioned' })
 					.pipe(replace('@@NAME@@', product.nameShort))
@@ -672,11 +676,11 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', quality!))
-					.pipe(rename(function (f) { f.basename = 'code'; f.extname = ''; })));
+					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
 			} else {
 				result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
 					.pipe(replace('@@NAME@@', product.nameShort))
-					.pipe(rename(function (f) { f.basename = 'code'; })));
+					.pipe(rename(function (f) { f.basename = product.applicationName; })));
 
 				result = es.merge(result, gulp.src('resources/win32/bin/code.sh', { base: 'resources/win32' })
 					.pipe(replace('@@NAME@@', product.nameShort))
@@ -686,7 +690,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@APPNAME@@', product.applicationName))
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', String(quality)))
-					.pipe(rename(function (f) { f.basename = 'code'; f.extname = ''; })));
+					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
 			}
 
 			result = es.merge(result, gulp.src('resources/win32/VisualElementsManifest.xml', { base: 'resources/win32' })
@@ -728,7 +732,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		const packagedStream = result.pipe(vfs.dest(destination));
 		await util.streamToPromise(packagedStream);
 
-		if (platform === 'darwin') {
+		if (platform === 'darwin' && appIconName !== undefined) {
 			const appBundlePath = path.join(destination, `${product.nameLong}.app`);
 			const resourcesDir = path.join(appBundlePath, 'Contents', 'Resources');
 			if (!fs.existsSync(resourcesDir)) {
@@ -746,7 +750,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 }
 
 function patchWin32DependenciesTask(destinationFolderName: string) {
-	const cwd = path.join(path.dirname(root), destinationFolderName);
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const cwd = path.join(buildOutputDir, destinationFolderName);
 
 	return async () => {
 		const versionedResourcesFolder = util.getVersionedResourcesFolder('win32', commit!);
@@ -781,7 +786,8 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
 	};
 }
 
-const buildRoot = path.dirname(root);
+// Allow overriding build output directory via environment variable
+const buildRoot = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
 
 const BUILD_TARGETS = [
 	{ platform: 'win32', arch: 'x64' },

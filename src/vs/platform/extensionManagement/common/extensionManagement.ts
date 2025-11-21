@@ -715,6 +715,23 @@ export const PreferencesLocalizedLabel = localize2('preferences', 'Preferences')
 export const AllowedExtensionsConfigKey = 'extensions.allowed';
 export const VerifyExtensionSignatureConfigKey = 'extensions.verifySignature';
 export const ExtensionRequestsTimeoutConfigKey = 'extensions.requestTimeout';
+export const QuarantineDaysConfigKey = 'extensions.quarantineDays';
+
+/**
+ * Check if an extension version is quarantined based on its publish date.
+ * @param publishedDate The publish date in milliseconds since epoch
+ * @param quarantineDays The number of days to quarantine, or undefined to use default
+ * @returns true if the version is quarantined, false otherwise
+ */
+export function isExtensionVersionQuarantined(publishedDate: number, quarantineDays: number | undefined): boolean {
+	const effectiveQuarantineDays = quarantineDays ?? 7;
+	if (effectiveQuarantineDays === 0) {
+		return false;
+	}
+	const quarantineMs = effectiveQuarantineDays * 24 * 60 * 60 * 1000;
+	const now = Date.now();
+	return (now - publishedDate) < quarantineMs;
+}
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration)
 	.registerConfiguration({

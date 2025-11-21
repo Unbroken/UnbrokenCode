@@ -148,6 +148,12 @@ suite('ConfigurationEditing', () => {
 		assert.fail('Should fail with ERROR_UNKNOWN_KEY');
 	});
 
+	test('write unregistered key when allowed', async () => {
+		await testObject.writeConfiguration(EditableConfigurationTarget.USER_LOCAL, { key: 'unknown.key', value: 'value' }, { allowUnregisteredKey: true });
+		const contents = await fileService.readFile(userDataProfileService.currentProfile.settingsResource);
+		assert.deepStrictEqual(json.parse(contents.value.toString()), { 'unknown.key': 'value' });
+	});
+
 	test('errors cases - no workspace', async () => {
 		await workspaceService.initialize({ id: uuid.generateUuid() });
 		try {

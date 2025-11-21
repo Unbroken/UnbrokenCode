@@ -147,6 +147,11 @@ export interface IConfigurationUpdateOptions {
 	 * How to handle dirty file when updating the configuration.
 	 */
 	handleDirtyFile?: 'save' | 'revert';
+	/**
+	 * If `true`, write the setting even if no configuration registers it, for example a setting of an extension that
+	 * is disabled. Default is `false`.
+	 */
+	allowUnregisteredKey?: boolean;
 }
 
 export interface IConfigurationService {

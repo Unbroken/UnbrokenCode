@@ -16,7 +16,7 @@ import { URI } from '../../../base/common/uri.js';
 import { IHeaders, IRequestContext, IRequestOptions, isOfflineError } from '../../../base/parts/request/common/request.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IEnvironmentService } from '../../environment/common/environment.js';
-import { getTargetPlatform, IExtensionGalleryService, IExtensionIdentifier, IExtensionInfo, IGalleryExtension, IGalleryExtensionAsset, IGalleryExtensionAssets, IGalleryExtensionVersion, InstallOperation, IQueryOptions, IExtensionsControlManifest, isNotWebExtensionInWebTargetPlatform, isTargetPlatformCompatible, ITranslation, SortOrder, StatisticType, toTargetPlatform, WEB_EXTENSION_TAG, IExtensionQueryOptions, IDeprecationInfo, ISearchPrefferedResults, ExtensionGalleryError, ExtensionGalleryErrorCode, IProductVersion, IAllowedExtensionsService, EXTENSION_IDENTIFIER_REGEX, SortBy, FilterType, MaliciousExtensionInfo, ExtensionRequestsTimeoutConfigKey } from './extensionManagement.js';
+import { getTargetPlatform, IExtensionGalleryService, IExtensionIdentifier, IExtensionInfo, IGalleryExtension, IGalleryExtensionAsset, IGalleryExtensionAssets, IGalleryExtensionVersion, InstallOperation, IQueryOptions, IExtensionsControlManifest, isNotWebExtensionInWebTargetPlatform, isTargetPlatformCompatible, ITranslation, SortOrder, StatisticType, toTargetPlatform, WEB_EXTENSION_TAG, IExtensionQueryOptions, IDeprecationInfo, ISearchPrefferedResults, ExtensionGalleryError, ExtensionGalleryErrorCode, IProductVersion, IAllowedExtensionsService, EXTENSION_IDENTIFIER_REGEX, SortBy, FilterType, MaliciousExtensionInfo, ExtensionRequestsTimeoutConfigKey, QuarantineDaysConfigKey, isExtensionVersionQuarantined } from './extensionManagement.js';
 import { adoptToGalleryExtensionId, areSameExtensions, getGalleryExtensionId, getGalleryExtensionTelemetryData } from './extensionManagementUtil.js';
 import { IExtensionManifest, TargetPlatform } from '../../extensions/common/extensions.js';
 import { areApiProposalsCompatible, isEngineValid } from '../../extensions/common/extensionValidator.js';
@@ -442,33 +442,55 @@ export function sortExtensionVersions(versions: IRawGalleryExtensionVersion[], p
 	return versions;
 }
 
-export function filterLatestExtensionVersionsForTargetPlatform(versions: IRawGalleryExtensionVersion[], targetPlatform: TargetPlatform, allTargetPlatforms: TargetPlatform[]): IRawGalleryExtensionVersion[] {
+export function filterLatestExtensionVersionsForTargetPlatform(versions: IRawGalleryExtensionVersion[], targetPlatform: TargetPlatform, allTargetPlatforms: TargetPlatform[], quarantineDays?: number): IRawGalleryExtensionVersion[] {
 	const latestVersions: IRawGalleryExtensionVersion[] = [];
+	const latestQuarantinedVersions: IRawGalleryExtensionVersion[] = [];
 
 	let preReleaseVersionFoundForTargetPlatform: boolean = false;
 	let releaseVersionFoundForTargetPlatform: boolean = false;
+	let quarantinedPreReleaseVersionFoundForTargetPlatform: boolean = false;
+	let quarantinedReleaseVersionFoundForTargetPlatform: boolean = false;
+
 	for (const version of versions) {
 		const versionTargetPlatform = getTargetPlatformForExtensionVersion(version);
 		const isCompatibleWithTargetPlatform = isTargetPlatformCompatible(versionTargetPlatform, allTargetPlatforms, targetPlatform);
 
+		// Check if this version is quarantined
+		const isQuarantined = quarantineDays !== undefined && isExtensionVersionQuarantined(Date.parse(version.lastUpdated), quarantineDays);
+
 		// Always include versions that are NOT compatible with the target platform
 		if (!isCompatibleWithTargetPlatform) {
-			latestVersions.push(version);
+			if (isQuarantined) {
+				latestQuarantinedVersions.push(version);
+			} else {
+				latestVersions.push(version);
+			}
 			continue;
 		}
 
 		// For compatible versions, only include the first (latest) of each type
 		if (isPreReleaseVersion(version)) {
-			if (!preReleaseVersionFoundForTargetPlatform) {
+			if (!preReleaseVersionFoundForTargetPlatform && !isQuarantined) {
 				preReleaseVersionFoundForTargetPlatform = true;
 				latestVersions.push(version);
+			} else if (!quarantinedPreReleaseVersionFoundForTargetPlatform && isQuarantined) {
+				quarantinedPreReleaseVersionFoundForTargetPlatform = true;
+				latestQuarantinedVersions.push(version);
 			}
 		} else {
-			if (!releaseVersionFoundForTargetPlatform) {
+			if (!releaseVersionFoundForTargetPlatform && !isQuarantined) {
 				releaseVersionFoundForTargetPlatform = true;
 				latestVersions.push(version);
+			} else if (!quarantinedReleaseVersionFoundForTargetPlatform && isQuarantined) {
+				quarantinedReleaseVersionFoundForTargetPlatform = true;
+				latestQuarantinedVersions.push(version);
 			}
 		}
+	}
+
+	// If no non-quarantined versions were found, fall back to quarantined versions
+	if (latestVersions.length === 0 && latestQuarantinedVersions.length > 0) {
+		return latestQuarantinedVersions;
 	}
 
 	return latestVersions;
@@ -525,7 +547,7 @@ function toExtension(galleryExtension: IRawGalleryExtension, version: IRawGaller
 		categories: galleryExtension.categories || [],
 		tags: galleryExtension.tags || [],
 		releaseDate: Date.parse(galleryExtension.releaseDate),
-		lastUpdated: Date.parse(galleryExtension.lastUpdated),
+		lastUpdated: Date.parse(version.lastUpdated),
 		allTargetPlatforms,
 		assets,
 		properties: {
@@ -610,6 +632,11 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 
 	isEnabled(): boolean {
 		return this.extensionGalleryManifestService.extensionGalleryManifestStatus === ExtensionGalleryManifestStatus.Available;
+	}
+
+	private isQuarantined(publishedDate: number): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		return isExtensionVersionQuarantined(publishedDate, quarantineDays);
 	}
 
 	getExtensions(extensionInfos: ReadonlyArray<IExtensionInfo>, token: CancellationToken): Promise<IGalleryExtension[]>;
@@ -826,9 +853,10 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 
 		const targetPlatform = options.targetPlatform ?? CURRENT_TARGET_PLATFORM;
 		const allTargetPlatforms = getAllTargetPlatforms(rawGalleryExtension);
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
 		const rawGalleryExtensionVersion = await this.getValidRawGalleryExtensionVersion(
 			rawGalleryExtension,
-			filterLatestExtensionVersionsForTargetPlatform(rawGalleryExtension.versions, targetPlatform, allTargetPlatforms),
+			filterLatestExtensionVersionsForTargetPlatform(rawGalleryExtension.versions, targetPlatform, allTargetPlatforms, quarantineDays),
 			{
 				targetPlatform,
 				compatible: !!options.compatible,
@@ -851,7 +879,11 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 			return null;
 		}
 		if (await this.isExtensionCompatible(extension, includePreRelease, targetPlatform)) {
-			return extension;
+			// Check if the current extension is quarantined
+			if (!this.isQuarantined(extension.lastUpdated)) {
+				return extension;
+			}
+			// Extension is quarantined, need to find an older non-quarantined version
 		}
 		if (this.allowedExtensionsService.isAllowed({ id: extension.identifier.id, publisherDisplayName: extension.publisherDisplayName }) !== true) {
 			return null;
@@ -867,7 +899,9 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 			targetPlatform,
 		}, CancellationToken.None);
 
-		return result[0] ?? null;
+		// Filter out quarantined versions and return the first non-quarantined one
+		const nonQuarantinedExtension = result.find(ext => !this.isQuarantined(ext.lastUpdated));
+		return nonQuarantinedExtension ?? null;
 	}
 
 	async isExtensionCompatible(extension: IGalleryExtension, includePreRelease: boolean, targetPlatform: TargetPlatform, productVersion: IProductVersion = { version: this.productService.version, date: this.productService.date }): Promise<boolean> {
@@ -1203,9 +1237,37 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 		}
 
 		const version = isString(criteria.version) ? criteria.version : undefined;
+		let firstQuarantinedValid: IRawGalleryExtensionVersion | null = null;
 
 		for (let index = 0; index < rawGalleryExtensionVersions.length; index++) {
 			const rawGalleryExtensionVersion = rawGalleryExtensionVersions[index];
+
+			// Skip quarantined versions when looking for compatible versions (unless a specific version is requested)
+			// But remember the first quarantined valid version as a fallback
+			if (criteria.compatible && !version) {
+				const publishedDate = Date.parse(rawGalleryExtensionVersion.lastUpdated);
+				if (this.isQuarantined(publishedDate)) {
+					// Check if this quarantined version is valid before skipping
+					if (!firstQuarantinedValid && await this.isValidVersion(
+						{
+							id: extensionIdentifier.id,
+							version: rawGalleryExtensionVersion.version,
+							isPreReleaseVersion: isPreReleaseVersion(rawGalleryExtensionVersion),
+							targetPlatform: getTargetPlatformForExtensionVersion(rawGalleryExtensionVersion),
+							engine: getEngine(rawGalleryExtensionVersion),
+							manifestAsset: getVersionAsset(rawGalleryExtensionVersion, AssetType.Manifest),
+							enabledApiProposals: getEnabledApiProposals(rawGalleryExtensionVersion)
+						},
+						criteria,
+						rawGalleryExtension.publisher.displayName,
+						allTargetPlatforms)
+					) {
+						firstQuarantinedValid = rawGalleryExtensionVersion;
+					}
+					continue;
+				}
+			}
+
 			if (await this.isValidVersion(
 				{
 					id: extensionIdentifier.id,
@@ -1225,6 +1287,11 @@ export abstract class AbstractExtensionGalleryService implements IExtensionGalle
 			if (version && rawGalleryExtensionVersion.version === version) {
 				return null;
 			}
+		}
+
+		// If no non-quarantined version was found but we have a quarantined valid version, use it
+		if (criteria.compatible && !version && firstQuarantinedValid) {
+			return firstQuarantinedValid;
 		}
 
 		if (version || criteria.compatible) {

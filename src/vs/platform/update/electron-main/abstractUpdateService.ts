@@ -19,13 +19,20 @@ export interface IUpdateURLOptions {
 }
 
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
-	const url = new URL(`${baseUpdateUrl}/api/update/${platform}/${quality}/${commit}`);
+	// Unbroken Code: Use static GitHub releases feed structure
+	// Quality parameter is not used as we only have 'stable' releases
 
-	if (options?.background) {
-		url.searchParams.set('bg', 'true');
+	// Use consistent naming for all platforms: latest-{platform}.json
+	// The feed generator creates platform-specific feeds with the appropriate format:
+	// - Squirrel.Mac format for darwin-* platforms
+	// - IUpdate format for linux-* and win32-* platforms
+
+	if (platform === 'darwin' || platform === 'darwin-universal') {
+		return `${baseUpdateUrl}/latest-darwin-universal.json`;
 	}
 
-	return url.toString();
+	// All other platforms use their platform identifier directly
+	return `${baseUpdateUrl}/latest-${platform}.json`;
 }
 
 export type UpdateErrorClassification = {

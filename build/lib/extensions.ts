@@ -121,7 +121,7 @@ function fromLocalWebpack(extensionPath: string, webpackConfigFileName: string, 
 	// A static analysis showed there are no webpack externals that are dependencies of the current
 	// local extensions so we can use the vsce.PackageManager.None config to ignore dependencies list
 	// as a temporary workaround.
-	vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
+	vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
 		const files = fileNames
 			.map(fileName => path.join(extensionPath, fileName))
 			.map(filePath => new File({
@@ -222,7 +222,7 @@ function fromLocalNormal(extensionPath: string): Stream {
 	const vsce = require('@vscode/vsce') as typeof import('@vscode/vsce');
 	const result = es.through();
 
-	vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm })
+	vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.Npm })
 		.then(fileNames => {
 			const files = fileNames
 				.map(fileName => path.join(extensionPath, fileName))
@@ -329,6 +329,7 @@ export function fromGithub({ name, version, repo, sha256, metadata }: IExtension
  */
 const nativeExtensions = [
 	'microsoft-authentication',
+	'codelldb',
 ];
 
 const excludedExtensions = [
@@ -447,8 +448,42 @@ function doPackageLocalExtensionsStream(forWeb: boolean, disableMangle: boolean,
 	const localExtensionsStream = minifyExtensionResources(
 		es.merge(
 			...localExtensionsDescriptions.map(extension => {
-				return fromLocal(extension.path, forWeb, disableMangle)
+				// Special handling for CodeLLDB packaging (require VSIX)
+				console.log('Processing extension:', extension.name, forWeb);
+				if (extension.name === 'codelldb' && !forWeb) {
+					console.log('Processing extension VSIX:', extension.name, forWeb);
+					const buildRoot = path.join(extension.path, 'build');
+					const vsixPath = path.join(buildRoot, 'codelldb-full.vsix');
+					if (!fs.existsSync(vsixPath)) {
+						throw new Error(`CodeLLDB VSIX not found at ${vsixPath}. Ensure the 'vsix_full' target built successfully.`);
+					}
+					const packageJsonFilter = filter('package.json', { restore: true });
+					const vsixStream = gulp.src(vsixPath)
+						.pipe(buffer())
+						.pipe(vzip.src())
+						.pipe(filter('extension/**'))
+						.pipe(rename(p => p.dirname = p.dirname!.replace(/^extension\/?/, '')))
+						// Exclude unnecessary CPython sysconfig artifact from CodeLLDB VSIX
+						.pipe(filter(['**', '!lldb/lib/python*/_sysconfigdata__darwin_darwin.py']))
+						.pipe(packageJsonFilter)
+						.pipe(buffer())
+						.pipe(es.mapSync((f: File) => {
+							try {
+								const data = JSON.parse(f.contents!.toString('utf8'));
+								delete data.scripts;
+								delete data.devDependencies;
+								f.contents = Buffer.from(JSON.stringify(data));
+							} catch { }
+							return f;
+						}))
+						.pipe(packageJsonFilter.restore)
+						.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+					// Only package content from the VSIX to avoid source package.json (@VERSION@)
+					return vsixStream;
+				}
+				const baseStream = fromLocal(extension.path, forWeb, disableMangle)
 					.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+				return baseStream;
 			})
 		)
 	);
@@ -559,7 +594,7 @@ export function translatePackageJSON(packageJSON: string, packageNLSPath: string
 			} else if (val && typeof val === 'object') {
 				translate(val);
 			} else if (typeof val === 'string' && val.charCodeAt(0) === CharCode_PC && val.charCodeAt(val.length - 1) === CharCode_PC) {
-				const translated = packageNls[val.substr(1, val.length - 2)];
+				const translated = packageNls[val.substring(1, val.length - 1)];
 				if (translated) {
 					obj[key] = typeof translated === 'string' ? translated : (typeof translated.message === 'string' ? translated.message : val);
 				}
@@ -581,6 +616,9 @@ const esbuildMediaScripts = [
 	'mermaid-chat-features/esbuild-chat-webview.mjs',
 	'notebook-renderers/esbuild.mjs',
 	'simple-browser/esbuild-preview.mjs',
+	'malterlib/esbuild.mjs',
+	'vscode-clangd/esbuild.mjs',
+	'vscode-copilot-chat/esbuild.mjs',
 ];
 
 export async function webpackExtensions(taskName: string, isWatch: boolean, webpackConfigLocations: { configPath: string; outputRoot?: string }[]) {
@@ -648,11 +686,13 @@ export async function webpackExtensions(taskName: string, isWatch: boolean, webp
 }
 
 async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { script: string; outputRoot?: string }[]) {
-	function reporter(stdError: string, script: string) {
+	function reporter(stdError: string, script: string, isIncremental: boolean,) {
 		const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-		fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		if (!isIncremental) {
+			fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		}
 		for (const match of matches || []) {
-			fancyLog.error(match);
+			fancyLog.error(ansiColors.red(match));
 		}
 	}
 
@@ -669,12 +709,16 @@ async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { 
 				if (error) {
 					return reject(error);
 				}
-				reporter(stderr, script);
+				reporter(stderr, script, false);
 				return resolve();
 			});
 
 			proc.stdout!.on('data', (data) => {
 				fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
+			});
+
+			proc.stderr!.on('data', (data) => {
+				reporter(data, script, true);
 			});
 		});
 	});

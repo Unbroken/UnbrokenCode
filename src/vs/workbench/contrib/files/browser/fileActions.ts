@@ -49,6 +49,7 @@ import { trim, rtrim } from '../../../../base/common/strings.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 import { ResourceFileEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { IExplorerService } from './files.js';
+import { ExplorerView } from './views/explorerView.js';
 import { BrowserFileUpload, FileDownload } from './fileImportExport.js';
 import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
@@ -1328,6 +1329,185 @@ export const openFilePreserveFocusHandler = async (accessor: ServicesAccessor) =
 		resource: s.resource,
 		options: { preserveFocus: true }
 	})));
+};
+
+// Promise to track the last navigation operation
+let navigationPromise: Promise<void> = Promise.resolve();
+let numPendingNavigations = 0;
+
+async function navigateToLeaf(
+	accessor: ServicesAccessor,
+	direction: 'next' | 'previous',
+	autoExpand: boolean
+): Promise<void> {
+	if (numPendingNavigations > 10) {
+		return;
+	}
+
+	const viewsService = accessor.get(IViewsService);
+	const editorService = accessor.get(IEditorService);
+	const view = viewsService.getViewWithId(VIEW_ID);
+	if (!view) {
+		return;
+	}
+
+	++numPendingNavigations;
+	console.log();
+
+	let resolve!: (() => void);
+	const newPromise = new Promise<void>((res) => resolve = res);
+
+	const previousPromise = navigationPromise;
+	navigationPromise = newPromise;
+
+	try {
+		if (numPendingNavigations > 1) {
+			await previousPromise;
+		}
+	} catch {
+	}
+
+	try {
+		const explorerView = view as ExplorerView;
+
+		// Get initial focus to know where we started (for wrap-around detection)
+		const initialFocus = explorerView.getFocus();
+		const startItem = initialFocus.length > 0 ? initialFocus[0] : null;
+
+		let attempts = 0;
+		const maxAttempts = 1000; // Prevent infinite loops
+		let justExpanded = false;
+
+		while (attempts < maxAttempts) {
+			attempts++;
+
+			// Move to next/previous item with loop enabled
+			// Exception: if we just expanded a folder, the focus is still on that folder
+			// We need to move into it
+			if (!justExpanded) {
+				if (direction === 'next') {
+					explorerView.focusNextWithLoop(1, true);
+				} else {
+					explorerView.focusPreviousWithLoop(1, true);
+				}
+			} else {
+				// We just expanded a folder, now move into it
+				if (direction === 'next') {
+					// For next, move to first child
+					explorerView.focusNextWithLoop(1, false);
+					justExpanded = false;
+				} else {
+					// For previous, we want to focus the last visible child of the expanded folder
+					// The tree knows the structure after expansion, so we:
+					// 1. Move forward to enter the folder (first child)
+					// 2. Then move backward twice to get to the last child
+					//    (backward from first child = parent, backward again = last child)
+					explorerView.focusNextWithLoop(1, false); // Enter the folder
+					const enteredChild = explorerView.getFocus()[0];
+					if (enteredChild) {
+						// Now move back to get the last child
+						// If we move back from the first child, we get the parent
+						// So we need to keep moving forward until we can't anymore to find the last sibling
+						let lastChild = enteredChild;
+						let previousFocus = lastChild;
+						// Navigate to the last sibling by repeatedly going next until we exit the parent
+						while (true) {
+							explorerView.focusNextWithLoop(1, false);
+							const newFocus = explorerView.getFocus()[0];
+							if (!newFocus || newFocus.parent !== enteredChild.parent) {
+								// We've exited the folder or reached the end, go back to last valid child
+								explorerView.setFocusOnItem(previousFocus);
+								break;
+							}
+							previousFocus = newFocus;
+							lastChild = newFocus;
+						}
+					}
+					// Don't reset justExpanded - we'll check if this is a file in the next iteration
+				}
+			}
+
+			const focused = explorerView.getFocus();
+			if (focused.length === 0) {
+				// No item focused, something went wrong
+				break;
+			}
+
+			const currentItem = focused[0];
+
+			// If we just positioned on a child after expansion, check if it's a file first
+			if (justExpanded && direction === 'previous') {
+				justExpanded = false;
+				// Check if this is a file (leaf)
+				if (!currentItem.isDirectory) {
+					explorerView.revealItem(currentItem);
+					await editorService.openEditor({
+						resource: currentItem.resource,
+						options: { preserveFocus: false }
+					});
+					break;
+				}
+				// If it's a folder, check if it needs expansion
+				if (autoExpand && explorerView.isItemCollapsed(currentItem)) {
+					try {
+						await explorerView.expandItem(currentItem);
+						justExpanded = true;
+					} catch (e) {
+						// Expansion failed, continue normally
+					}
+				}
+				// Continue to next iteration
+				continue;
+			}
+
+			// Check if we've wrapped around back to start
+			if (attempts > 1 && currentItem === startItem) {
+				// We've looped through entire tree without finding a file
+				break;
+			}
+
+			// If this is a file (leaf), open it and break
+			if (!currentItem.isDirectory) {
+				explorerView.revealItem(currentItem);
+				await editorService.openEditor({
+					resource: currentItem.resource,
+					options: { preserveFocus: false }
+				});
+				break;
+			}
+
+			// If this is a directory and autoExpand is enabled
+			if (autoExpand && explorerView.isItemCollapsed(currentItem)) {
+				try {
+					await explorerView.expandItem(currentItem);
+					justExpanded = true;
+				} catch (e) {
+					// Expansion failed, skip this item and continue
+					justExpanded = false;
+				}
+			}
+			// Continue to next iteration to move past this directory
+		}
+	} finally {
+		--numPendingNavigations;
+		resolve();
+	}
+}
+
+export const focusNextLeafHandler = async (accessor: ServicesAccessor) => {
+	await navigateToLeaf(accessor, 'next', false);
+};
+
+export const focusPreviousLeafHandler = async (accessor: ServicesAccessor) => {
+	await navigateToLeaf(accessor, 'previous', false);
+};
+
+export const focusNextLeafExpandHandler = async (accessor: ServicesAccessor) => {
+	await navigateToLeaf(accessor, 'next', true);
+};
+
+export const focusPreviousLeafExpandHandler = async (accessor: ServicesAccessor) => {
+	await navigateToLeaf(accessor, 'previous', true);
 };
 
 class BaseSetActiveEditorReadonlyInSession extends Action2 {

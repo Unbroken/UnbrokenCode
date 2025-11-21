@@ -51,6 +51,7 @@ allowBuilds:
   '@vscode/ripgrep@1.17.1': true
   '@vscode/spdlog@0.15.8': true
   '@vscode/sqlite3@5.1.12-vscode': true
+  '@vscode/vsce-sign@2.1.1': true
   '@vscode/windows-ca-certs@0.3.4': true
   '@vscode/windows-mutex@0.5.3': true
   '@vscode/windows-process-tree@0.8.0': true
@@ -64,6 +65,7 @@ allowBuilds:
   fsevents@2.3.3: true
   husky: false
   kerberos@2.1.1: true
+  keytar@7.9.0: false
   koffi@3.2.1: false
   native-is-elevated@0.9.0: true
   native-keymap@3.3.9: true

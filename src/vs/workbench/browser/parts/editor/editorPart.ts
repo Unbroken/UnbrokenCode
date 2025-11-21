@@ -22,7 +22,7 @@ import { IStorageService, IStorageValueChangeEvent, StorageScope, StorageTarget 
 import { ISerializedEditorGroupModel, isSerializedEditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { EditorDropTarget } from './editorDropTarget.js';
 import { Color } from '../../../../base/common/color.js';
-import { CenteredViewLayout, CenteredViewState } from '../../../../base/browser/ui/centered/centeredViewLayout.js';
+import { CenteredViewLayout, CenteredViewState, CenteredViewEditorWidthConfig } from '../../../../base/browser/ui/centered/centeredViewLayout.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Parts, IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
 import { DeepPartial, assertType } from '../../../../base/common/types.js';
@@ -36,6 +36,8 @@ import { IContextKeyService } from '../../../../platform/contextkey/common/conte
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorTabsVisibleContext } from '../../../common/contextkeys.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
+import { isCodeEditor } from '../../../../editor/browser/editorBrowser.js';
 
 export interface IEditorPartUIState {
 	readonly serializedGrid: ISerializedGrid;
@@ -1015,8 +1017,92 @@ export class EditorPart extends Part<IEditorPartMemento> implements IEditorPart,
 		this.doCreateGridControl();
 
 		// Centered layout widget
-		this.centeredLayoutWidget = this._register(new CenteredViewLayout(this.container, this.gridWidgetView, this.profileMemento[EditorPart.EDITOR_PART_CENTERED_VIEW_STORAGE_KEY], this._partOptions.centeredLayoutFixedWidth));
+		this.centeredLayoutWidget = this._register(new CenteredViewLayout(
+			this.container,
+			this.gridWidgetView,
+			this.profileMemento[EditorPart.EDITOR_PART_CENTERED_VIEW_STORAGE_KEY],
+			this._partOptions.centeredLayoutFixedWidth,
+			() => this.getEditorWidthConfig(),
+			() => this.getWindowWidth()
+		));
 		this._register(this.onDidChangeEditorPartOptions(e => this.centeredLayoutWidget.setFixedWidth(e.newPartOptions.centeredLayoutFixedWidth ?? false)));
+
+		this._register(this.onDidActivateGroup(() => {
+			this.centeredLayoutWidget.recalculate();
+		}));
+
+		// Listen to when the active editor changes within groups
+		const editorConfigListeners = new DisposableStore();
+		const setupEditorListeners = () => {
+			editorConfigListeners.clear();
+
+			const activeGroup = this.activeGroup;
+			if (activeGroup) {
+				// Listen to active editor changes in the active group
+				editorConfigListeners.add(activeGroup.onDidActiveEditorChange(() => {
+					const activeEditorPane = activeGroup.activeEditorPane;
+					if (activeEditorPane) {
+						const control = activeEditorPane.getControl();
+						if (control && isCodeEditor(control)) {
+							this.centeredLayoutWidget.recalculate();
+
+							// Listen to editor option changes (font metrics, layout info, etc.)
+							editorConfigListeners.add(control.onDidChangeConfiguration(e => {
+								if (e.hasChanged(EditorOption.rulers) ||
+									e.hasChanged(EditorOption.fontInfo) ||
+									e.hasChanged(EditorOption.scrollBeyondLastColumn)) {
+									this.centeredLayoutWidget.recalculate();
+								}
+							}));
+						}
+					}
+				}));
+
+				// Also setup for the currently active editor
+				const activeEditorPane = activeGroup.activeEditorPane;
+				if (activeEditorPane) {
+					const control = activeEditorPane.getControl();
+					if (control && isCodeEditor(control)) {
+						// Listen to editor option changes (font metrics, layout info, etc.)
+						editorConfigListeners.add(control.onDidChangeConfiguration(e => {
+							if (e.hasChanged(EditorOption.rulers) ||
+								e.hasChanged(EditorOption.fontInfo) ||
+								e.hasChanged(EditorOption.scrollBeyondLastColumn)) {
+								this.centeredLayoutWidget.recalculate();
+							}
+						}));
+					}
+				}
+			}
+		};
+
+		// Setup listeners when active group changes
+		this._register(this.onDidChangeActiveGroup(() => {
+			this.centeredLayoutWidget.recalculate();
+			setupEditorListeners();
+		}));
+
+		// Initial setup
+		setupEditorListeners();
+
+		// Clean up on dispose
+		this._register(editorConfigListeners);
+
+		// Recalculate when configuration changes that affect centering
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (e.affectsConfiguration('editor.rulers') ||
+				e.affectsConfiguration('editor.fontSize') ||
+				e.affectsConfiguration('editor.fontFamily') ||
+				e.affectsConfiguration('editor.lineHeight') ||
+				e.affectsConfiguration('editor.scrollBeyondLastColumn') ||
+				e.affectsConfiguration('editor.scrollbar') ||
+				e.affectsConfiguration('editor.lineNumbers') ||
+				e.affectsConfiguration('editor.folding') ||
+				e.affectsConfiguration('editor.glyphMargin') ||
+				e.affectsConfiguration('editor.minimap')) {
+				this.centeredLayoutWidget.recalculate();
+			}
+		}));
 
 		// Drag & Drop support
 		this.setupDragAndDropSupport(parent, this.container);
@@ -1034,6 +1120,71 @@ export class EditorPart extends Part<IEditorPartMemento> implements IEditorPart,
 		});
 
 		return this.container;
+	}
+
+	private getEditorWidthConfig(): CenteredViewEditorWidthConfig {
+		const activeEditorPane = this.activeGroup?.activeEditorPane;
+		const activeEditor = activeEditorPane?.input;
+
+		if (activeEditorPane) {
+			const control = activeEditorPane.getControl();
+
+			if (control && isCodeEditor(control)) {
+				const rulersOption = control.getOption(EditorOption.rulers);
+				const fontInfo = control.getOption(EditorOption.fontInfo);
+				const layoutInfo = control.getOption(EditorOption.layoutInfo);
+
+				// Parse rulers - they can be numbers or objects with column property
+				const rulers = Array.isArray(rulersOption)
+					? rulersOption.map(r => typeof r === 'number' ? r : (r as { column: number }).column)
+					: [];
+
+				// Get scrollbar width - vertical scrollbar takes up width
+				const scrollbarWidth = layoutInfo?.verticalScrollbarWidth || 0;
+
+				// Get minimap width - minimap takes up width on the right
+				const minimapWidth = layoutInfo?.minimap?.minimapWidth || 0;
+
+				// Get overscroll - the padding on the right side
+				const scrollBeyondLastColumn = control.getOption(EditorOption.scrollBeyondLastColumn);
+
+				return {
+					rulers,
+					typicalCharWidth: fontInfo?.typicalHalfwidthCharacterWidth || 8,
+					contentLeft: layoutInfo?.contentLeft || 0,
+					scrollbarWidth,
+					minimapWidth,
+					overscrollWidth: scrollBeyondLastColumn || 0
+				};
+			}
+		}
+
+		// Special handling for settings editor - use fixed width
+		if (activeEditor && (
+			activeEditor.typeId === 'workbench.input.settings2' ||
+			activeEditor.resource?.scheme === 'vscode-userdata'
+		)) {
+			return {
+				rulers: [],
+				typicalCharWidth: 6,
+				contentLeft: 0,
+				useFixedWidth: true,
+				fixedWidth: 1152
+			};
+		}
+
+		// Unknown editors take up whole window
+		return {
+			rulers: [],
+			typicalCharWidth: 6,
+			contentLeft: 0,
+			useFixedWidth: true,
+			fixedWidth: 100000
+		};
+	}
+
+	private getWindowWidth(): number {
+		return getWindow(this.container).innerWidth;
 	}
 
 	protected handleContextKeys(): void {

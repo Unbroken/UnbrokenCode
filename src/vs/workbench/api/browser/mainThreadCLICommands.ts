@@ -50,6 +50,7 @@ interface ManageExtensionsArgs {
 	install?: (string | URI)[];
 	uninstall?: string[];
 	force?: boolean;
+	includeQuarantined?: boolean;
 }
 
 CommandsRegistry.registerCommand('_remoteCLI.manageExtensions', async function (accessor: ServicesAccessor, args: ManageExtensionsArgs): Promise<string | undefined> {
@@ -76,7 +77,7 @@ CommandsRegistry.registerCommand('_remoteCLI.manageExtensions', async function (
 			const revive = (inputs: (string | UriComponents)[]) => inputs.map(input => isString(input) ? input : URI.revive(input));
 			if (Array.isArray(args.install) && args.install.length) {
 				try {
-					await cliService.installExtensions(revive(args.install), [], { isMachineScoped: true }, !!args.force);
+					await cliService.installExtensions(revive(args.install), [], { isMachineScoped: true }, !!args.force, !!args.includeQuarantined);
 				} catch (e) {
 					lines.push(e.message);
 				}

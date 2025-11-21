@@ -34,6 +34,8 @@ import { IExtensionService } from '../../../../../workbench/services/extensions/
 import { IPreferencesService } from '../../../../../workbench/services/preferences/common/preferences.js';
 import { IWorkbenchThemeService } from '../../../../../workbench/services/themes/common/workbenchThemeService.js';
 import { AGENTS_WINDOW_MARKETPLACE_QUERY_SOURCE, AgentsWindowMarketplaceSearch, IMarketplaceSearchResult, MarketplaceSearchStatus } from '../../browser/agentsWindowExtensionsMarketplace.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 
 function aGalleryExtension(id: string, properties: Partial<IExtension> = {}): IExtension {
 	return new class extends mock<IExtension>() {
@@ -188,8 +190,10 @@ suite('Installing from the Agents window', () => {
 		instantiationService.stub(IExtensionGalleryService, new class extends mock<IExtensionGalleryService>() { });
 		instantiationService.stub(IExtensionManifestPropertiesService, new class extends mock<IExtensionManifestPropertiesService>() { });
 		instantiationService.stub(IWorkbenchIssueService, new class extends mock<IWorkbenchIssueService>() { });
+		// Without the quarantine of new versions, which would install an older version than the tests expect
+		instantiationService.stub(IConfigurationService, new TestConfigurationService({ extensions: { quarantineDays: 0 } }));
 
-		const action = disposables.add(instantiationService.createInstance(InstallDropdownAction));
+		const action = disposables.add(instantiationService.createInstance(InstallDropdownAction, false));
 		// Like the Agents window, which has no Extensions editor and disables extensions that don't support it by default.
 		action.opensExtensionEditor = !agentsWindow;
 		action.enablesExtension = agentsWindow;

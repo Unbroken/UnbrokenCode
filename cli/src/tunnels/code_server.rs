@@ -66,6 +66,7 @@ pub struct CodeServerArgs {
 	pub show_versions: bool,
 	pub category: Option<String>,
 	pub pre_release: bool,
+	pub include_quarantined: bool,
 	pub donot_include_pack_and_dependencies: bool,
 	pub force: bool,
 	pub start_server: bool,
@@ -139,6 +140,9 @@ impl CodeServerArgs {
 		if !&self.install_extensions.is_empty() {
 			if self.pre_release {
 				args.push(String::from("--pre-release"));
+			}
+			if self.include_quarantined {
+				args.push(String::from("--include-quarantined"));
 			}
 			if self.force {
 				args.push(String::from("--force"));

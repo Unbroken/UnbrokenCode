@@ -75,7 +75,11 @@ export class ExtensionManagementCLI {
 		}
 	}
 
-	public async installExtensions(extensions: (string | URI)[], builtinExtensions: (string | URI)[], installOptions: InstallOptions, force: boolean): Promise<void> {
+	/**
+	 * @param includeQuarantined Install the newest version of an extension given without a version also when it was
+	 * published within the quarantine of new versions, `extensions.quarantineDays`
+	 */
+	public async installExtensions(extensions: (string | URI)[], builtinExtensions: (string | URI)[], installOptions: InstallOptions, force: boolean, includeQuarantined: boolean = false): Promise<void> {
 		const failed: string[] = [];
 
 		try {
@@ -122,7 +126,7 @@ export class ExtensionManagementCLI {
 			}
 
 			if (installExtensionInfos.length) {
-				const failedGalleryExtensions = await this.installGalleryExtensions(installExtensionInfos, installed, force);
+				const failedGalleryExtensions = await this.installGalleryExtensions(installExtensionInfos, installed, force, includeQuarantined);
 				failed.push(...failedGalleryExtensions);
 			}
 		} catch (error) {
@@ -177,7 +181,7 @@ export class ExtensionManagementCLI {
 		}
 	}
 
-	private async installGalleryExtensions(installExtensionInfos: InstallGalleryExtensionInfo[], installed: ILocalExtension[], force: boolean): Promise<string[]> {
+	private async installGalleryExtensions(installExtensionInfos: InstallGalleryExtensionInfo[], installed: ILocalExtension[], force: boolean, includeQuarantined: boolean): Promise<string[]> {
 		installExtensionInfos = installExtensionInfos.filter(installExtensionInfo => {
 			const { id, version, installOptions } = installExtensionInfo;
 			const installedExtension = installed.find(i => areSameExtensions(i.identifier, { id }));
@@ -208,7 +212,7 @@ export class ExtensionManagementCLI {
 
 		const failed: string[] = [];
 		const extensionsToInstall: InstallExtensionInfo[] = [];
-		const galleryExtensions = await this.getGalleryExtensions(installExtensionInfos);
+		const galleryExtensions = await this.getGalleryExtensions(installExtensionInfos, includeQuarantined);
 		await Promise.all(installExtensionInfos.map(async ({ id, version, installOptions }) => {
 			const gallery = galleryExtensions.get(id.toLowerCase());
 			if (!gallery) {
@@ -230,6 +234,11 @@ export class ExtensionManagementCLI {
 			if (installedExtension) {
 				if (gallery.version === installedExtension.manifest.version) {
 					this.logger.info(localize('alreadyInstalled', "Extension '{0}' is already installed.", version ? `${id}@${version}` : id));
+					return;
+				}
+				// The quarantine keeps new versions from being installed, not installed ones from being used
+				if (!version && !includeQuarantined && gt(installedExtension.manifest.version, gallery.version)) {
+					this.logger.info(localize('alreadyInstalledNewerThanQuarantine', "Extension '{0}' v{1} is already installed, which is newer than v{2}, the newest version published before the quarantine of new versions. Use '--include-quarantined' to install the newest version.", id, installedExtension.manifest.version, gallery.version));
 					return;
 				}
 				this.logger.info(localize('updateMessage', "Updating the extension '{0}' to the version {1}", id, gallery.version));
@@ -282,7 +291,13 @@ export class ExtensionManagementCLI {
 		}
 	}
 
-	private async getGalleryExtensions(extensions: InstallGalleryExtensionInfo[]): Promise<Map<string, IGalleryExtension>> {
+	/**
+	 * The gallery extensions to install. For an extension without a version that's its newest compatible version that
+	 * was published before the quarantine of new versions, or the newest version when all are newer or
+	 * `includeQuarantined` is set. An extension without a compatible version is looked up without, so that installing
+	 * it reports why.
+	 */
+	private async getGalleryExtensions(extensions: InstallGalleryExtensionInfo[], includeQuarantined: boolean): Promise<Map<string, IGalleryExtension>> {
 		const galleryExtensions = new Map<string, IGalleryExtension>();
 		const preRelease = extensions.some(e => e.installOptions.installPreReleaseVersion);
 		const targetPlatform = await this.extensionManagementService.getTargetPlatform();
@@ -292,10 +307,43 @@ export class ExtensionManagementCLI {
 				extensionInfos.push({ ...extension, preRelease });
 			}
 		}
-		if (extensionInfos.length) {
-			const result = await this.extensionGalleryService.getExtensions(extensionInfos, { targetPlatform }, CancellationToken.None);
+		const query = async (infos: IExtensionInfo[], compatible: boolean) => {
+			if (!infos.length) {
+				return;
+			}
+			const result = await this.extensionGalleryService.getExtensions(infos, compatible ? { targetPlatform, compatible: true } : { targetPlatform }, CancellationToken.None);
 			for (const extension of result) {
 				galleryExtensions.set(extension.identifier.id.toLowerCase(), extension);
+			}
+		};
+		// Only a query for compatible versions leaves out the versions in quarantine; an explicit version is installed as
+		// given
+		const respectQuarantine = (info: IExtensionInfo) => !includeQuarantined && !info.version;
+		await query(extensionInfos.filter(respectQuarantine), true);
+		await query(extensionInfos.filter(info => !respectQuarantine(info) || !galleryExtensions.has(info.id.toLowerCase())), false);
+
+		// When the newest version isn't compatible, installing it looks for the newest compatible one in the quarantine of
+		// new versions, so the newest compatible version is given as an explicit one, which is installed as given.
+		// Known limitation: with --pre-release, when that newest compatible version is a release, installing it still
+		// looks for a compatible pre-release, which leaves out the quarantine, so the newest release before the quarantine
+		// is installed. Installing the given version instead would pin the extension, which stops its updates.
+		if (includeQuarantined) {
+			for (const info of extensionInfos.filter(info => !info.version)) {
+				const key = info.id.toLowerCase();
+				const extension = galleryExtensions.get(key);
+				if (!extension || await this.extensionGalleryService.isExtensionCompatible(extension, !!info.preRelease, targetPlatform)) {
+					continue;
+				}
+				// The versions aren't in order, as they're collected while their compatibility is checked
+				const compatibleVersions = await this.extensionGalleryService.getAllCompatibleVersions(extension.identifier, !!info.preRelease, targetPlatform);
+				const newestCompatible = compatibleVersions.reduce<typeof compatibleVersions[number] | undefined>((newest, candidate) => !newest || gt(candidate.version, newest.version) ? candidate : newest, undefined);
+				if (!newestCompatible) {
+					continue;
+				}
+				const [compatible] = await this.extensionGalleryService.getExtensions([{ ...extension.identifier, version: newestCompatible.version }], { targetPlatform, compatible: true }, CancellationToken.None);
+				if (compatible) {
+					galleryExtensions.set(key, compatible);
+				}
 			}
 		}
 		return galleryExtensions;

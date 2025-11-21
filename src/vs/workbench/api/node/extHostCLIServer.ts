@@ -42,6 +42,7 @@ export interface ExtensionManagementPipeArgs {
 	install?: string[];
 	uninstall?: string[];
 	force?: boolean;
+	includeQuarantined?: boolean;
 }
 
 export type PipeCommand = OpenCommandPipeArgs | StatusPipeArgs | OpenExternalCommandPipeArgs | ExtensionManagementPipeArgs;
@@ -171,7 +172,8 @@ export class CLIServerBase {
 			list: data.list,
 			install: toExtOrVSIX(data.install),
 			uninstall: toExtOrVSIX(data.uninstall),
-			force: data.force
+			force: data.force,
+			includeQuarantined: data.includeQuarantined
 		};
 		return await this._commands.executeCommand<string | undefined>('_remoteCLI.manageExtensions', commandArgs);
 	}

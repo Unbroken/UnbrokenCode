@@ -92,6 +92,7 @@ export const serverOptions: OptionDescriptions<Required<ServerParsedArgs>> = {
 	'do-not-sync': OPTIONS['do-not-sync'],
 	'do-not-include-pack-dependencies': OPTIONS['do-not-include-pack-dependencies'],
 	'pre-release': OPTIONS['pre-release'],
+	'include-quarantined': OPTIONS['include-quarantined'],
 	'start-server': { type: 'boolean', cat: 'e', description: nls.localize('start-server', "Start the server when installing or uninstalling extensions. To be used in combination with 'install-extension', 'install-builtin-extension' and 'uninstall-extension'.") },
 
 
@@ -227,6 +228,7 @@ export interface ServerParsedArgs {
 	force?: boolean; // used by install-extension
 	'do-not-sync'?: boolean; // used by install-extension
 	'pre-release'?: boolean; // used by install-extension
+	'include-quarantined'?: boolean; // used by install-extension
 	'do-not-include-pack-dependencies'?: boolean; // used by install-extension
 
 

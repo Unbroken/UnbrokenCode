@@ -66,7 +66,7 @@ export class StartupPageEditorResolverContribution extends Disposable implements
 						editor: this.instantiationService.createInstance(GettingStartedInput, options as GettingStartedEditorOptions),
 						options: {
 							...options,
-							pinned: false
+							pinned: options?.pinned ?? false
 						}
 					};
 				}

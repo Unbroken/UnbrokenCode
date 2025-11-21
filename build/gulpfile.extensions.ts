@@ -10,6 +10,9 @@ EventEmitter.defaultMaxListeners = 100;
 import gulp from 'gulp';
 import * as path from 'path';
 import * as nodeUtil from 'util';
+import * as cp from 'child_process';
+import fancyLog from 'fancy-log';
+import ansiColors from 'ansi-colors';
 import es from 'event-stream';
 import filter from 'gulp-filter';
 import * as util from './lib/util.ts';
@@ -51,6 +54,7 @@ const compilations = [
 	'extensions/jake/tsconfig.json',
 	'extensions/json-language-features/client/tsconfig.json',
 	'extensions/json-language-features/server/tsconfig.json',
+	'extensions/malterlib/tsconfig.json',
 	'extensions/markdown-language-features/tsconfig.json',
 	'extensions/markdown-math/tsconfig.json',
 	'extensions/media-preview/tsconfig.json',
@@ -185,7 +189,37 @@ gulp.task(transpileExtensionsTask);
 export const compileExtensionsTask = task.define('compile-extensions', task.parallel(...tasks.map(t => t.compileTask)));
 gulp.task(compileExtensionsTask);
 
-export const watchExtensionsTask = task.define('watch-extensions', task.parallel(...tasks.map(t => t.watchTask)));
+// Ensure the one-time native build runs before starting extension watchers
+// Use a special build for watch that targets dev_debugging
+const buildCodelldbNativeForWatchTask = task.define('build-codelldb-native-watch', () => new Promise<void>((resolve, reject) => {
+	const script = path.join(root, 'extensions/codelldb/scripts/build-native.mjs');
+	const env = { ...process.env, CODELLDB_BUILD_TARGET: 'dev_debugging' };
+	const proc = cp.execFile(process.execPath, [script], { cwd: root, env }, (err) => {
+		if (err) { return reject(err); }
+		return resolve();
+	});
+	proc.stdout?.on('data', d => fancyLog.info(`${ansiColors.green('build-codelldb-native-watch')}: ${d.toString('utf8').trimEnd()}`));
+	proc.stderr?.on('data', d => fancyLog.warn(`${ansiColors.yellow('build-codelldb-native-watch')}: ${d.toString('utf8').trimEnd()}`));
+}));
+
+// Build full VSIX for packaging
+const buildCodelldbNativeVsixTask = task.define('build-codelldb-native-vsix', () => new Promise<void>((resolve, reject) => {
+	const script = path.join(root, 'extensions/codelldb/scripts/build-native.mjs');
+	const env = { ...process.env, CODELLDB_BUILD_TARGET: 'vsix_full' };
+	const proc = cp.execFile(process.execPath, [script], { cwd: root, env }, (err) => {
+		if (err) { return reject(err); }
+		return resolve();
+	});
+	proc.stdout?.on('data', d => fancyLog.info(`${ansiColors.green('build-codelldb-native-vsix')}: ${d.toString('utf8').trimEnd()}`));
+	proc.stderr?.on('data', d => fancyLog.warn(`${ansiColors.yellow('build-codelldb-native-vsix')}: ${d.toString('utf8').trimEnd()}`));
+}));
+
+export const watchExtensionsTask = task.define('watch-extensions', task.series(
+	// Build native bits once for CodeLLDB
+	buildCodelldbNativeForWatchTask,
+	// Start TS watchers
+	task.parallel(...tasks.map(t => t.watchTask))
+));
 gulp.task(watchExtensionsTask);
 
 //#region Extension media
@@ -227,7 +261,10 @@ gulp.task(compileNonNativeExtensionsBuildTask);
  * Compiles the native extensions for the build
  * @note this does not clean the directory ahead of it. See {@link cleanExtensionsBuildTask} for that.
  */
-export const compileNativeExtensionsBuildTask = task.define('compile-native-extensions-build', () => ext.packageNativeLocalExtensionsStream(false, false).pipe(gulp.dest('.build')));
+export const compileNativeExtensionsBuildTask = task.define('compile-native-extensions-build', task.series(
+	buildCodelldbNativeVsixTask,
+	() => ext.packageNativeLocalExtensionsStream(false, false).pipe(gulp.dest('.build'))
+));
 gulp.task(compileNativeExtensionsBuildTask);
 
 /**
@@ -237,6 +274,7 @@ gulp.task(compileNativeExtensionsBuildTask);
 export const compileAllExtensionsBuildTask = task.define('compile-extensions-build', task.series(
 	cleanExtensionsBuildTask,
 	bundleMarketplaceExtensionsBuildTask,
+	buildCodelldbNativeVsixTask,
 	task.define('bundle-extensions-build', () => ext.packageAllLocalExtensionsStream(false, false).pipe(gulp.dest('.build'))),
 ));
 gulp.task(compileAllExtensionsBuildTask);
@@ -248,6 +286,7 @@ gulp.task(task.define('extensions-ci', task.series(compileNonNativeExtensionsBui
 const compileExtensionsBuildPullRequestTask = task.define('compile-extensions-build-pr', task.series(
 	cleanExtensionsBuildTask,
 	bundleMarketplaceExtensionsBuildTask,
+	buildCodelldbNativeVsixTask,
 	task.define('bundle-extensions-build-pr', () => ext.packageAllLocalExtensionsStream(false, true).pipe(gulp.dest('.build'))),
 ));
 gulp.task(compileExtensionsBuildPullRequestTask);

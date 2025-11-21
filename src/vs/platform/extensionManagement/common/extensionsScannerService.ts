@@ -596,7 +596,20 @@ class ExtensionsScanner extends Disposable {
 				if (input.type === ExtensionType.User && basename(c.resource).indexOf('.') === 0) {
 					return null;
 				}
-				const extensionScannerInput = new ExtensionScannerInput(c.resource, input.mtime, input.applicationExtensionslocation, input.applicationExtensionslocationMtime, input.profile, input.profileScanOptions, input.type, input.validate, input.productVersion, input.productDate, input.productCommit, input.devMode, input.language, input.translations);
+				let location = c.resource;
+				// Dev convenience: for extensions that produce build outputs with their own package.json
+				// prefer the build folder when present. This helps projects like CodeLLDB that generate
+				// a versioned package.json and compiled main in a "build" subfolder. Support build-<arch>.
+				try {
+					const folderName = basename(c.resource);
+					if (!this.environmentService.isBuilt && folderName === 'codelldb') {
+						const buildPkg = joinPath(c.resource, 'build', 'package.json');
+						if (await this.fileService.exists(buildPkg)) {
+							location = joinPath(c.resource, 'build');
+						}
+					}
+				} catch (error) { }
+				const extensionScannerInput = new ExtensionScannerInput(location, input.mtime, input.applicationExtensionslocation, input.applicationExtensionslocationMtime, input.profile, input.profileScanOptions, input.type, input.validate, input.productVersion, input.productDate, input.productCommit, input.devMode, input.language, input.translations);
 				return this.scanExtension(extensionScannerInput);
 			}));
 		return coalesce(extensions)

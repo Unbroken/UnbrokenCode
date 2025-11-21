@@ -26,7 +26,9 @@ import {
 	ExtensionManagementErrorCode,
 	MaliciousExtensionInfo,
 	shouldRequireRepositorySignatureFor,
-	IGalleryExtensionVersion
+	IGalleryExtensionVersion,
+	QuarantineDaysConfigKey,
+	isExtensionVersionQuarantined
 } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IWorkbenchExtensionEnablementService, EnablementState, IExtensionManagementServerService, IExtensionManagementServer, IWorkbenchExtensionManagementService, IResourceExtension } from '../../../services/extensionManagement/common/extensionManagement.js';
 import { getGalleryExtensionTelemetryData, getLocalExtensionTelemetryData, areSameExtensions, groupByExtension, getGalleryExtensionId, findMatchingMaliciousEntry } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
@@ -109,8 +111,14 @@ export class Extension implements IExtension {
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@ILogService private readonly logService: ILogService,
 		@IFileService private readonly fileService: IFileService,
-		@IProductService private readonly productService: IProductService
+		@IProductService private readonly productService: IProductService,
+		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
+	}
+
+	private isQuarantined(publishedDate: number): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		return isExtensionVersionQuarantined(publishedDate, quarantineDays);
 	}
 
 	get resourceExtension(): IResourceExtension | undefined {
@@ -239,6 +247,10 @@ export class Extension implements IExtension {
 
 	get latestVersion(): string {
 		return this.gallery ? this.gallery.version : this.getManifestFromLocalOrResource()?.version ?? '';
+	}
+
+	get isGalleryVersionQuarantined(): boolean {
+		return this.gallery ? this.isQuarantined(this.gallery.lastUpdated) : false;
 	}
 
 	get description(): string {
@@ -1254,7 +1266,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 			}
 		}
 		if (extensionsToFetch.length) {
-			const extensions = await this.getExtensions(extensionsToFetch.map(e => ({ id: e.identifier.value, uuid: e.uuid })), CancellationToken.None);
+			const extensions = await this.getExtensions(extensionsToFetch.map(e => ({ id: e.identifier.value, uuid: e.uuid })), { compatible: true }, CancellationToken.None);
 			changedExtensions.push(...extensions);
 		}
 		if (workspaceExtensions.length) {
@@ -2436,6 +2448,11 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 		return new MarkdownString().appendText(nls.localize('cannot be installed', "Cannot install the '{0}' extension because it is not available in this setup.", extension.displayName ?? extension.identifier.id));
 	}
 
+	private isQuarantined(publishedDate: number): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		return isExtensionVersionQuarantined(publishedDate, quarantineDays);
+	}
+
 	async install(arg: string | URI | IExtension, installOptions: InstallExtensionOptions = {}, progressLocation?: ProgressLocation | string): Promise<IExtension> {
 		let installable: URI | IGalleryExtension | IResourceExtension | undefined;
 		let extension: IExtension | undefined;
@@ -2461,6 +2478,14 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				if (installOptions.version && installOptions.version !== gallery?.version) {
 					installableInfo = { id: extension.identifier.id, version: installOptions.version };
 				}
+				// If no specific version requested and the gallery version is quarantined,
+				// fetch the latest compatible (non-quarantined) version instead
+				else if (!installOptions.installGivenVersion) {
+					if (this.isQuarantined(gallery.lastUpdated)) {
+						// Gallery version is quarantined, fetch compatible version
+						installableInfo = { id: extension.identifier.id, preRelease: gallery.properties.isPreReleaseVersion };
+					}
+				}
 			}
 			// Install by resource
 			else if (arg.resourceExtension) {
@@ -2470,7 +2495,24 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 			if (installableInfo) {
 				const targetPlatform = extension?.server ? await extension.server.extensionManagementService.getTargetPlatform() : undefined;
-				gallery = (await this.galleryService.getExtensions([installableInfo], { targetPlatform }, CancellationToken.None)).at(0);
+				gallery = (await this.galleryService.getExtensions([installableInfo], { targetPlatform, compatible: true }, CancellationToken.None)).at(0);
+
+				// If we fetched a compatible version but it's still quarantined, warn the user
+				// (this happens when all versions are quarantined)
+				if (gallery && !installOptions.installGivenVersion) {
+					if (this.isQuarantined(gallery.lastUpdated)) {
+						const effectiveQuarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey) ?? 7;
+						const result = await this.dialogService.confirm({
+							title: nls.localize('quarantinedVersionWarning', "Install Quarantined Version?"),
+							message: nls.localize('allVersionsQuarantinedMessage', "All available versions of this extension were released less than {0} days ago and are quarantined as a security precaution. Do you want to install anyway?", effectiveQuarantineDays),
+							primaryButton: nls.localize('installAnyway', "Install Anyway"),
+							type: 'warning'
+						});
+						if (!result.confirmed) {
+							throw new CancellationError();
+						}
+					}
+				}
 			}
 
 			if (!extension && gallery) {

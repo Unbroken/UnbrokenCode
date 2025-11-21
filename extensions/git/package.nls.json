@@ -491,5 +491,23 @@
 			"Please make sure there is no space between the right bracket and left parenthesis:  ]( this is an internal syntax for links"
 		]
 	},
-	"view.workbench.learnMore": "To learn more about how to use Git and source control in VS Code [read our docs](https://aka.ms/vscode-scm)."
+	"view.workbench.learnMore": "To learn more about how to use Git and source control in VS Code [read our docs](https://aka.ms/vscode-scm).",
+	"command.openRepositoryInSublimeMerge": "Open Repository in Sublime Merge",
+	"command.fileHistoryInSublimeMerge": "File History in Sublime Merge",
+	"command.lineHistoryInSublimeMerge": "Line History in Sublime Merge",
+	"command.blameInSublimeMerge": "Blame in Sublime Merge",
+	"command.openRepositoryInSourcetree": "Open Repository in Sourcetree",
+	"command.openRepositoryInGitKraken": "Open Repository in GitKraken",
+	"command.openRepositoryInTower": "Open Repository in Tower",
+	"command.openRepositoryInGitHubDesktop": "Open Repository in GitHub Desktop",
+	"config.externalGitUI.sublimeMerge.enabled": "Enable Sublime Merge integration. When enabled, commands to open repository and file history in Sublime Merge will be available.",
+	"config.externalGitUI.sublimeMerge.path": "Path to the Sublime Merge executable. If not specified, the extension will attempt to auto-detect it.",
+	"config.externalGitUI.sourcetree.enabled": "Enable Sourcetree integration. When enabled, commands to open repository and file history in Sourcetree will be available.",
+	"config.externalGitUI.sourcetree.path": "Path to the Sourcetree executable. If not specified, the extension will attempt to auto-detect it.",
+	"config.externalGitUI.gitKraken.enabled": "Enable GitKraken integration. When enabled, commands to open repository and file history in GitKraken will be available.",
+	"config.externalGitUI.gitKraken.path": "Path to the GitKraken executable. If not specified, the extension will attempt to auto-detect it.",
+	"config.externalGitUI.tower.enabled": "Enable Tower integration. When enabled, commands to open repository and file history in Tower will be available.",
+	"config.externalGitUI.tower.path": "Path to the Tower executable. If not specified, the extension will attempt to auto-detect it.",
+	"config.externalGitUI.githubDesktop.enabled": "Enable GitHub Desktop integration. When enabled, commands to open repository in GitHub Desktop will be available.",
+	"config.externalGitUI.githubDesktop.path": "Path to the GitHub Desktop executable. If not specified, the extension will attempt to auto-detect it."
 }

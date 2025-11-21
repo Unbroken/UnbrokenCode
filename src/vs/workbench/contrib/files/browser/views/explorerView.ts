@@ -368,6 +368,26 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.tree.focusNext();
 	}
 
+	focusNextWithLoop(n: number = 1, loop: boolean = false): void {
+		this.tree.focusNext(n, loop);
+	}
+
+	focusPreviousWithLoop(n: number = 1, loop: boolean = false): void {
+		this.tree.focusPrevious(n, loop);
+	}
+
+	setFocusOnItem(item: ExplorerItem): void {
+		this.tree.setFocus([item]);
+	}
+
+	revealItem(item: ExplorerItem): void {
+		this.tree.reveal(item);
+	}
+
+	async expandItem(item: ExplorerItem): Promise<void> {
+		await this.tree.expand(item);
+	}
+
 	focusLast(): void {
 		this.tree.focusLast();
 	}

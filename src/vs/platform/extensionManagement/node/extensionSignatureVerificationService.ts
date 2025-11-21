@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../../base/common/errors.js';
 import { isDefined } from '../../../base/common/types.js';
 import { TargetPlatform } from '../../extensions/common/extensions.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
-import { ILogService, LogLevel } from '../../log/common/log.js';
+import { ILogService } from '../../log/common/log.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { ExtensionSignatureVerificationCode } from '../common/extensionManagement.js';
 
@@ -35,7 +35,7 @@ export interface IExtensionSignatureVerificationService {
 }
 
 declare module vsceSign {
-	export function verify(vsixFilePath: string, signatureArchiveFilePath: string, verbose: boolean): Promise<ExtensionSignatureVerificationResult>;
+	export function verify(vsixFilePath: string, signatureArchiveFilePath: string): Promise<boolean>;
 }
 
 /**
@@ -67,7 +67,7 @@ export class ExtensionSignatureVerificationService implements IExtensionSignatur
 	}
 
 	private async resolveVsceSign(): Promise<typeof vsceSign> {
-		const mod = '@vscode/vsce-sign';
+		const mod = 'node-ovsx-sign';
 		return import(mod);
 	}
 
@@ -87,7 +87,11 @@ export class ExtensionSignatureVerificationService implements IExtensionSignatur
 
 		try {
 			this.logService.trace(`Verifying extension signature for ${extensionId}...`);
-			result = await module.verify(vsixFilePath, signatureArchiveFilePath, this.logService.getLevel() === LogLevel.Trace);
+			if (await module.verify(vsixFilePath, signatureArchiveFilePath)) {
+				result = { code: ExtensionSignatureVerificationCode.Success, didExecute: true };
+			} else {
+				result = { code: ExtensionSignatureVerificationCode.SignatureIsNotValid, didExecute: true };
+			}
 		} catch (e) {
 			result = {
 				code: ExtensionSignatureVerificationCode.UnknownError,

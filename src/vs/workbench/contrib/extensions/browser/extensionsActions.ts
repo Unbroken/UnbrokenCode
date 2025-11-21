@@ -13,7 +13,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { disposeIfDisposable } from '../../../../base/common/lifecycle.js';
 import { IExtension, ExtensionState, IExtensionsWorkbenchService, IExtensionContainer, TOGGLE_IGNORE_EXTENSION_ACTION_ID, SELECT_INSTALL_VSIX_EXTENSION_COMMAND_ID, THEME_ACTIONS_GROUP, INSTALL_ACTIONS_GROUP, UPDATE_ACTIONS_GROUP, ExtensionEditorTab, ExtensionRuntimeActionType, IExtensionArg, AutoUpdateConfigurationKey } from '../common/extensions.js';
 import { ExtensionsConfigurationInitialContent } from '../common/extensionsFileTemplate.js';
-import { IGalleryExtension, IExtensionGalleryService, ILocalExtension, InstallOptions, InstallOperation, ExtensionManagementErrorCode, IAllowedExtensionsService, shouldRequireRepositorySignatureFor } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { IGalleryExtension, IExtensionGalleryService, ILocalExtension, InstallOptions, InstallOperation, ExtensionManagementErrorCode, IAllowedExtensionsService, shouldRequireRepositorySignatureFor, QuarantineDaysConfigKey, isExtensionVersionQuarantined } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IWorkbenchExtensionEnablementService, EnablementState, IExtensionManagementServerService, IExtensionManagementServer, IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
 import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService, IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { areSameExtensions, getExtensionId } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
@@ -430,6 +430,13 @@ export class InstallAction extends ExtensionAction {
 	static readonly CLASS = `${this.LABEL_ACTION_CLASS} prominent install`;
 	private static readonly HIDE = `${this.CLASS} hide`;
 
+	// Dedupes compatible-version fetches across both InstallAction siblings spawned by
+	// InstallDropdownAction and across the multiple update() calls each one receives per
+	// extension change. Keyed by the gallery object reference, so a new gallery (i.e. a fresh
+	// fetch from the marketplace) naturally bypasses the cache, but as long as the same
+	// IGalleryExtension instance is in play the fetch only happens once.
+	private static readonly _resolutionsByGallery = new WeakMap<IGalleryExtension, Promise<IGalleryExtension | undefined>>();
+
 	protected _manifest: IExtensionManifest | null = null;
 	set manifest(manifest: IExtensionManifest | null) {
 		this._manifest = manifest;
@@ -438,6 +445,29 @@ export class InstallAction extends ExtensionAction {
 
 	private readonly updateThrottler = this._register(new Throttler());
 	public readonly options: InstallOptions;
+
+	// Set by InstallDropdownAction when the button should display the version. Gates the
+	// follow-up "compatible version" fetch so the list view (which only shows "Install")
+	// doesn't trigger gallery requests as items scroll into view.
+	public verbose: boolean = false;
+
+	private _resolvedInstallVersion: string | undefined;
+	get installVersion(): string | undefined {
+		if (this._resolvedInstallVersion) {
+			return this._resolvedInstallVersion;
+		}
+		// If the gallery version is quarantined we'll fall back to an older non-quarantined
+		// version; suppress the version in the label until the async resolution finishes so we
+		// don't briefly display the quarantined version.
+		const gallery = this.extension?.gallery;
+		if (gallery) {
+			const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+			if (isExtensionVersionQuarantined(gallery.lastUpdated, quarantineDays)) {
+				return undefined;
+			}
+		}
+		return this.extension?.latestVersion;
+	}
 
 	constructor(
 		options: InstallOptions,
@@ -452,6 +482,9 @@ export class InstallAction extends ExtensionAction {
 		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
 		@IAllowedExtensionsService private readonly allowedExtensionsService: IAllowedExtensionsService,
 		@IExtensionGalleryManifestService private readonly extensionGalleryManifestService: IExtensionGalleryManifestService,
+		@IExtensionGalleryService private readonly galleryService: IExtensionGalleryService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super('extensions.install', localize('install', "Install"), InstallAction.CLASS, false);
 		this.hideOnDisabled = false;
@@ -469,6 +502,7 @@ export class InstallAction extends ExtensionAction {
 		this.enabled = false;
 		this.class = InstallAction.HIDE;
 		this.hidden = true;
+		this._resolvedInstallVersion = undefined;
 		if (!this.extension) {
 			return;
 		}
@@ -491,6 +525,39 @@ export class InstallAction extends ExtensionAction {
 		this.class = InstallAction.CLASS;
 		if (await this.extensionsWorkbenchService.canInstall(this.extension) === true) {
 			this.enabled = true;
+			// If the gallery version is quarantined, the install flow will fall back to an older
+			// non-quarantined version. Resolve it up-front so the label reflects what will actually
+			// be installed. Skip for non-verbose consumers (e.g. the list view) since they don't
+			// show the version and we'd otherwise hit the gallery for every item scrolled into view.
+			const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+			const gallery = this.extension.gallery;
+			const isQ = !!gallery && isExtensionVersionQuarantined(gallery.lastUpdated, quarantineDays);
+			if (this.verbose && gallery && isQ) {
+				const galleryAtFetchTime = gallery;
+				let promise = InstallAction._resolutionsByGallery.get(galleryAtFetchTime);
+				if (!promise) {
+					const extensionId = this.extension.identifier.id;
+					promise = (async () => {
+						const targetPlatform = this.extension?.server ? await this.extension.server.extensionManagementService.getTargetPlatform() : undefined;
+						const installableInfo = { id: extensionId, preRelease: galleryAtFetchTime.properties.isPreReleaseVersion };
+						return (await this.galleryService.getExtensions([installableInfo], { targetPlatform, compatible: true }, CancellationToken.None)).at(0);
+					})();
+					InstallAction._resolutionsByGallery.set(galleryAtFetchTime, promise);
+				}
+				try {
+					const compatible = await promise;
+					if (this.extension?.gallery === galleryAtFetchTime && compatible) {
+						this._resolvedInstallVersion = compatible.version;
+						// The base label string ("Install") doesn't change when the resolved version
+						// updates, so the implicit label-setter change event won't fire. Notify
+						// listeners (e.g. InstallDropdownAction) explicitly so they re-render their
+						// own label using the new installVersion.
+						this._onDidChange.fire({});
+					}
+				} catch (e) {
+					this.logService.warn(`Failed to resolve compatible version for ${this.extension.identifier.id}`, getErrorMessage(e));
+				}
+			}
 			this.updateLabel();
 		}
 	}
@@ -694,19 +761,23 @@ export class InstallDropdownAction extends ButtonWithDropDownExtensionAction {
 	}
 
 	constructor(
+		private readonly verbose: boolean,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IWorkbenchExtensionManagementService extensionManagementService: IWorkbenchExtensionManagementService,
 	) {
-		super(`extensions.installActions`, InstallAction.CLASS, [
-			[
-				instantiationService.createInstance(InstallAction, { installPreReleaseVersion: extensionManagementService.preferPreReleases }),
-				instantiationService.createInstance(InstallAction, { installPreReleaseVersion: !extensionManagementService.preferPreReleases }),
-			]
-		]);
+		const preferredAction = instantiationService.createInstance(InstallAction, { installPreReleaseVersion: extensionManagementService.preferPreReleases });
+		const otherAction = instantiationService.createInstance(InstallAction, { installPreReleaseVersion: !extensionManagementService.preferPreReleases });
+		preferredAction.verbose = verbose;
+		otherAction.verbose = verbose;
+		super(`extensions.installActions`, InstallAction.CLASS, [[preferredAction, otherAction]]);
 	}
 
 	protected override getLabel(action: InstallAction): string {
-		return action.getLabel(true);
+		const baseLabel = action.getLabel(true);
+		if (this.verbose && action.installVersion) {
+			return localize('install with version', "{0} v{1}", baseLabel, action.installVersion);
+		}
+		return baseLabel;
 	}
 
 }
@@ -957,12 +1028,17 @@ export class UpdateAction extends ExtensionAction {
 
 	private readonly updateThrottler = this._register(new Throttler());
 
+	private _resolvedUpdateVersion: string | undefined;
+
 	constructor(
 		private readonly verbose: boolean,
 		@IExtensionsWorkbenchService private readonly extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IOpenerService private readonly openerService: IOpenerService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IExtensionGalleryService private readonly galleryService: IExtensionGalleryService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super(`extensions.update`, localize('update', "Update"), UpdateAction.DisabledClass, false);
 		this.update();
@@ -971,13 +1047,32 @@ export class UpdateAction extends ExtensionAction {
 	update(): void {
 		this.updateThrottler.queue(() => this.computeAndUpdateEnablement());
 		if (this.extension) {
-			this.label = this.verbose ? localize('update to', "Update to v{0}", this.extension.latestVersion) : localize('update', "Update");
+			this.label = this.verbose ? this.computeVerboseLabel() : localize('update', "Update");
 		}
+	}
+
+	private computeVerboseLabel(): string {
+		if (!this.extension) {
+			return localize('update', "Update");
+		}
+		// If the gallery version is quarantined, the install flow falls back to an older
+		// non-quarantined version. Suppress the version in the label until the async resolution
+		// finishes, so we don't briefly display the quarantined version.
+		if (this._resolvedUpdateVersion) {
+			return localize('update to', "Update to v{0}", this._resolvedUpdateVersion);
+		}
+		const gallery = this.extension.gallery;
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		if (gallery && isExtensionVersionQuarantined(gallery.lastUpdated, quarantineDays)) {
+			return localize('update', "Update");
+		}
+		return localize('update to', "Update to v{0}", this.extension.latestVersion);
 	}
 
 	private async computeAndUpdateEnablement(): Promise<void> {
 		this.enabled = false;
 		this.class = UpdateAction.DisabledClass;
+		this._resolvedUpdateVersion = undefined;
 
 		if (!this.extension) {
 			return;
@@ -992,6 +1087,32 @@ export class UpdateAction extends ExtensionAction {
 
 		this.enabled = canInstall === true && isInstalled && this.extension.outdated;
 		this.class = this.enabled ? UpdateAction.EnabledClass : UpdateAction.DisabledClass;
+
+		// If the gallery version is quarantined, the install flow will fall back to an older
+		// non-quarantined version. Resolve it up-front so the label reflects what will actually
+		// be installed. Skip when the button isn't enabled (not installed / not outdated) or in
+		// non-verbose contexts (list view) — no point hitting the gallery for items that won't
+		// display the version.
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		const gallery = this.extension.gallery;
+		const isQ = !!gallery && isExtensionVersionQuarantined(gallery.lastUpdated, quarantineDays);
+		if (this.verbose && this.enabled && gallery && isQ) {
+			const galleryAtFetchTime = gallery;
+			try {
+				const targetPlatform = this.extension.server ? await this.extension.server.extensionManagementService.getTargetPlatform() : undefined;
+				const installableInfo = { id: this.extension.identifier.id, preRelease: galleryAtFetchTime.properties.isPreReleaseVersion };
+				const compatible = (await this.galleryService.getExtensions([installableInfo], { targetPlatform, compatible: true }, CancellationToken.None)).at(0);
+				if (this.extension?.gallery === galleryAtFetchTime && compatible) {
+					this._resolvedUpdateVersion = compatible.version;
+				}
+			} catch (e) {
+				this.logService.warn(`Failed to resolve compatible version for ${this.extension.identifier.id}`, getErrorMessage(e));
+			}
+		}
+
+		if (this.extension) {
+			this.label = this.verbose ? this.computeVerboseLabel() : localize('update', "Update");
+		}
 	}
 
 	override async run(): Promise<any> {
@@ -1588,6 +1709,7 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IAllowedExtensionsService private readonly allowedExtensionsService: IAllowedExtensionsService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super(InstallAnotherVersionAction.ID, InstallAnotherVersionAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
 		this._register(allowedExtensionsService.onDidChangeAllowedExtensionsConfigValue(() => this.update()));
@@ -1601,6 +1723,12 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		if (this.enabled && this.whenInstalled) {
 			this.enabled = !!this.extension?.local && !!this.extension.server && this.extension.state === ExtensionState.Installed;
 		}
+	}
+
+	private isQuarantined(publishedDate: string): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		const publishedMs = Date.parse(publishedDate);
+		return isExtensionVersionQuarantined(publishedMs, quarantineDays);
 	}
 
 	override async run(): Promise<any> {
@@ -1618,12 +1746,25 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		}
 
 		const picks = allVersions.map((v, i) => {
+			const isQuarantined = this.isQuarantined(v.date);
+			const isCurrent = v.version === this.extension?.local?.manifest.version;
+			let description = fromNow(new Date(Date.parse(v.date)), true);
+			if (v.isPreReleaseVersion) {
+				description += ` (${localize('pre-release', "pre-release")})`;
+			}
+			if (isQuarantined) {
+				description += ` (${localize('quarantined', "quarantined")})`;
+			}
+			if (isCurrent) {
+				description += ` (${localize('current', "current")})`;
+			}
 			return {
 				id: v.version,
 				label: v.version,
-				description: `${fromNow(new Date(Date.parse(v.date)), true)}${v.isPreReleaseVersion ? ` (${localize('pre-release', "pre-release")})` : ''}${v.version === this.extension?.local?.manifest.version ? ` (${localize('current', "current")})` : ''}`,
-				ariaLabel: `${v.isPreReleaseVersion ? 'Pre-Release version' : 'Release version'} ${v.version}`,
-				isPreReleaseVersion: v.isPreReleaseVersion
+				description,
+				ariaLabel: `${v.isPreReleaseVersion ? 'Pre-Release version' : 'Release version'} ${v.version}${isQuarantined ? ' (quarantined)' : ''}`,
+				isPreReleaseVersion: v.isPreReleaseVersion,
+				isQuarantined
 			};
 		});
 		const pick = await this.quickInputService.pick(picks,
@@ -1635,6 +1776,20 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 			if (this.extension.local?.manifest.version === pick.id) {
 				return;
 			}
+
+			// Show warning if the selected version is quarantined
+			if (pick.isQuarantined) {
+				const result = await this.dialogService.confirm({
+					title: localize('quarantinedVersionWarning', "Install Quarantined Version?"),
+					message: localize('quarantinedVersionMessage', "The version you selected was released less than {0} days ago and is currently quarantined as a security measure against supply chain attacks.\n\nAre you sure you want to install this version?", this.configurationService.getValue<number>(QuarantineDaysConfigKey)),
+					primaryButton: localize('installAnyway', "Install Anyway"),
+					type: 'warning'
+				});
+				if (!result.confirmed) {
+					return;
+				}
+			}
+
 			const options = { installPreReleaseVersion: pick.isPreReleaseVersion, version: pick.id };
 			try {
 				await this.extensionsWorkbenchService.install(this.extension, options);

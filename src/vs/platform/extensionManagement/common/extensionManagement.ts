@@ -718,6 +718,23 @@ export const PreferencesLocalizedLabel = localize2('preferences', 'Preferences')
 export const AllowedExtensionsConfigKey = 'extensions.allowed';
 export const VerifyExtensionSignatureConfigKey = 'extensions.verifySignature';
 export const ExtensionRequestsTimeoutConfigKey = 'extensions.requestTimeout';
+export const QuarantineDaysConfigKey = 'extensions.quarantineDays';
+
+/**
+ * Check if an extension version is quarantined based on its publish date.
+ * @param publishedDate The publish date in milliseconds since epoch
+ * @param quarantineDays The number of days to quarantine, or undefined to use default
+ * @returns true if the version is quarantined, false otherwise
+ */
+export function isExtensionVersionQuarantined(publishedDate: number, quarantineDays: number | undefined): boolean {
+	const effectiveQuarantineDays = quarantineDays ?? 7;
+	if (effectiveQuarantineDays === 0) {
+		return false;
+	}
+	const quarantineMs = effectiveQuarantineDays * 24 * 60 * 60 * 1000;
+	const now = Date.now();
+	return (now - publishedDate) < quarantineMs;
+}
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration)
 	.registerConfiguration({
@@ -795,7 +812,14 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration)
 						],
 					}
 				}
-			}
+			},
+			[QuarantineDaysConfigKey]: {
+				type: 'number',
+				description: localize('extensionsQuarantineDays', "Number of days to quarantine newly released extension versions as a security measure against supply chain attacks. During the quarantine period, these versions will not be automatically installed or shown as available updates. You can still manually install quarantined versions using the 'Install Another Version' action."),
+				default: 7,
+				minimum: 0,
+				scope: ConfigurationScope.APPLICATION
+			},
 		}
 	});
 

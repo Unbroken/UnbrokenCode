@@ -45,9 +45,17 @@ export class LinuxUpdateService extends AbstractUpdateService {
 			.then(update => {
 				if (!update || !update.url || !update.version || !update.productVersion) {
 					this.setState(State.Idle(UpdateType.Archive));
-				} else {
-					this.setState(State.AvailableForDownload(update));
+					return;
 				}
+
+				// Compare commits - if they're the same, no update is needed
+				if (update.version === this.productService.commit) {
+					this.logService.trace('update#doCheckForUpdates(): no update available, current commit matches server commit', { current: this.productService.commit, server: update.version });
+					this.setState(State.Idle(UpdateType.Archive));
+					return;
+				}
+
+				this.setState(State.AvailableForDownload(update));
 			})
 			.then(undefined, err => {
 				this.logService.error(err);

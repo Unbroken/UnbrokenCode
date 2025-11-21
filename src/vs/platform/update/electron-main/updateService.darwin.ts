@@ -82,7 +82,7 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 		}
 		const url = createUpdateURL(assetID, quality, this.productService);
 		try {
-			electron.autoUpdater.setFeedURL({ url });
+			electron.autoUpdater.setFeedURL({ url, serverType: 'json' });
 		} catch (e) {
 			// application is very likely not signed
 			this.logService.error('Failed to set update feed URL', e);
@@ -99,7 +99,7 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 		this.setState(State.CheckingForUpdates(explicit));
 
 		const url = explicit ? this.url : `${this.url}?bg=true`;
-		electron.autoUpdater.setFeedURL({ url });
+		electron.autoUpdater.setFeedURL({ url, serverType: 'json' });
 		electron.autoUpdater.checkForUpdates();
 	}
 

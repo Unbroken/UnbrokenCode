@@ -14,7 +14,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { disposeIfDisposable } from '../../../../base/common/lifecycle.js';
 import { IExtension, ExtensionState, IExtensionsWorkbenchService, IExtensionContainer, TOGGLE_IGNORE_EXTENSION_ACTION_ID, SELECT_INSTALL_VSIX_EXTENSION_COMMAND_ID, THEME_ACTIONS_GROUP, INSTALL_ACTIONS_GROUP, UPDATE_ACTIONS_GROUP, ExtensionEditorTab, ExtensionRuntimeActionType, IExtensionArg, AutoUpdateConfigurationKey } from '../common/extensions.js';
 import { ExtensionsConfigurationInitialContent } from '../common/extensionsFileTemplate.js';
-import { IGalleryExtension, IExtensionGalleryService, ILocalExtension, InstallOptions, InstallOperation, ExtensionManagementErrorCode, IAllowedExtensionsService, shouldRequireRepositorySignatureFor } from '../../../../platform/extensionManagement/common/extensionManagement.js';
+import { IGalleryExtension, IExtensionGalleryService, ILocalExtension, InstallOptions, InstallOperation, ExtensionManagementErrorCode, IAllowedExtensionsService, shouldRequireRepositorySignatureFor, QuarantineDaysConfigKey, isExtensionVersionQuarantined } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import { IWorkbenchExtensionEnablementService, EnablementState, IExtensionManagementServerService, IExtensionManagementServer, IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
 import { ExtensionRecommendationReason, IExtensionIgnoredRecommendationsService, IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { areSameExtensions, getExtensionId } from '../../../../platform/extensionManagement/common/extensionManagementUtil.js';
@@ -1576,6 +1576,7 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@IAllowedExtensionsService private readonly allowedExtensionsService: IAllowedExtensionsService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super(InstallAnotherVersionAction.ID, InstallAnotherVersionAction.LABEL, ExtensionAction.LABEL_ACTION_CLASS);
 		this._register(allowedExtensionsService.onDidChangeAllowedExtensionsConfigValue(() => this.update()));
@@ -1589,6 +1590,12 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		if (this.enabled && this.whenInstalled) {
 			this.enabled = !!this.extension?.local && !!this.extension.server && this.extension.state === ExtensionState.Installed;
 		}
+	}
+
+	private isQuarantined(publishedDate: string): boolean {
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
+		const publishedMs = Date.parse(publishedDate);
+		return isExtensionVersionQuarantined(publishedMs, quarantineDays);
 	}
 
 	override async run(): Promise<any> {
@@ -1606,12 +1613,25 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 		}
 
 		const picks = allVersions.map((v, i) => {
+			const isQuarantined = this.isQuarantined(v.date);
+			const isCurrent = v.version === this.extension?.local?.manifest.version;
+			let description = fromNow(new Date(Date.parse(v.date)), true);
+			if (v.isPreReleaseVersion) {
+				description += ` (${localize('pre-release', "pre-release")})`;
+			}
+			if (isQuarantined) {
+				description += ` (${localize('quarantined', "quarantined")})`;
+			}
+			if (isCurrent) {
+				description += ` (${localize('current', "current")})`;
+			}
 			return {
 				id: v.version,
 				label: v.version,
-				description: `${fromNow(new Date(Date.parse(v.date)), true)}${v.isPreReleaseVersion ? ` (${localize('pre-release', "pre-release")})` : ''}${v.version === this.extension?.local?.manifest.version ? ` (${localize('current', "current")})` : ''}`,
-				ariaLabel: `${v.isPreReleaseVersion ? 'Pre-Release version' : 'Release version'} ${v.version}`,
-				isPreReleaseVersion: v.isPreReleaseVersion
+				description,
+				ariaLabel: `${v.isPreReleaseVersion ? 'Pre-Release version' : 'Release version'} ${v.version}${isQuarantined ? ' (quarantined)' : ''}`,
+				isPreReleaseVersion: v.isPreReleaseVersion,
+				isQuarantined
 			};
 		});
 		const pick = await this.quickInputService.pick(picks,
@@ -1623,6 +1643,20 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 			if (this.extension.local?.manifest.version === pick.id) {
 				return;
 			}
+
+			// Show warning if the selected version is quarantined
+			if (pick.isQuarantined) {
+				const result = await this.dialogService.confirm({
+					title: localize('quarantinedVersionWarning', "Install Quarantined Version?"),
+					message: localize('quarantinedVersionMessage', "The version you selected was released less than {0} days ago and is currently quarantined as a security measure against supply chain attacks.\n\nAre you sure you want to install this version?", this.configurationService.getValue<number>(QuarantineDaysConfigKey) ?? 7),
+					primaryButton: localize('installAnyway', "Install Anyway"),
+					type: 'warning'
+				});
+				if (!result.confirmed) {
+					return;
+				}
+			}
+
 			const options = { installPreReleaseVersion: pick.isPreReleaseVersion, version: pick.id };
 			try {
 				await this.extensionsWorkbenchService.install(this.extension, options);

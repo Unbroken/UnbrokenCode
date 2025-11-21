@@ -1,0 +1,686 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { BaseOnboardingScreen } from './baseScreen.js';
+import { append, $, getWindow } from '../../../../../base/browser/dom.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { SAMPLE_CPP_CODE, SAMPLE_TYPESCRIPT_CODE, SAMPLE_RUST_CODE, FONT_SIZE_OPTIONS, FontSize } from '../../common/unbrokenOnboardingConstants.js';
+import { IFontSmoothingService } from '../../../../../platform/fontSmoothing/common/fontSmoothingService.js';
+import { INativeHostService } from '../../../../../platform/native/common/native.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { isMacintosh } from '../../../../../base/common/platform.js';
+
+export class FontSizeScreen extends BaseOnboardingScreen {
+
+	private selectedFontSize: FontSize;
+	private fontSizeOptionsElements: Map<number, HTMLElement> = new Map();
+	private fontSizeBylineElements: Map<number, HTMLElement> = new Map();
+	private currentDevicePixelRatio: number;
+	private fontSmoothingWarningContainer: HTMLElement | undefined;
+
+	constructor(
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IModelService modelService: IModelService,
+		@IConfigurationService configurationService: IConfigurationService,
+		@ILanguageService languageService: ILanguageService,
+		@IExtensionService extensionService: IExtensionService,
+		@IStorageService storageService: IStorageService,
+		@ILifecycleService lifecycleService: ILifecycleService,
+		@IFontSmoothingService private readonly fontSmoothingService: IFontSmoothingService,
+		@INativeHostService private readonly nativeHostService: INativeHostService
+	) {
+		super(
+			instantiationService,
+			modelService,
+			configurationService,
+			languageService,
+			extensionService,
+			storageService,
+			lifecycleService
+		);
+
+		// Initialize selected font size from current user settings
+		const currentFontSize = this.configurationService.getValue<number>('editor.fontSize');
+		// Check if current font size is one of our valid options, otherwise default to 10
+		const matchingOption = FONT_SIZE_OPTIONS.find(option => option.size === currentFontSize);
+		this.selectedFontSize = matchingOption ? matchingOption.size : 10;
+
+		// Initialize device pixel ratio (will be updated when container is available)
+		this.currentDevicePixelRatio = 1;
+	}
+
+	get title(): string {
+		return 'Unbroken Code Setup - Choose Your Font Size';
+	}
+
+	get description(): string {
+		return 'Unbroken Code ships with a pixel-perfect font optimized for coding. On high-DPI displays ' +
+			'(Retina/2x), all three sizes work well. On standard displays, 10px is recommended for best clarity. ' +
+			'You can change this anytime in Settings or reopen this wizard from Help → Open Unbroken Code Setup.';
+	}
+
+	render(parent: HTMLElement): void {
+		this.container = append(parent, $('.font-size-screen'));
+
+		// Create header
+		this.createHeader(this.container);
+
+		// Create font smoothing warning (if needed)
+		this.createFontSmoothingWarning(this.container);
+
+		// Set up resolution change detection after container is created but before creating options
+		// This initializes currentDevicePixelRatio before it's needed
+		this.setupResolutionChangeDetection();
+
+		// Create content area
+		const content = append(this.container, $('.onboarding-screen-content'));
+
+		// Create font size selector
+		this.createFontSizeSelector(content);
+
+		// Create preview editor
+		this.createPreviewEditorWithComparisonButton(content);
+
+		// Create footer with navigation
+		this.createFooter(this.container, { showSkip: true, nextLabel: 'Continue', settingsApplyMode: 'realtime' });
+	}
+
+	private createFontSmoothingWarning(parent: HTMLElement): void {
+		// Only show on supported platforms (macOS)
+		if (!this.fontSmoothingService.isSupported()) {
+			return;
+		}
+
+		// Create container for warning (initially hidden)
+		this.fontSmoothingWarningContainer = append(parent, $('.font-smoothing-warning'));
+		this.fontSmoothingWarningContainer.style.display = 'none';
+
+		const warningContent = append(this.fontSmoothingWarningContainer, $('.font-smoothing-warning-content'));
+
+		// Warning icon
+		append(warningContent, $('.codicon.codicon-warning.font-smoothing-warning-icon'));
+
+		// Warning message
+		const messageContainer = append(warningContent, $('.font-smoothing-warning-message'));
+		const messageText = append(messageContainer, $('span'));
+		messageText.textContent = 'Font smoothing is enabled, which makes it impossible to render a pixel perfect font and will make text appear blurry. ';
+
+		const link = append(messageContainer, $('a.font-smoothing-warning-link')) as HTMLAnchorElement;
+		link.href = 'https://tonsky.me/blog/monitors/#turn-off-font-smoothing';
+		link.textContent = 'Learn why font smoothing is problematic';
+		link.target = '_blank';
+		link.rel = 'noopener noreferrer';
+
+		const messageText2 = append(messageContainer, $('span'));
+		messageText2.textContent = '. For the best experience with Unbroken Code\'s crisp font rendering, consider disabling it.';
+
+		// Action buttons container
+		const actionsContainer = append(this.fontSmoothingWarningContainer, $('.font-smoothing-warning-actions'));
+
+		// Disable and restart button
+		const disableButton = append(actionsContainer, $('button.onboarding-button.primary')) as HTMLButtonElement;
+		disableButton.textContent = 'Disable Font Smoothing and Restart';
+
+		this._register(this.addDisposableListener(disableButton, 'click', async () => {
+			disableButton.disabled = true;
+			disableButton.textContent = 'Disabling...';
+
+			try {
+				const success = await this.fontSmoothingService.disableFontSmoothing();
+				if (success) {
+					disableButton.textContent = 'Restarting...';
+					// Give a brief moment for the user to see the status
+					setTimeout(async () => {
+						await this.nativeHostService.relaunch();
+					}, 500);
+				} else {
+					disableButton.textContent = 'Failed - Try Manual Disable';
+					disableButton.disabled = false;
+				}
+			} catch (error) {
+				disableButton.textContent = 'Failed - Try Manual Disable';
+				disableButton.disabled = false;
+			}
+		}));
+
+		// Check font smoothing status asynchronously
+		this.checkAndDisplayFontSmoothingStatus();
+	}
+
+	private async checkAndDisplayFontSmoothingStatus(): Promise<void> {
+		if (!this.fontSmoothingWarningContainer) {
+			return;
+		}
+
+		try {
+			const fontSmoothingEnabled = await this.fontSmoothingService.isFontSmoothingEnabled();
+			if (fontSmoothingEnabled && this.fontSmoothingWarningContainer) {
+				this.fontSmoothingWarningContainer.style.display = 'flex';
+			}
+		} catch (error) {
+			// Silently ignore errors in detection
+		}
+	}
+
+	private createFontSizeSelector(parent: HTMLElement): void {
+		const selectorContainer = append(parent, $('.font-size-selector'));
+
+		const label = append(selectorContainer, $('label.font-size-label'));
+		label.textContent = 'Font Size:';
+
+		const optionsContainer = append(selectorContainer, $('.font-size-options'));
+
+		FONT_SIZE_OPTIONS.forEach(sizeOption => {
+			const option = append(optionsContainer, $('.font-size-option'));
+
+			// Radio input (hidden, controlled by clicking the entire option)
+			const radio = append(option, $('input.font-size-radio')) as HTMLInputElement;
+			radio.type = 'radio';
+			radio.name = 'fontSize';
+			radio.value = sizeOption.size.toString();
+			radio.id = `fontSize${sizeOption.size}`;
+			radio.checked = sizeOption.size === this.selectedFontSize;
+
+			// Left side: Font size display
+			const sizeDisplay = append(option, $('.font-size-option-size'));
+			sizeDisplay.textContent = `${sizeOption.size}px`;
+
+			// Right side: Description and byline wrapper
+			const textWrapper = append(option, $('.font-size-option-text'));
+
+			const descElement = append(textWrapper, $('.font-size-option-desc'));
+			descElement.textContent = sizeOption.desc;
+
+			// Create byline element for line count display
+			const bylineElement = append(textWrapper, $('.font-size-option-byline'));
+			bylineElement.textContent = '-'; // Placeholder until calculated
+
+			// Store references to the elements
+			this.fontSizeOptionsElements.set(sizeOption.size, option);
+			this.fontSizeBylineElements.set(sizeOption.size, bylineElement);
+
+			this._register(this.addDisposableListener(radio, 'change', () => {
+				if (radio.checked && !radio.disabled) {
+					this.selectedFontSize = sizeOption.size;
+					this.updatePreview();
+				}
+			}));
+
+			// Make the entire option container clickable
+			this._register(this.addDisposableListener(option, 'click', () => {
+				if (!radio.disabled) {
+					radio.checked = true;
+					this.selectedFontSize = sizeOption.size;
+					this.updatePreview();
+				}
+			}));
+		});
+
+		// Apply initial disabled state based on current resolution
+		this.updateOptionsAvailability();
+	}
+
+	private createPreviewEditorWithComparisonButton(parent: HTMLElement): void {
+		// First, create the preview editor using the base class method with multiple languages
+		super.createPreviewEditor(parent, {
+			languages: [
+				{
+					language: 'C++',
+					languageId: 'cpp',
+					code: SAMPLE_CPP_CODE,
+					uri: 'inmemory://onboarding/preview.cpp'
+				},
+				{
+					language: 'TypeScript',
+					languageId: 'typescript',
+					code: SAMPLE_TYPESCRIPT_CODE,
+					uri: 'inmemory://onboarding/preview.ts'
+				},
+				{
+					language: 'Rust',
+					languageId: 'rust',
+					code: SAMPLE_RUST_CODE,
+					uri: 'inmemory://onboarding/preview.rs'
+				}
+			],
+			defaultLanguage: 'cpp'
+		});
+
+		// Now add the comparison button to the preview header that was just created
+		// Find the preview header that was created by the base class
+		const previewContainer = parent.querySelector('.preview-editor-container');
+		if (previewContainer) {
+			const previewHeader = previewContainer.querySelector('.preview-header');
+			if (previewHeader) {
+				// Add comparison table button
+				const comparisonButton = append(previewHeader as HTMLElement, $('button.font-size-comparison-button')) as HTMLButtonElement;
+				comparisonButton.textContent = 'Compare for different screen sizes';
+				comparisonButton.type = 'button';
+				this._register(this.addDisposableListener(comparisonButton, 'click', () => {
+					this.showComparisonTable();
+				}));
+			}
+		}
+
+		// Update preview to apply current font settings
+		this.updatePreview();
+	}
+
+	protected override layoutEditor(): void {
+		// Call base class layout first
+		super.layoutEditor();
+
+		// Then update line count bylines (screen-specific behavior)
+		this.updateLineCountBylines();
+	}
+
+	private calculateVisibleLines(fontSize: number): number {
+		if (!this.editorContainer || !this.previewEditor) {
+			return 0;
+		}
+
+		// Get the container height
+		const rect = this.editorContainer.getBoundingClientRect();
+		const containerHeight = rect.height;
+
+		// Account for editor wrapper padding (10px top + 10px bottom)
+		const padding = 20;
+		const availableHeight = containerHeight - padding;
+
+		// Line height equals font size (as per user clarification)
+		const lineHeight = fontSize;
+
+		// Calculate number of visible lines
+		const visibleLines = Math.floor(availableHeight / lineHeight);
+
+		return visibleLines;
+	}
+
+	private updateLineCountBylines(): void {
+		if (!this.editorContainer || !this.previewEditor) {
+			return;
+		}
+
+		// Calculate the baseline (10px option) for percentage calculation
+		const baselineLines = this.calculateVisibleLines(10);
+
+		if (baselineLines === 0) {
+			return; // Container not ready yet
+		}
+
+		// Update byline for each font size option
+		FONT_SIZE_OPTIONS.forEach(sizeOption => {
+			const bylineElement = this.fontSizeBylineElements.get(sizeOption.size);
+			if (!bylineElement) {
+				return;
+			}
+
+			const visibleLines = this.calculateVisibleLines(sizeOption.size);
+			const percentage = Math.round((visibleLines / baselineLines) * 100);
+
+			bylineElement.textContent = `${visibleLines} lines (${percentage}%)`;
+		});
+	}
+
+	private showComparisonTable(): void {
+		if (!this.container) {
+			return;
+		}
+
+		// Create modal overlay
+		const modal = append(this.container, $('.font-size-comparison-modal'));
+
+		// Create modal content
+		const modalContent = append(modal, $('.font-size-comparison-content'));
+
+		// Header
+		const header = append(modalContent, $('.font-size-comparison-header'));
+		const title = append(header, $('h2.font-size-comparison-title'));
+		title.textContent = 'Font Size Comparison by Resolution';
+
+		const closeButton = append(header, $('button.font-size-comparison-close')) as HTMLButtonElement;
+		closeButton.textContent = '×';
+		closeButton.type = 'button';
+
+		// Explanation text
+		const explanation = append(modalContent, $('.font-size-comparison-explanation'));
+		const explanationPara1 = append(explanation, $('p'));
+		explanationPara1.textContent = 'Each cell shows the number of characters per line × number of lines that fit on screen for that font size and resolution combination.';
+
+		const explanationPara2 = append(explanation, $('p'));
+		explanationPara2.textContent = 'Note: These resolutions represent logical (scaled) resolutions. On Retina/HiDPI displays (2x scaling), the physical resolution is twice the logical resolution. For example, a MacBook with 1280×720 logical resolution has a 2560×1440 physical display, so refer to the 1280×720 column for accurate sizing.';
+
+		// Table
+		const table = append(modalContent, $('table.font-size-comparison-table'));
+
+		// Table header
+		const thead = append(table, $('thead'));
+		const headerRow = append(thead, $('tr'));
+		function appendHeaderCell() {
+			const element = append(headerRow, $('th'));
+			element.style.textAlign = 'center';
+			return element;
+		}
+		appendHeaderCell().textContent = '';
+
+		// Get current screen resolution
+		// In fullscreen mode, only the notch reduces available space, not the menu bar
+		const targetWindow = getWindow(this.container);
+		const screenWidth = targetWindow.screen.width;
+		const screenHeight = targetWindow.screen.height;
+
+		console.log('screen', targetWindow.innerWidth, targetWindow.innerHeight);
+
+		const currentWidth = screenWidth;
+		let currentHeight = screenHeight;
+
+		if (isMacintosh) {
+			// MacBook Pro with notch specifications
+			// 14" MacBook Pro: 3024×1964 physical → 1512×982 logical (native)
+			// 16" MacBook Pro: 3456×2234 physical → 1728×1117 logical (native)
+			// Physical notch height: 66px
+			// At native resolution (2x): 66px physical → 33px logical
+			// Menu bar minimum: 31px logical
+
+			const macBookProNotchModels = [
+				{ nativeWidth: 1512, nativeHeight: 982, physicalNotch: 66 },  // 14" MacBook Pro
+				{ nativeWidth: 1728, nativeHeight: 1117, physicalNotch: 66 }  // 16" MacBook Pro
+			];
+
+			// Find if we're on a MacBook Pro with notch
+			for (const model of macBookProNotchModels) {
+				// Calculate the scaling factor based on width
+				const scaleFactor = screenWidth / model.nativeWidth;
+
+				// Check if this matches the model's aspect ratio (with some tolerance for rounding)
+				const expectedHeight = Math.round(model.nativeHeight * scaleFactor);
+				const heightTolerance = 2; // Allow 2px difference due to rounding
+
+				if (Math.abs(screenHeight - expectedHeight) <= heightTolerance) {
+					// This is a MacBook Pro with notch at this scaled resolution
+					// Calculate the scaled notch height
+					const scaledNotchHeight = Math.round(model.physicalNotch / 2 * scaleFactor);
+
+					// The unusable space is the max of notch height and menu bar (31px minimum)
+					const unusableHeight = Math.max(scaledNotchHeight, 26);
+
+					currentHeight = screenHeight - unusableHeight;
+					break;
+				}
+			}
+		}
+
+		const resolutions = [
+			{ width: 1152, height: 864, label: '1152×720' },
+			{ width: 1280, height: 720, label: '1280×720' },
+			{ width: 1920, height: 1080, label: '1920×1080' },
+			{ width: 1728, height: 1084, label: '1728×1084' },
+			{ width: 2560, height: 1440, label: '2560×1440' },
+			{ width: 3008, height: 1692, label: '3008×1692' }
+		];
+
+		// Check if current resolution is already in the list
+		const currentResExists = resolutions.some(res => res.width === currentWidth && res.height === currentHeight);
+
+		// Add current resolution if not present
+		if (!currentResExists) {
+			resolutions.push({
+				width: currentWidth,
+				height: currentHeight,
+				label: `${currentWidth}×${currentHeight}`
+			});
+		}
+
+		// Sort by width, then by height
+		resolutions.sort((a, b) => {
+			if (a.width !== b.width) {
+				return a.width - b.width;
+			}
+			return a.height - b.height;
+		});
+
+		// Find the index of the current resolution for highlighting
+		const currentResIndex = resolutions.findIndex(res => res.width === currentWidth && res.height === currentHeight);
+
+		resolutions.forEach((res, index) => {
+			const th = appendHeaderCell();
+			th.textContent = res.label;
+			if (index === currentResIndex) {
+				th.classList.add('current-resolution');
+			}
+		});
+
+		// Table body
+		const tbody = append(table, $('tbody'));
+
+		const fontSizes = [
+			{ size: 10, charWidth: 6 },
+			{ size: 12, charWidth: 7 },
+			{ size: 15, charWidth: 9 }
+		];
+
+		fontSizes.forEach(font => {
+			const row = append(tbody, $(`tr.font-size-${font.size}`));
+			const fontCell = append(row, $('td.font-size-label-cell'));
+			fontCell.textContent = `${font.size}px`;
+			fontCell.style.textAlign = 'center';
+
+			resolutions.forEach((res, index) => {
+				const cell = append(row, $('td'));
+
+				// Calculate columns (chars per line)
+				const usableWidth = res.width;
+				const columns = Math.floor(usableWidth / font.charWidth);
+
+				// Calculate lines
+				const usableHeight = res.height;
+				const lines = Math.floor(usableHeight / font.size);
+
+				cell.textContent = `${columns} × ${lines}`;
+				cell.style.textAlign = 'center';
+
+				// Highlight current resolution column
+				if (index === currentResIndex) {
+					cell.classList.add('current-resolution');
+				}
+			});
+		});
+
+		// Close button handler
+		const closeModal = () => {
+			modal.remove();
+		};
+
+		this._register(this.addDisposableListener(closeButton, 'click', closeModal));
+		this._register(this.addDisposableListener(modal, 'click', (e) => {
+			if (e.target === modal) {
+				closeModal();
+			}
+		}));
+	}
+
+	private async updatePreview(): Promise<void> {
+		if (!this.previewEditor) {
+			return;
+		}
+
+		// Update the configuration - the base class's configuration change listener
+		// will automatically update the editor with the new font settings
+		await this.applySettings();
+
+		// Force layout after font size change to ensure scrollbar updates
+		this.layoutEditor();
+
+		// Update line count bylines after preview update
+		this.updateLineCountBylines();
+	}
+
+	private updateOptionsAvailability(): void {
+		// On non-2x displays, only 10px is advisable
+		const isRetinaDisplay = this.currentDevicePixelRatio >= 2;
+
+		FONT_SIZE_OPTIONS.forEach(sizeOption => {
+			const optionElement = this.fontSizeOptionsElements.get(sizeOption.size);
+			if (!optionElement) {
+				return;
+			}
+
+			const radio = optionElement.querySelector('input.font-size-radio') as HTMLInputElement;
+			if (!radio) {
+				return;
+			}
+
+			// Only 10px is advisable on non-Retina displays
+			const isAdvisable = isRetinaDisplay || sizeOption.size === 10;
+
+			if (isAdvisable) {
+				optionElement.classList.remove('unadvisable');
+				radio.disabled = false;
+				optionElement.title = '';
+			} else {
+				optionElement.classList.add('unadvisable');
+				radio.disabled = true;
+				optionElement.title = `This font size is only recommended for 2x (Retina) displays. Your current display resolution is ${this.currentDevicePixelRatio}x.`;
+
+				// If the currently selected option becomes unadvisable, switch to 10px
+				if (this.selectedFontSize === sizeOption.size) {
+					const defaultOption = this.fontSizeOptionsElements.get(10);
+					if (defaultOption) {
+						const defaultRadio = defaultOption.querySelector('input.font-size-radio') as HTMLInputElement;
+						if (defaultRadio) {
+							defaultRadio.checked = true;
+							this.selectedFontSize = 10;
+							this.updatePreview();
+						}
+					}
+				}
+			}
+		});
+	}
+
+	private setupResolutionChangeDetection(): void {
+		if (!this.container) {
+			return;
+		}
+
+		// Get the window from the container element
+		const targetWindow = getWindow(this.container);
+
+		// Update initial device pixel ratio
+		this.currentDevicePixelRatio = targetWindow.devicePixelRatio || 1;
+
+		// Monitor for resolution changes using matchMedia
+		const updateResolution = () => {
+			const newDevicePixelRatio = targetWindow.devicePixelRatio || 1;
+			if (newDevicePixelRatio !== this.currentDevicePixelRatio) {
+				this.currentDevicePixelRatio = newDevicePixelRatio;
+				this.updateOptionsAvailability();
+			}
+		};
+
+		// Set up media query listener for resolution changes
+		// This watches for changes in device pixel ratio
+		const mediaQuery = targetWindow.matchMedia(`(resolution: ${this.currentDevicePixelRatio}dppx)`);
+		const listener = () => {
+			updateResolution();
+			// Re-attach listener with new resolution value
+			this.setupResolutionChangeDetection();
+		};
+
+		mediaQuery.addEventListener('change', listener);
+
+		this._register({
+			dispose: () => {
+				mediaQuery.removeEventListener('change', listener);
+			}
+		});
+	}
+
+	override onActivate(): void {
+		// Call base class onActivate (handles layoutEditor and malterlib)
+		super.onActivate();
+
+		// Update line count bylines when screen becomes active (screen-specific)
+		this.updateLineCountBylines();
+	}
+
+	override async applySettings(): Promise<void> {
+		const promises: Promise<void>[] = [];
+
+		// Set the font family based on the selected size
+		if (this.selectedFontSize === 10) {
+			// For 10px, remove font setting to use the default
+			promises.push(this.configurationService.updateValue(
+				'editor.fontFamily',
+				undefined,
+				ConfigurationTarget.USER
+			));
+		} else if (this.selectedFontSize === 12) {
+			promises.push(this.configurationService.updateValue(
+				'editor.fontFamily',
+				'Unbroken12Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace',
+				ConfigurationTarget.USER
+			));
+		} else if (this.selectedFontSize === 15) {
+			promises.push(this.configurationService.updateValue(
+				'editor.fontFamily',
+				'Unbroken10Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace',
+				ConfigurationTarget.USER
+			));
+		}
+
+		const fontSizeSetting = this.selectedFontSize === 10 ? undefined : this.selectedFontSize;
+
+		// Write the selected font size to user settings
+		promises.push(this.configurationService.updateValue(
+			'editor.fontSize',
+			fontSizeSetting,
+			ConfigurationTarget.USER
+		));
+		promises.push(this.configurationService.updateValue(
+			'chat.editor.fontSize',
+			fontSizeSetting,
+			ConfigurationTarget.USER
+		));
+		promises.push(this.configurationService.updateValue(
+			'debug.console.fontSize',
+			fontSizeSetting,
+			ConfigurationTarget.USER
+		));
+		promises.push(this.configurationService.updateValue(
+			'terminal.integrated.fontSize',
+			fontSizeSetting,
+			ConfigurationTarget.USER
+		));
+		promises.push(this.configurationService.updateValue(
+			'debug.console.lineHeight',
+			fontSizeSetting,
+			ConfigurationTarget.USER
+		));
+
+		let rulers: any[] | undefined = undefined;
+
+		if (this.selectedFontSize !== 10) {
+			rulers = [{
+				'column': Math.round(190 / this.selectedFontSize * 10),
+				'color': null
+			}];
+		}
+
+		promises.push(this.configurationService.updateValue(
+			'editor.rulers',
+			rulers,
+			ConfigurationTarget.USER
+		));
+
+		await Promise.all(promises);
+	}
+
+}

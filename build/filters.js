@@ -29,10 +29,18 @@ module.exports.all = [
 	'!test/**/out/**',
 	'!**/node_modules/**',
 	'!**/*.js.map',
+	'!extensions/malterlib/**',
+	'!extensions/codelldb/**',
+	'!extensions/vscode-clangd/**',
+	'!extensions/vscode-copilot-chat/**',
 ];
 
 module.exports.unicodeFilter = [
 	'**',
+
+	'!**/build-unbroken-code.sh',
+
+	'!**/build/release/create-github-release.*',
 
 	'!**/ThirdPartyNotices.txt',
 	'!**/ThirdPartyNotices.cli.txt',
@@ -40,7 +48,7 @@ module.exports.unicodeFilter = [
 	'!LICENSES.chromium.html',
 	'!**/LICENSE',
 
-	'!**/*.{dll,exe,png,bmp,jpg,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm}',
+	'!**/*.{dll,exe,png,bmp,jpg,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm,tiff}',
 	'!**/test/**',
 	'!**/*.test.ts',
 	'!**/*.{d.ts,json,md}',
@@ -129,8 +137,8 @@ module.exports.indentationFilter = [
 	'!src/vs/*/**/*.d.ts',
 	'!src/typings/**/*.d.ts',
 	'!extensions/**/*.d.ts',
-	'!**/*.{svg,exe,png,bmp,jpg,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm}',
-	'!build/{lib,download,linux,darwin}/**/*.js',
+	'!**/*.{svg,exe,png,bmp,jpg,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm,tiff}',
+	'!build/{lib,download,linux,darwin,release}/**/*.js',
 	'!build/**/*.sh',
 	'!build/azure-pipelines/**/*.js',
 	'!build/azure-pipelines/**/*.config',
@@ -172,6 +180,7 @@ module.exports.copyrightFilter = [
 	'!**/*.code-workspace',
 	'!**/*.js.map',
 	'!**/*.wasm',
+	'!**/*.tiff',
 	'!build/**/*.init',
 	'!build/linux/libcxx-fetcher.*',
 	'!resources/linux/snap/snapcraft.yaml',

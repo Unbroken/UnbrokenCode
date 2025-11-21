@@ -260,6 +260,8 @@ async function compileDarwinAssetCatalog(resourcesDir, options) {
 		if (stderr && stderr.trim()) {
 			console.log(stderr.trim());
 		}
+	} catch (error) {
+		console.error('Failed to generate Assets.car exception', error);
 	} finally {
 		try {
 			await fs.promises.rm(tmpDir, { recursive: true, force: true });
@@ -275,7 +277,9 @@ async function compileDarwinAssetCatalog(resourcesDir, options) {
 function packageTask(platform, arch, sourceFolderName, destinationFolderName, opts) {
 	opts = opts || {};
 
-	const destination = path.join(path.dirname(root), destinationFolderName);
+	// Allow overriding build output directory via environment variable
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const destination = path.join(buildOutputDir, destinationFolderName);
 	platform = platform || process.platform;
 
 	const task = async () => {
@@ -540,7 +544,8 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 }
 
 function patchWin32DependenciesTask(destinationFolderName) {
-	const cwd = path.join(path.dirname(root), destinationFolderName);
+	const buildOutputDir = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
+	const cwd = path.join(buildOutputDir, destinationFolderName);
 
 	return async () => {
 		const deps = await glob('**/*.node', { cwd, ignore: 'extensions/node_modules/@parcel/watcher/**' });
@@ -568,7 +573,8 @@ function patchWin32DependenciesTask(destinationFolderName) {
 	};
 }
 
-const buildRoot = path.dirname(root);
+// Allow overriding build output directory via environment variable
+const buildRoot = process.env.VSCODE_BUILD_OUTPUT_DIR || path.dirname(root);
 
 const BUILD_TARGETS = [
 	{ platform: 'win32', arch: 'x64' },

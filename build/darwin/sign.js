@@ -33,6 +33,15 @@ function getEntitlementsForFile(filePath) {
     else if (filePath.includes(pluginHelperAppName)) {
         return path_1.default.join(baseDir, 'azure-pipelines', 'darwin', 'helper-plugin-entitlements.plist');
     }
+    // Apply a narrow entitlement only to the CodeLLDB adapter binary
+    // so it can load libLLDB signed by a different Team ID.
+    try {
+        const normalized = filePath.split('\\').join('/');
+        if (normalized.includes('/extensions/codelldb/') && normalized.includes('/adapter/codelldb')) {
+            return path_1.default.join(baseDir, 'azure-pipelines', 'darwin', 'codelldb-entitlements.plist');
+        }
+    }
+    catch { }
     return path_1.default.join(baseDir, 'azure-pipelines', 'darwin', 'app-entitlements.plist');
 }
 async function retrySignOnKeychainError(fn, maxRetries = 3) {
@@ -80,32 +89,42 @@ async function main(buildDir) {
         }),
         preAutoEntitlements: false,
         preEmbedProvisioningProfile: false,
-        keychain: path_1.default.join(tempDir, 'buildagent.keychain'),
         version: getElectronVersion(),
         identity,
     };
     // Only overwrite plist entries for x64 and arm64 builds,
     // universal will get its copy from the x64 build.
     if (arch !== 'universal') {
-        await (0, cross_spawn_promise_1.spawn)('plutil', [
-            '-insert',
-            'NSAppleEventsUsageDescription',
-            '-string',
-            'An application in Visual Studio Code wants to use AppleScript.',
-            `${infoPlistPath}`
-        ]);
+        try {
+            await (0, cross_spawn_promise_1.spawn)('plutil', [
+                '-insert',
+                'NSAppleEventsUsageDescription',
+                '-string',
+                'An application in Unbroken Code wants to use AppleScript.',
+                `${infoPlistPath}`
+            ]);
+        }
+        catch (error) {
+            await (0, cross_spawn_promise_1.spawn)('plutil', [
+                '-replace',
+                'NSAppleEventsUsageDescription',
+                '-string',
+                'An application in Unbroken Code wants to use AppleScript.',
+                `${infoPlistPath}`
+            ]);
+        }
         await (0, cross_spawn_promise_1.spawn)('plutil', [
             '-replace',
             'NSMicrophoneUsageDescription',
             '-string',
-            'An application in Visual Studio Code wants to use the Microphone.',
+            'An application in Unbroken Code wants to use the Microphone.',
             `${infoPlistPath}`
         ]);
         await (0, cross_spawn_promise_1.spawn)('plutil', [
             '-replace',
             'NSCameraUsageDescription',
             '-string',
-            'An application in Visual Studio Code wants to use the Camera.',
+            'An application in Unbroken Code wants to use the Camera.',
             `${infoPlistPath}`
         ]);
     }

@@ -144,7 +144,7 @@ function fromLocalWebpack(extensionPath, webpackConfigFileName, disableMangle) {
     // A static analysis showed there are no webpack externals that are dependencies of the current
     // local extensions so we can use the vsce.PackageManager.None config to ignore dependencies list
     // as a temporary workaround.
-    vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
+    vsce.listFiles({ cwd: fs_1.default.realpathSync(extensionPath), packageManager: vsce.PackageManager.None, packagedDependencies }).then(fileNames => {
         const files = fileNames
             .map(fileName => path_1.default.join(extensionPath, fileName))
             .map(filePath => new vinyl_1.default({
@@ -227,7 +227,7 @@ function fromLocalWebpack(extensionPath, webpackConfigFileName, disableMangle) {
 function fromLocalNormal(extensionPath) {
     const vsce = require('@vscode/vsce');
     const result = event_stream_1.default.through();
-    vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm })
+    vsce.listFiles({ cwd: fs_1.default.realpathSync(extensionPath), packageManager: vsce.PackageManager.Npm })
         .then(fileNames => {
         const files = fileNames
             .map(fileName => path_1.default.join(extensionPath, fileName))
@@ -316,6 +316,7 @@ function fromGithub({ name, version, repo, sha256, metadata }) {
  */
 const nativeExtensions = [
     'microsoft-authentication',
+    'codelldb',
 ];
 const excludedExtensions = [
     'vscode-api-tests',
@@ -413,8 +414,41 @@ function doPackageLocalExtensionsStream(forWeb, disableMangle, native) {
         .filter(({ name }) => builtInExtensions.every(b => b.name !== name))
         .filter(({ manifestPath }) => (forWeb ? isWebExtension(require(manifestPath)) : true)));
     const localExtensionsStream = minifyExtensionResources(event_stream_1.default.merge(...localExtensionsDescriptions.map(extension => {
-        return fromLocal(extension.path, forWeb, disableMangle)
+        // Special handling for CodeLLDB packaging (require VSIX)
+        console.log('Processing extension:', extension.name, forWeb);
+        if (extension.name === 'codelldb' && !forWeb) {
+            console.log('Processing extension VSIX:', extension.name, forWeb);
+            const buildRoot = path_1.default.join(extension.path, 'build');
+            const vsixPath = path_1.default.join(buildRoot, 'codelldb-full.vsix');
+            if (!fs_1.default.existsSync(vsixPath)) {
+                throw new Error(`CodeLLDB VSIX not found at ${vsixPath}. Ensure the 'vsix_full' target built successfully.`);
+            }
+            const packageJsonFilter = (0, gulp_filter_1.default)('package.json', { restore: true });
+            const vsixStream = vzip.src(vsixPath)
+                .pipe((0, gulp_filter_1.default)('extension/**'))
+                .pipe((0, gulp_rename_1.default)(p => p.dirname = p.dirname.replace(/^extension\/?/, '')))
+                // Exclude unnecessary CPython sysconfig artifact from CodeLLDB VSIX
+                .pipe((0, gulp_filter_1.default)(['**', '!lldb/lib/python*/_sysconfigdata__darwin_darwin.py']))
+                .pipe(packageJsonFilter)
+                .pipe((0, gulp_buffer_1.default)())
+                .pipe(event_stream_1.default.mapSync((f) => {
+                try {
+                    const data = JSON.parse(f.contents.toString('utf8'));
+                    delete data.scripts;
+                    delete data.devDependencies;
+                    f.contents = Buffer.from(JSON.stringify(data));
+                }
+                catch { }
+                return f;
+            }))
+                .pipe(packageJsonFilter.restore)
+                .pipe((0, gulp_rename_1.default)(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+            // Only package content from the VSIX to avoid source package.json (@VERSION@)
+            return vsixStream;
+        }
+        const baseStream = fromLocal(extension.path, forWeb, disableMangle)
             .pipe((0, gulp_rename_1.default)(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+        return baseStream;
     })));
     let result;
     if (forWeb) {
@@ -517,6 +551,9 @@ const esbuildMediaScripts = [
     'mermaid-chat-features/esbuild-chat-webview.mjs',
     'notebook-renderers/esbuild.mjs',
     'simple-browser/esbuild-preview.mjs',
+    'malterlib/esbuild.mjs',
+    'vscode-clangd/esbuild.mjs',
+    'vscode-copilot-chat/esbuild.mjs',
 ];
 async function webpackExtensions(taskName, isWatch, webpackConfigLocations) {
     const webpack = require('webpack');
@@ -582,11 +619,13 @@ async function webpackExtensions(taskName, isWatch, webpackConfigLocations) {
     });
 }
 async function esbuildExtensions(taskName, isWatch, scripts) {
-    function reporter(stdError, script) {
+    function reporter(stdError, script, isIncremental) {
         const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-        (0, fancy_log_1.default)(`Finished ${ansi_colors_1.default.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+        if (!isIncremental) {
+            (0, fancy_log_1.default)(`Finished ${ansi_colors_1.default.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+        }
         for (const match of matches || []) {
-            fancy_log_1.default.error(match);
+            fancy_log_1.default.error(ansi_colors_1.default.red(match));
         }
     }
     const tasks = scripts.map(({ script, outputRoot }) => {
@@ -602,11 +641,14 @@ async function esbuildExtensions(taskName, isWatch, scripts) {
                 if (error) {
                     return reject(error);
                 }
-                reporter(stderr, script);
+                reporter(stderr, script, false);
                 return resolve();
             });
             proc.stdout.on('data', (data) => {
                 (0, fancy_log_1.default)(`${ansi_colors_1.default.green(taskName)}: ${data.toString('utf8')}`);
+            });
+            proc.stderr.on('data', (data) => {
+                reporter(data, script, true);
             });
         });
     });

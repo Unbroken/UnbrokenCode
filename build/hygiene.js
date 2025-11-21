@@ -147,7 +147,7 @@ function hygiene(some, runEslint = true) {
 
 	const productJsonFilter = filter('product.json', { restore: true });
 	const snapshotFilter = filter(['**', '!**/*.snap', '!**/*.snap.actual']);
-	const yarnLockFilter = filter(['**', '!**/yarn.lock']);
+	const yarnLockFilter = filter(['**', '!**/yarn.lock', '!**/unbroken.version']);
 	const unicodeFilterStream = filter(unicodeFilter, { restore: true });
 
 	const result = input
@@ -293,7 +293,14 @@ if (require.main === module) {
 					process.exit(1);
 				}
 
-				const some = out.split(/\r?\n/).filter((l) => !!l);
+				const some = out.split(/\r?\n/).filter((l) =>
+					!!l &&
+					l !== 'extensions/malterlib' &&
+					l !== 'extensions/vscode-clangd' &&
+					l !== 'extensions/codelldb' &&
+					l !== 'extensions/vscode-copilot-chat'
+				);
+
 
 				if (some.length > 0) {
 					console.log('Reading git index versions...');

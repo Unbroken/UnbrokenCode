@@ -913,12 +913,22 @@ export class SplitView<TLayoutContext = undefined, TView extends IView<TLayoutCo
 
 				if (isLastSash) {
 					const viewItem = this.viewItems[index];
-					minDelta = (viewItem.minimumSize - viewItem.size) / 2;
-					maxDelta = (viewItem.maximumSize - viewItem.size) / 2;
+					if (sash.maxDragMargin !== undefined) {
+						minDelta = (viewItem.minimumSize - viewItem.size) + sash.maxDragMargin;
+						maxDelta = (viewItem.maximumSize - viewItem.size) - sash.maxDragMargin;
+					} else {
+						minDelta = (viewItem.minimumSize - viewItem.size) / 2;
+						maxDelta = (viewItem.maximumSize - viewItem.size) / 2;
+					}
 				} else {
 					const viewItem = this.viewItems[index + 1];
-					minDelta = (viewItem.size - viewItem.maximumSize) / 2;
-					maxDelta = (viewItem.size - viewItem.minimumSize) / 2;
+					if (sash.maxDragMargin !== undefined) {
+						minDelta = (viewItem.size - viewItem.maximumSize) + sash.maxDragMargin;
+						maxDelta = (viewItem.size - viewItem.minimumSize) - sash.maxDragMargin;
+					} else {
+						minDelta = (viewItem.size - viewItem.maximumSize) / 2;
+						maxDelta = (viewItem.size - viewItem.minimumSize) / 2;
+					}
 				}
 			}
 

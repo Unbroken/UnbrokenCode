@@ -1189,6 +1189,54 @@
         "command": "git.repositories.stashCopyBranchName",
         "title": "%command.artifactCopyBranchName%",
         "category": "Git"
+      },
+      {
+        "command": "git.openRepositoryInSublimeMerge",
+        "title": "%command.openRepositoryInSublimeMerge%",
+        "category": "Git",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "git.fileHistoryInSublimeMerge",
+        "title": "%command.fileHistoryInSublimeMerge%",
+        "category": "Git",
+        "icon": "$(history)"
+      },
+      {
+        "command": "git.lineHistoryInSublimeMerge",
+        "title": "%command.lineHistoryInSublimeMerge%",
+        "category": "Git",
+        "icon": "$(history)"
+      },
+      {
+        "command": "git.blameInSublimeMerge",
+        "title": "%command.blameInSublimeMerge%",
+        "category": "Git",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "git.openRepositoryInSourcetree",
+        "title": "%command.openRepositoryInSourcetree%",
+        "category": "Git",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "git.openRepositoryInGitKraken",
+        "title": "%command.openRepositoryInGitKraken%",
+        "category": "Git",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "git.openRepositoryInTower",
+        "title": "%command.openRepositoryInTower%",
+        "category": "Git",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "git.openRepositoryInGitHubDesktop",
+        "title": "%command.openRepositoryInGitHubDesktop%",
+        "category": "Git",
+        "icon": "$(link-external)"
       }
     ],
     "continueEditSession": [
@@ -2664,6 +2712,46 @@
           "command": "git.ignore",
           "when": "scmProvider == git && scmResourceGroup == untracked",
           "group": "1_modification@3"
+        },
+        {
+          "command": "git.openRepositoryInSublimeMerge",
+          "when": "scmProvider == git && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed",
+          "group": "3_external@1"
+        },
+        {
+          "command": "git.fileHistoryInSublimeMerge",
+          "when": "scmProvider == git && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed",
+          "group": "3_external@2"
+        },
+        {
+          "command": "git.lineHistoryInSublimeMerge",
+          "when": "scmProvider == git && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed",
+          "group": "3_external@3"
+        },
+        {
+          "command": "git.blameInSublimeMerge",
+          "when": "scmProvider == git && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed",
+          "group": "3_external@4"
+        },
+        {
+          "command": "git.openRepositoryInSourcetree",
+          "when": "scmProvider == git && config.git.externalGitUI.sourcetree.enabled && git.externalGitUI.sourcetree.installed",
+          "group": "3_external@5"
+        },
+        {
+          "command": "git.openRepositoryInGitKraken",
+          "when": "scmProvider == git && config.git.externalGitUI.gitKraken.enabled && git.externalGitUI.gitKraken.installed",
+          "group": "3_external@6"
+        },
+        {
+          "command": "git.openRepositoryInTower",
+          "when": "scmProvider == git && config.git.externalGitUI.tower.enabled && git.externalGitUI.tower.installed",
+          "group": "3_external@7"
+        },
+        {
+          "command": "git.openRepositoryInGitHubDesktop",
+          "when": "scmProvider == git && config.git.externalGitUI.githubDesktop.enabled && git.externalGitUI.githubDesktop.installed",
+          "group": "3_external@9"
         }
       ],
       "scm/history/title": [
@@ -2835,6 +2923,46 @@
           "command": "git.revertSelectedRanges",
           "group": "2_git@3",
           "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && isInDiffEditor && isInDiffRightEditor && !isEmbeddedDiffEditor && resourceScheme == file"
+        },
+        {
+          "command": "git.openRepositoryInSublimeMerge",
+          "group": "3_git_external@1",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed"
+        },
+        {
+          "command": "git.fileHistoryInSublimeMerge",
+          "group": "3_git_external@2",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed && resourceScheme == file"
+        },
+        {
+          "command": "git.lineHistoryInSublimeMerge",
+          "group": "3_git_external@3",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed && resourceScheme == file"
+        },
+        {
+          "command": "git.blameInSublimeMerge",
+          "group": "3_git_external@4",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.sublimeMerge.enabled && git.externalGitUI.sublimeMerge.installed && resourceScheme == file"
+        },
+        {
+          "command": "git.openRepositoryInSourcetree",
+          "group": "3_git_external@5",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.sourcetree.enabled && git.externalGitUI.sourcetree.installed"
+        },
+        {
+          "command": "git.openRepositoryInGitKraken",
+          "group": "3_git_external@8",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.gitKraken.enabled && git.externalGitUI.gitKraken.installed"
+        },
+        {
+          "command": "git.openRepositoryInTower",
+          "group": "3_git_external@11",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.tower.enabled && git.externalGitUI.tower.installed"
+        },
+        {
+          "command": "git.openRepositoryInGitHubDesktop",
+          "group": "3_git_external@13",
+          "when": "config.git.enabled && !git.missing && gitOpenRepositoryCount != 0 && config.git.externalGitUI.githubDesktop.enabled && git.externalGitUI.githubDesktop.installed"
         }
       ],
       "editor/content": [
@@ -4143,6 +4271,81 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.showReferenceDetails%"
+        },
+        "git.externalGitUI.sublimeMerge.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.externalGitUI.sublimeMerge.enabled%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.sublimeMerge.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.externalGitUI.sublimeMerge.path%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.sourcetree.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.externalGitUI.sourcetree.enabled%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.sourcetree.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.externalGitUI.sourcetree.path%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.gitKraken.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.externalGitUI.gitKraken.enabled%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.gitKraken.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.externalGitUI.gitKraken.path%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.tower.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.externalGitUI.tower.enabled%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.tower.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.externalGitUI.tower.path%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.githubDesktop.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.externalGitUI.githubDesktop.enabled%",
+          "scope": "machine"
+        },
+        "git.externalGitUI.githubDesktop.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "%config.externalGitUI.githubDesktop.path%",
+          "scope": "machine"
         }
       }
     },

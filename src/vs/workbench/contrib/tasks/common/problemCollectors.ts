@@ -47,6 +47,7 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	private openModels: IStringDictionary<boolean>;
 	protected readonly modelListeners = new DisposableStore();
 	private tail: Promise<void> | undefined;
+	private _sequenceNumber: number;
 
 	// [owner] -> ApplyToKind
 	protected applyToByOwner: Map<string, ApplyToKind>;
@@ -88,6 +89,7 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		this.activeMatcher = null;
 		this._numberOfMatches = 0;
 		this._maxMarkerSeverity = undefined;
+		this._sequenceNumber = 0;
 		this.openModels = Object.create(null);
 		this.applyToByOwner = new Map<string, ApplyToKind>();
 		for (const problemMatcher of problemMatchers) {
@@ -214,6 +216,11 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 
 	private captureMatch(match: IProblemMatch): void {
 		this._numberOfMatches++;
+		this._sequenceNumber++;
+
+		// Add sequence number to the marker data
+		match.marker.sequenceNumber = this._sequenceNumber;
+
 		if (this._maxMarkerSeverity === undefined || match.marker.severity > this._maxMarkerSeverity) {
 			this._maxMarkerSeverity = match.marker.severity;
 		}
@@ -278,7 +285,10 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		this.markerService.remove(owner, uris);
 	}
 
-	protected recordMarker(marker: IMarkerData, owner: string, resourceAsString: string): void {
+	protected recordMarker(marker: IMarkerData, owner: string, resourceAsString: string, resourceSequenceNumber: number): void {
+		// Add resource sequence to the marker data
+		marker.resourceSequenceNumber = resourceSequenceNumber;
+
 		let markersPerOwner = this.markers.get(owner);
 		if (!markersPerOwner) {
 			markersPerOwner = new Map<string, Map<string, IMarkerData>>();
@@ -343,6 +353,7 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	protected cleanMarkerCaches(): void {
 		this._numberOfMatches = 0;
 		this._maxMarkerSeverity = undefined;
+		this._sequenceNumber = 0;
 		this.markers.clear();
 		this.deliveredMarkers.clear();
 	}

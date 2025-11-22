@@ -9,7 +9,7 @@ import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js
 import { ResourceLabels, IResourceLabel } from '../../../browser/labels.js';
 import { HighlightedLabel } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { IMarker, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
-import { ResourceMarkers, Marker, RelatedInformation, MarkerElement, MarkerTableItem } from './markersModel.js';
+import { ResourceMarkers, Marker, RelatedInformation, MarkerElement, MarkerTableItem, SubProblem, Category } from './markersModel.js';
 import Messages from './messages.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -68,6 +68,18 @@ interface IRelatedInformationTemplateData {
 	description: HighlightedLabel;
 }
 
+interface ISubProblemTemplateData {
+	resourceLabel: HighlightedLabel;
+	lnCol: HTMLElement;
+	description: HighlightedLabel;
+}
+
+interface ICategoryTemplateData {
+	icon: HTMLElement;
+	label: HighlightedLabel;
+	count: CountBadge;
+}
+
 export class MarkersWidgetAccessibilityProvider implements IListAccessibilityProvider<MarkerElement | MarkerTableItem> {
 
 	constructor(@ILabelService private readonly labelService: ILabelService) { }
@@ -87,6 +99,18 @@ export class MarkersWidgetAccessibilityProvider implements IListAccessibilityPro
 		if (element instanceof RelatedInformation) {
 			return Messages.MARKERS_TREE_ARIA_LABEL_RELATED_INFORMATION(element.raw);
 		}
+		if (element instanceof SubProblem) {
+			return Messages.MARKERS_TREE_ARIA_LABEL_SUBPROBLEM(
+				element.category,
+				element.resourceMarker.marker.message,
+				element.resourceMarker.marker.startLineNumber,
+				element.resourceMarker.marker.startColumn,
+				element.resource
+			);
+		}
+		if (element instanceof Category) {
+			return Messages.MARKERS_TREE_ARIA_LABEL_CATEGORY(element.name, element.problems.length);
+		}
 		return null;
 	}
 }
@@ -94,7 +118,9 @@ export class MarkersWidgetAccessibilityProvider implements IListAccessibilityPro
 const enum TemplateId {
 	ResourceMarkers = 'rm',
 	Marker = 'm',
-	RelatedInformation = 'ri'
+	RelatedInformation = 'ri',
+	SubProblem = 'sp',
+	Category = 'cat'
 }
 
 export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
@@ -117,6 +143,10 @@ export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 			return TemplateId.ResourceMarkers;
 		} else if (element instanceof Marker) {
 			return TemplateId.Marker;
+		} else if (element instanceof SubProblem) {
+			return TemplateId.SubProblem;
+		} else if (element instanceof Category) {
+			return TemplateId.Category;
 		} else {
 			return TemplateId.RelatedInformation;
 		}
@@ -126,7 +156,9 @@ export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 const enum FilterDataType {
 	ResourceMarkers,
 	Marker,
-	RelatedInformation
+	RelatedInformation,
+	SubProblem,
+	Category
 }
 
 interface ResourceMarkersFilterData {
@@ -147,7 +179,18 @@ interface RelatedInformationFilterData {
 	messageMatches: IMatch[];
 }
 
-export type FilterData = ResourceMarkersFilterData | MarkerFilterData | RelatedInformationFilterData;
+interface SubProblemFilterData {
+	type: FilterDataType.SubProblem;
+	uriMatches: IMatch[];
+	messageMatches: IMatch[];
+}
+
+interface CategoryFilterData {
+	type: FilterDataType.Category;
+	nameMatches: IMatch[];
+}
+
+export type FilterData = ResourceMarkersFilterData | MarkerFilterData | RelatedInformationFilterData | SubProblemFilterData | CategoryFilterData;
 
 export class ResourceMarkersRenderer implements ITreeRenderer<ResourceMarkers, ResourceMarkersFilterData, IResourceMarkersTemplateData> {
 
@@ -455,6 +498,85 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 	}
 }
 
+export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemFilterData, ISubProblemTemplateData> {
+
+	constructor(
+		@ILabelService private readonly labelService: ILabelService
+	) { }
+
+	templateId = TemplateId.SubProblem;
+
+	renderTemplate(container: HTMLElement): ISubProblemTemplateData {
+		const data: ISubProblemTemplateData = Object.create(null);
+
+		dom.append(container, dom.$('.actions'));
+		dom.append(container, dom.$('.icon'));
+
+		data.resourceLabel = new HighlightedLabel(dom.append(container, dom.$('.resource')));
+
+		data.lnCol = dom.append(container, dom.$('span.marker-line'));
+		data.lnCol.style.paddingLeft = '4px';
+		data.lnCol.style.paddingRight = '2px';
+
+		const separator = dom.append(container, dom.$('span.subproblem-separator'));
+		separator.textContent = ':';
+		separator.style.paddingRight = '4px';
+
+		data.description = new HighlightedLabel(dom.append(container, dom.$('.marker-description')));
+
+		return data;
+	}
+
+	renderElement(node: ITreeNode<SubProblem, SubProblemFilterData>, _: number, templateData: ISubProblemTemplateData): void {
+		const subProblem = node.element;
+		const uriMatches = node.filterData && node.filterData.uriMatches || [];
+		const messageMatches = node.filterData && node.filterData.messageMatches || [];
+
+		const resourceLabelTitle = this.labelService.getUriLabel(subProblem.resource, { relative: true });
+		templateData.resourceLabel.set(basename(subProblem.resource), uriMatches, resourceLabelTitle);
+		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(subProblem.resourceMarker.marker.startLineNumber, subProblem.resourceMarker.marker.startColumn);
+		templateData.description.set(subProblem.resourceMarker.marker.message, messageMatches, subProblem.resourceMarker.marker.message);
+	}
+
+	disposeTemplate(templateData: ISubProblemTemplateData): void {
+		templateData.resourceLabel.dispose();
+		templateData.description.dispose();
+	}
+}
+
+export class CategoryRenderer implements ITreeRenderer<Category, CategoryFilterData, ICategoryTemplateData> {
+
+	templateId = TemplateId.Category;
+
+	renderTemplate(container: HTMLElement): ICategoryTemplateData {
+		const data: ICategoryTemplateData = Object.create(null);
+
+		const categoryLabelContainer = dom.append(container, dom.$('.category-label-container'));
+		const iconElement = dom.append(categoryLabelContainer, dom.$('.icon.codicon.codicon-folder'));
+		const labelElement = dom.append(categoryLabelContainer, dom.$('.category-label'));
+		const countBadgeWrapper = dom.append(container, dom.$('.count-badge-wrapper'));
+
+		data.icon = iconElement;
+		data.label = new HighlightedLabel(labelElement);
+		data.count = new CountBadge(countBadgeWrapper, {}, defaultCountBadgeStyles);
+
+		return data;
+	}
+
+	renderElement(node: ITreeNode<Category, CategoryFilterData>, _: number, templateData: ICategoryTemplateData): void {
+		const category = node.element;
+		const nameMatches = node.filterData && node.filterData.nameMatches || [];
+
+		templateData.label.set(category.name, nameMatches, category.name);
+		templateData.count.setCount(category.problems.length);
+	}
+
+	disposeTemplate(templateData: ICategoryTemplateData): void {
+		templateData.label.dispose();
+		templateData.count.dispose();
+	}
+}
+
 export class Filter implements ITreeFilter<MarkerElement, FilterData> {
 
 	constructor(public options: FilterOptions) { }
@@ -464,6 +586,10 @@ export class Filter implements ITreeFilter<MarkerElement, FilterData> {
 			return this.filterResourceMarkers(element);
 		} else if (element instanceof Marker) {
 			return this.filterMarker(element, parentVisibility);
+		} else if (element instanceof SubProblem) {
+			return this.filterSubProblem(element, parentVisibility);
+		} else if (element instanceof Category) {
+			return this.filterCategory(element, parentVisibility);
 		} else {
 			return this.filterRelatedInformation(element, parentVisibility);
 		}
@@ -535,10 +661,20 @@ export class Filter implements ITreeFilter<MarkerElement, FilterData> {
 			return true;
 		}
 
+		// Not matched and not negated - check children (categories/subproblems)
+		if (!matched && !this.options.textFilter.negate) {
+			return TreeVisibility.Recurse;
+		}
+
 		return parentVisibility;
 	}
 
 	private filterRelatedInformation(relatedInformation: RelatedInformation, parentVisibility: TreeVisibility): TreeFilterResult<FilterData> {
+		// Hide related information if showProblemDetails is false
+		if (!this.options.showProblemDetails) {
+			return false;
+		}
+
 		if (!this.options.textFilter.text) {
 			return true;
 		}
@@ -563,6 +699,71 @@ export class Filter implements ITreeFilter<MarkerElement, FilterData> {
 		}
 
 		return parentVisibility;
+	}
+
+	private filterSubProblem(subProblem: SubProblem, _parentVisibility: TreeVisibility): TreeFilterResult<FilterData> {
+		// Hide sub-problems if showProblemDetails is false
+		if (!this.options.showProblemDetails) {
+			return false;
+		}
+
+		if (!this.options.textFilter.text) {
+			return true;
+		}
+
+		const uriMatches = FilterOptions._filter(this.options.textFilter.text, basename(subProblem.resource));
+		const messageMatches = FilterOptions._messageFilter(this.options.textFilter.text, subProblem.resourceMarker.marker.message);
+		const matched = uriMatches || messageMatches;
+
+		// Matched and not negated
+		if (matched && !this.options.textFilter.negate) {
+			return { visibility: true, data: { type: FilterDataType.SubProblem, uriMatches: uriMatches || [], messageMatches: messageMatches || [] } };
+		}
+
+		// Matched and negated - exclude it
+		if (matched && this.options.textFilter.negate) {
+			return false;
+		}
+
+		// Not matched and negated - include it
+		if (!matched && this.options.textFilter.negate) {
+			return true;
+		}
+
+		// Not matched and not negated - exclude it
+		return false;
+	}
+
+	private filterCategory(category: Category, _parentVisibility: TreeVisibility): TreeFilterResult<FilterData> {
+		// Hide categories if showProblemDetails is false
+		if (!this.options.showProblemDetails) {
+			return false;
+		}
+
+		if (!this.options.textFilter.text) {
+			return true;
+		}
+
+		const nameMatches = FilterOptions._filter(this.options.textFilter.text, category.name);
+		const matched = nameMatches;
+
+		// Matched and not negated
+		if (matched && !this.options.textFilter.negate) {
+			return { visibility: true, data: { type: FilterDataType.Category, nameMatches: nameMatches || [] } };
+		}
+
+		// Matched and negated - exclude it
+		if (matched && this.options.textFilter.negate) {
+			return false;
+		}
+
+		// Not matched and negated - include it
+		if (!matched && this.options.textFilter.negate) {
+			return true;
+		}
+
+		// Not matched and not negated - check children
+		return TreeVisibility.Recurse;
 	}
 }
 

@@ -121,7 +121,7 @@ suite('OutlineModel', function () {
 	}
 
 	function fakeMarker(range: Range): IMarker {
-		return { ...range, owner: 'ffff', message: 'test', severity: MarkerSeverity.Error, resource: null! };
+		return { ...range, owner: 'ffff', message: 'test', severity: MarkerSeverity.Error, resource: null!, sequenceNumber: 0, resourceSequenceNumber: 0 };
 	}
 
 	test('OutlineElement - updateMarker', function () {

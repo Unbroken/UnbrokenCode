@@ -152,6 +152,9 @@ suite('Task Terminal Status', () => {
 				applyTo: ApplyToKind.allDocuments,
 				fileLocation: FileLocationKind.Relative,
 				filePrefix: '/workspace',
+				resourceSequenceNumberMap: new Map(),
+				resourceSequenceNumber: 0,
+				matcherSequenceNumber: 0,
 				pattern: { regexp: /^(.*):(\d+): (.*)$/, file: 1, line: 2, message: 3 },
 				watching: { activeOnStart: false, beginsPattern: { regexp: /^begin$/ }, endsPattern: { regexp: /^end$/ } }
 			}], store.add(new MarkerService()), upcastPartial<IModelService>({

@@ -121,6 +121,8 @@ export interface IMarkerData {
 	startColumn: number;
 	endLineNumber: number;
 	endColumn: number;
+	sequenceNumber?: number;
+	resourceSequenceNumber?: number;
 	modelVersionId?: number;
 	relatedInformation?: IRelatedInformation[];
 	tags?: MarkerTag[];
@@ -143,6 +145,8 @@ export interface IMarker {
 	startColumn: number;
 	endLineNumber: number;
 	endColumn: number;
+	sequenceNumber: number;
+	resourceSequenceNumber: number;
 	modelVersionId?: number;
 	relatedInformation?: IRelatedInformation[];
 	tags?: MarkerTag[];

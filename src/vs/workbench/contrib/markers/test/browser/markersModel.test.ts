@@ -303,7 +303,9 @@ suite('MarkersModel Test', () => {
 			endLineNumber,
 			endColumn,
 			source,
-			relatedInformation
+			relatedInformation,
+			sequenceNumber: 0,
+			resourceSequenceNumber: 0
 		};
 	}
 });

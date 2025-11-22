@@ -5,7 +5,7 @@
 
 import { MarkersFilters } from './markersViewActions.js';
 import { IView } from '../../../common/views.js';
-import { MarkerElement, ResourceMarkers } from './markersModel.js';
+import { MarkerElement, ResourceMarkers, MarkerSortOrder } from './markersModel.js';
 import { MarkersViewMode } from '../common/markers.js';
 
 export interface IMarkersView extends IView {
@@ -22,4 +22,7 @@ export interface IMarkersView extends IView {
 	collapseAll(): void;
 	setMultiline(multiline: boolean): void;
 	setViewMode(viewMode: MarkersViewMode): void;
+
+	getSortOrder(): MarkerSortOrder;
+	setSortOrder(sortOrder: MarkerSortOrder): void;
 }

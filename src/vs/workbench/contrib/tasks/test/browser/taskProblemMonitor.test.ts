@@ -26,7 +26,7 @@ suite('TaskProblemMonitor', () => {
 	}
 
 	function marker(message: string, line: number, resource = URI.file('/a.ts'), owner = 'compiler'): IMarker {
-		return { owner, resource, message, startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 2, severity: MarkerSeverity.Error };
+		return { owner, resource, message, startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 2, severity: MarkerSeverity.Error, resourceSequenceNumber: 0, sequenceNumber: 0 };
 	}
 
 	test('releases terminal and problem collector listeners when disposed', () => {

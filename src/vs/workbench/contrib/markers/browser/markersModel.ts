@@ -17,6 +17,11 @@ import { unsupportedSchemas } from '../../../../platform/markers/common/markerSe
 
 export type MarkerElement = ResourceMarkers | Marker | RelatedInformation;
 
+export enum MarkerSortOrder {
+	PositionAndSeverity = 'positionAndSeverity',
+	OutputOrder = 'outputOrder'
+}
+
 export function compareMarkersByUri(a: IMarker, b: IMarker) {
 	return extUri.compare(a.resource, b.resource);
 }
@@ -32,6 +37,21 @@ function compareResourceMarkers(a: ResourceMarkers, b: ResourceMarkers): number 
 		res = a.path.localeCompare(b.path) || a.name.localeCompare(b.name);
 	}
 	return res;
+}
+
+function compareResourceMarkersByOutputOrder(a: ResourceMarkers, b: ResourceMarkers): number {
+	const [firstMarkerOfA] = a.markers;
+	const [firstMarkerOfB] = b.markers;
+	if (firstMarkerOfA && firstMarkerOfB) {
+		// Compare by resource sequence number first
+		const rseqA = firstMarkerOfA.marker.resourceSequenceNumber;
+		const rseqB = firstMarkerOfB.marker.resourceSequenceNumber;
+		if (rseqA !== rseqB) {
+			return rseqA - rseqB;
+		}
+	}
+	// Fallback to path comparison
+	return a.path.localeCompare(b.path) || a.name.localeCompare(b.name);
 }
 
 
@@ -55,6 +75,14 @@ export class ResourceMarkers {
 			this._cachedMarkers = [...this._markersMap.values()].flat().sort(ResourceMarkers._compareMarkers);
 		}
 		return this._cachedMarkers;
+	}
+
+	getMarkersSorted(sortOrder: MarkerSortOrder): readonly Marker[] {
+		const allMarkers = [...this._markersMap.values()].flat();
+		if (sortOrder === MarkerSortOrder.OutputOrder) {
+			return allMarkers.sort(ResourceMarkers._compareMarkersByOutputOrder);
+		}
+		return allMarkers.sort(ResourceMarkers._compareMarkers);
 	}
 
 	has(uri: URI) {
@@ -87,6 +115,10 @@ export class ResourceMarkers {
 		return MarkerSeverity.compare(a.marker.severity, b.marker.severity)
 			|| extUri.compare(a.resource, b.resource)
 			|| Range.compareRangesUsingStarts(a.marker, b.marker);
+	}
+
+	private static _compareMarkersByOutputOrder(a: Marker, b: Marker): number {
+		return a.marker.sequenceNumber - b.marker.sequenceNumber;
 	}
 }
 
@@ -148,13 +180,17 @@ export interface MarkerChangesEvent {
 export class MarkersModel {
 
 	private cachedSortedResources: ResourceMarkers[] | undefined = undefined;
+	private _sortOrder: MarkerSortOrder = MarkerSortOrder.PositionAndSeverity;
 
 	private readonly _onDidChange = new Emitter<MarkerChangesEvent>();
 	readonly onDidChange: Event<MarkerChangesEvent> = this._onDidChange.event;
 
 	get resourceMarkers(): ResourceMarkers[] {
 		if (!this.cachedSortedResources) {
-			this.cachedSortedResources = [...this.resourcesByUri.values()].sort(compareResourceMarkers);
+			const compareFunc = this._sortOrder === MarkerSortOrder.OutputOrder
+				? compareResourceMarkersByOutputOrder
+				: compareResourceMarkers;
+			this.cachedSortedResources = [...this.resourcesByUri.values()].sort(compareFunc);
 		}
 		return this.cachedSortedResources;
 	}
@@ -163,6 +199,25 @@ export class MarkersModel {
 
 	constructor() {
 		this.resourcesByUri = new Map<string, ResourceMarkers>();
+	}
+
+	get sortOrder(): MarkerSortOrder {
+		return this._sortOrder;
+	}
+
+	set sortOrder(order: MarkerSortOrder) {
+		if (this._sortOrder !== order) {
+			this._sortOrder = order;
+			this.cachedSortedResources = undefined;
+			// Force a full reset by marking all resources as removed and then added
+			// This ensures the UI rebuilds with the new sort order
+			const allResources = new Set<ResourceMarkers>(this.resourcesByUri.values());
+			this._onDidChange.fire({
+				added: allResources,
+				removed: allResources,
+				updated: new Set<ResourceMarkers>()
+			});
+		}
 	}
 
 	reset(): void {

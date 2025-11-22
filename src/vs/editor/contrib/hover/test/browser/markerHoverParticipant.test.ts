@@ -33,7 +33,9 @@ suite('Marker Hover Participant', () => {
 					startLineNumber: 1,
 					startColumn,
 					endLineNumber: 1,
-					endColumn: 15
+					endColumn: 15,
+					resourceSequenceNumber: 0,
+					sequenceNumber: 0
 				};
 				return new MarkerHover(participant, Range.lift(marker), marker);
 			};
@@ -95,6 +97,8 @@ suite('Marker Hover Participant', () => {
 				startColumn: 1,
 				endLineNumber: 1,
 				endColumn: 5,
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0,
 				relatedInformation: [{
 					resource: URI.file('/related.ts'),
 					message: 'Related message',

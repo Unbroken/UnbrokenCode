@@ -124,7 +124,7 @@ suite('TerminalTaskSystem workspace trust', () => {
 		const entered = new DeferredPromise<void>();
 		const task = createTask('background');
 		const matcher: ProblemMatcher = {
-			owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace',
+			owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace', resourceSequenceNumberMap: new Map(), resourceSequenceNumber: 0, matcherSequenceNumber: 0,
 			pattern: { regexp: /^(.*):(\d+): (.*)$/, file: 1, line: 2, message: 3 },
 			watching: { activeOnStart: true, beginsPattern: { regexp: /^begin$/ }, endsPattern: { regexp: /^end$/ } }
 		};

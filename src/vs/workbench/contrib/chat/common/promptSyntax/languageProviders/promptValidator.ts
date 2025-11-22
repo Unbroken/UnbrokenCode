@@ -1224,5 +1224,5 @@ export function getTarget(promptType: PromptsType, header: PromptHeader | URI): 
 }
 
 function toMarker(message: string, range: Range, severity = MarkerSeverity.Error, tags?: MarkerTag[]): IMarkerData {
-	return { severity, message, ...(tags ? { tags } : {}), ...range };
+	return { severity, message, ...(tags ? { tags } : {}), ...range, resourceSequenceNumber: 0, sequenceNumber: 0 };
 }

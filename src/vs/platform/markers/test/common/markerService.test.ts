@@ -16,7 +16,9 @@ function randomMarkerData(severity = MarkerSeverity.Error): IMarkerData {
 		startLineNumber: 1,
 		startColumn: 1,
 		endLineNumber: 1,
-		endColumn: 1
+		endColumn: 1,
+		resourceSequenceNumber: 0,
+		sequenceNumber: 0
 	};
 }
 

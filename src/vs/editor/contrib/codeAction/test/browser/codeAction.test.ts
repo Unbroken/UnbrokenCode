@@ -47,7 +47,9 @@ suite('CodeAction', () => {
 					endLineNumber: 2,
 					endColumn: 1,
 					severity: MarkerSeverity.Error,
-					message: 'abc'
+					message: 'abc',
+					sequenceNumber: 0,
+					resourceSequenceNumber: 0
 				}]
 			},
 			bcd: {
@@ -58,7 +60,9 @@ suite('CodeAction', () => {
 					endLineNumber: 2,
 					endColumn: 1,
 					severity: MarkerSeverity.Error,
-					message: 'bcd'
+					message: 'bcd',
+					sequenceNumber: 0,
+					resourceSequenceNumber: 0
 				}]
 			}
 		},

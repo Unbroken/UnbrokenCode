@@ -24,6 +24,7 @@ export class CellDiagnostics extends Disposable implements INotebookEditorContri
 	private enabled = false;
 	private listening = false;
 	private diagnosticsByHandle: Map<number, IDisposable[]> = new Map();
+	private markerSequence = 0;
 
 	constructor(
 		private readonly notebookEditor: INotebookEditor,
@@ -147,7 +148,9 @@ export class CellDiagnostics extends Disposable implements INotebookEditorContri
 			startColumn: location.startColumn + 1,
 			endLineNumber: location.endLineNumber + 1,
 			endColumn: location.endColumn + 1,
-			source: 'Cell Execution Error'
+			source: 'Cell Execution Error',
+			sequenceNumber: ++this.markerSequence,
+			resourceSequenceNumber: 0,
 		};
 	}
 

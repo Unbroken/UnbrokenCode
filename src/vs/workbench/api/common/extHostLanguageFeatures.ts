@@ -535,7 +535,7 @@ class CodeActionAdapter {
 					cacheId: [cacheId, i],
 					title: toConvert.title,
 					command: toConvert.command && this._commands.toInternal(toConvert.command, disposables),
-					diagnostics: toConvert.diagnostics && toConvert.diagnostics.map(typeConvert.Diagnostic.from),
+					diagnostics: toConvert.diagnostics && toConvert.diagnostics.map((value: vscode.Diagnostic) => typeConvert.Diagnostic.from(value, 100000, 0)),
 					edit: toConvert.edit && typeConvert.WorkspaceEdit.from(toConvert.edit, undefined),
 					kind: toConvert.kind && toConvert.kind.value,
 					isPreferred: toConvert.isPreferred,

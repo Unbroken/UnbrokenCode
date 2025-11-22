@@ -62,7 +62,9 @@ suite('MainThreadDiagnostics', function () {
 			endColumn: 1,
 			message: 'fffff',
 			severity: 1,
-			source: 'me'
+			source: 'me',
+			sequenceNumber: 0,
+			resourceSequenceNumber: 0
 		}], true]]);
 
 		assert.deepStrictEqual({
@@ -117,7 +119,9 @@ suite('MainThreadDiagnostics', function () {
 				endLineNumber: 1,
 				endColumn: 1,
 				severity: 1,
-				source: 'me'
+				source: 'me',
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			};
 			const target = URI.file('a');
 			diag.$changeMany('foo', [[target, [{ ...markerDataStub, message: 'same_owner' }]]]);
@@ -147,7 +151,9 @@ suite('MainThreadDiagnostics', function () {
 				endColumn: 1,
 				severity: 1,
 				source: 'me',
-				message: 'message'
+				message: 'message',
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
 			};
 			const target = URI.file('a');
 			markerService.changeOne('bar', target, [markerData]);

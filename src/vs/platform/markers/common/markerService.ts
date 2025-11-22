@@ -241,7 +241,8 @@ export class MarkerService implements IMarkerService {
 			startLineNumber, startColumn, endLineNumber, endColumn,
 			relatedInformation,
 			modelVersionId,
-			tags, origin
+			tags, origin,
+			resourceSequenceNumber, sequenceNumber
 		} = data;
 
 		if (!message) {
@@ -268,7 +269,9 @@ export class MarkerService implements IMarkerService {
 			relatedInformation,
 			modelVersionId,
 			tags,
-			origin
+			origin,
+			resourceSequenceNumber: resourceSequenceNumber ?? 0,
+			sequenceNumber: sequenceNumber ?? 0
 		};
 	}
 
@@ -335,6 +338,8 @@ export class MarkerService implements IMarkerService {
 			startColumn: 1,
 			endLineNumber: 1,
 			endColumn: 1,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 

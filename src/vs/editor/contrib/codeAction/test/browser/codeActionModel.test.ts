@@ -83,7 +83,9 @@ suite('CodeActionModel', () => {
 				message: 'error',
 				severity: 1,
 				code: '',
-				source: ''
+				source: '',
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}]);
 			return donePromise;
 		});
@@ -99,7 +101,9 @@ suite('CodeActionModel', () => {
 				message: 'error',
 				severity: 1,
 				code: '',
-				source: ''
+				source: '',
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}]);
 
 			editor.setPosition({ lineNumber: 2, column: 1 });
@@ -152,7 +156,9 @@ suite('CodeActionModel', () => {
 				message: 'error',
 				severity: 1,
 				code: '',
-				source: ''
+				source: '',
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}]);
 
 			editor.setSelection({ startLineNumber: 1, startColumn: 1, endLineNumber: 4, endColumn: 1 });

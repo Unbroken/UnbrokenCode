@@ -236,7 +236,7 @@ export namespace DiagnosticTag {
 }
 
 export namespace Diagnostic {
-	export function from(value: vscode.Diagnostic): IMarkerData {
+	export function from(value: vscode.Diagnostic, resourceSequenceNumber: number, sequenceNumber: number): IMarkerData {
 		let code: string | { value: string; target: URI } | undefined;
 
 		if (value.code) {
@@ -258,6 +258,8 @@ export namespace Diagnostic {
 			severity: DiagnosticSeverity.from(value.severity),
 			relatedInformation: value.relatedInformation && value.relatedInformation.map(DiagnosticRelatedInformation.from),
 			tags: Array.isArray(value.tags) ? coalesce(value.tags.map(DiagnosticTag.from)) : undefined,
+			resourceSequenceNumber: resourceSequenceNumber,
+			sequenceNumber: sequenceNumber
 		};
 	}
 

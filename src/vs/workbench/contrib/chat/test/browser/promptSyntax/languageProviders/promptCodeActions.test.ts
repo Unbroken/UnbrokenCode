@@ -236,7 +236,9 @@ suite('PromptCodeActionProvider', () => {
 				startLineNumber: 4,
 				startColumn: 9,
 				endLineNumber: 4,
-				endColumn: 19
+				endColumn: 19,
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}];
 			const content = [
 				'---',
@@ -262,7 +264,9 @@ suite('PromptCodeActionProvider', () => {
 				startLineNumber: 4,
 				startColumn: 9,
 				endLineNumber: 4,
-				endColumn: 21
+				endColumn: 21,
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}];
 			const content = [
 				'---',
@@ -287,7 +291,9 @@ suite('PromptCodeActionProvider', () => {
 				startLineNumber: 4,
 				startColumn: 9,
 				endLineNumber: 4,
-				endColumn: 28
+				endColumn: 28,
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}];
 			const content = [
 				'---',
@@ -312,7 +318,9 @@ suite('PromptCodeActionProvider', () => {
 				startLineNumber: 4,
 				startColumn: 9,
 				endLineNumber: 4,
-				endColumn: 59
+				endColumn: 59,
+				sequenceNumber: 0,
+				resourceSequenceNumber: 0
 			}];
 			const content = [
 				'---',

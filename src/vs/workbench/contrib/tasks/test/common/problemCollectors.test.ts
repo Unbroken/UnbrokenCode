@@ -47,6 +47,9 @@ suite('ProblemCollectors', () => {
 			owner: 'test',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0,
 			pattern: { regexp: problemPattern },
 			watching: {
 				activeOnStart: true,

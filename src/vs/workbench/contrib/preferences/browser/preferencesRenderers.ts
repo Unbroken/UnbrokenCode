@@ -597,7 +597,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 			severity: MarkerSeverity.Hint,
 			tags: [MarkerTag.Unnecessary],
 			...setting.range,
-			message: nls.localize('unsupportedPolicySetting', "This setting cannot be applied because it is configured in the system policy.")
+			message: nls.localize('unsupportedPolicySetting', "This setting cannot be applied because it is configured in the system policy."),
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		});
 		return true;
 	}
@@ -611,7 +613,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 						severity: MarkerSeverity.Hint,
 						tags: [MarkerTag.Unnecessary],
 						...setting.range,
-						message: nls.localize('unsupportLanguageOverrideSetting', "This setting cannot be applied because it is not registered as language override setting.")
+						message: nls.localize('unsupportLanguageOverrideSetting', "This setting cannot be applied because it is not registered as language override setting."),
+						resourceSequenceNumber: 0,
+						sequenceNumber: 0
 					});
 				}
 			} else {
@@ -628,7 +632,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 					severity: MarkerSeverity.Hint,
 					tags: [MarkerTag.Unnecessary],
 					...setting.range,
-					message: nls.localize('defaultProfileSettingWhileNonDefaultActive', "This setting cannot be applied while a non-default profile is active. It will be applied when the default profile is active.")
+					message: nls.localize('defaultProfileSettingWhileNonDefaultActive', "This setting cannot be applied while a non-default profile is active. It will be applied when the default profile is active."),
+					resourceSequenceNumber: 0,
+					sequenceNumber: 0
 				});
 			} else if (isEqual(this.userDataProfileService.currentProfile.settingsResource, this.settingsEditorModel.uri)) {
 				if (configuration.scope && APPLICATION_SCOPES.includes(configuration.scope)) {
@@ -640,7 +646,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 						severity: MarkerSeverity.Hint,
 						tags: [MarkerTag.Unnecessary],
 						...setting.range,
-						message: nls.localize('allProfileSettingWhileInNonDefaultProfileSetting', "This setting cannot be applied because it is configured to be applied in all profiles using setting {0}. Value from the default profile will be used instead.", APPLY_ALL_PROFILES_SETTING)
+						message: nls.localize('allProfileSettingWhileInNonDefaultProfileSetting', "This setting cannot be applied because it is configured to be applied in all profiles using setting {0}. Value from the default profile will be used instead.", APPLY_ALL_PROFILES_SETTING),
+						resourceSequenceNumber: 0,
+						sequenceNumber: 0
 					});
 				}
 			}
@@ -650,7 +658,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 				severity: MarkerSeverity.Hint,
 				tags: [MarkerTag.Unnecessary],
 				...setting.range,
-				message: nls.localize('unsupportedRemoteMachineSetting', "This setting cannot be applied in this window. It will be applied when you open a local window.")
+				message: nls.localize('unsupportedRemoteMachineSetting', "This setting cannot be applied in this window. It will be applied when you open a local window."),
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
 			});
 		}
 	}
@@ -692,7 +702,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 				severity: MarkerSeverity.Hint,
 				tags: [MarkerTag.Unnecessary],
 				...setting.range,
-				message: nls.localize('unsupportedWindowSetting', "This setting cannot be applied in this workspace. It will be applied when you open the containing workspace folder directly.")
+				message: nls.localize('unsupportedWindowSetting', "This setting cannot be applied in this workspace. It will be applied when you open the containing workspace folder directly."),
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
 			});
 		}
 
@@ -717,7 +729,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 			severity: MarkerSeverity.Hint,
 			tags: [MarkerTag.Unnecessary],
 			...setting.range,
-			message: nls.localize('unsupportedApplicationSetting', "This setting has an application scope and can only be set in the settings file from the Default profile.")
+			message: nls.localize('unsupportedApplicationSetting', "This setting has an application scope and can only be set in the settings file from the Default profile."),
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -726,7 +740,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 			severity: MarkerSeverity.Hint,
 			tags: [MarkerTag.Unnecessary],
 			...setting.range,
-			message: nls.localize('unsupportedMachineSetting', "This setting can only be applied in user settings in local window or in remote settings in remote window.")
+			message: nls.localize('unsupportedMachineSetting', "This setting can only be applied in user settings in local window or in remote settings in remote window."),
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -734,7 +750,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 		return {
 			severity: MarkerSeverity.Warning,
 			...setting.range,
-			message: nls.localize('untrustedSetting', "This setting can only be applied in a trusted workspace.")
+			message: nls.localize('untrustedSetting', "This setting can only be applied in a trusted workspace."),
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -743,7 +761,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 			severity: MarkerSeverity.Hint,
 			tags: [MarkerTag.Unnecessary],
 			...setting.range,
-			message: nls.localize('unknown configuration setting', "Unknown Configuration Setting")
+			message: nls.localize('unknown configuration setting', "Unknown Configuration Setting"),
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -763,7 +783,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 		return {
 			severity: MarkerSeverity.Hint,
 			...setting.range,
-			message: PREVIEW_INDICATOR_DESCRIPTION
+			message: PREVIEW_INDICATOR_DESCRIPTION,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -771,7 +793,9 @@ class UnsupportedSettingsRenderer extends Disposable implements languages.CodeAc
 		return {
 			severity: MarkerSeverity.Hint,
 			...setting.range,
-			message: EXPERIMENTAL_INDICATOR_DESCRIPTION
+			message: EXPERIMENTAL_INDICATOR_DESCRIPTION,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -872,7 +896,9 @@ class McpSettingsRenderer extends Disposable implements languages.CodeActionProv
 		return {
 			severity: MarkerSeverity.Warning,
 			...setting.range,
-			message
+			message,
+			resourceSequenceNumber: 0,
+			sequenceNumber: 0
 		};
 	}
 
@@ -939,7 +965,9 @@ class WorkspaceConfigurationRenderer extends Disposable {
 								severity: MarkerSeverity.Hint,
 								tags: [MarkerTag.Unnecessary],
 								...setting.range,
-								message: nls.localize('unsupportedProperty', "Unsupported Property")
+								message: nls.localize('unsupportedProperty', "Unsupported Property"),
+								resourceSequenceNumber: 0,
+								sequenceNumber: 0
 							});
 						}
 					}

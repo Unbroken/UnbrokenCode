@@ -193,6 +193,8 @@ export class McpLanguageFeatures extends Disposable implements IWorkbenchContrib
 						endLineNumber: end.lineNumber,
 						endColumn: end.column,
 						modelVersionId: tm.getVersionId(),
+						resourceSequenceNumber: 0,
+						sequenceNumber: 0
 					});
 				}
 			}

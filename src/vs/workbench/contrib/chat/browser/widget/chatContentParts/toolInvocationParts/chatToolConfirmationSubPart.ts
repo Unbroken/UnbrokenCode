@@ -243,7 +243,9 @@ export class ToolConfirmationSubPart extends AbstractToolConfirmationSubPart {
 								startColumn: item.range[0].character + 1,
 								endLineNumber: item.range[1].line + 1,
 								endColumn: item.range[1].character + 1,
-								code: item.code ? String(item.code) : undefined
+								code: item.code ? String(item.code) : undefined,
+								resourceSequenceNumber: 0,
+								sequenceNumber: 0
 							});
 						}
 					}

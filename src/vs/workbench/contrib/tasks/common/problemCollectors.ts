@@ -39,6 +39,7 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 
 	private matchers: INumberDictionary<ILineMatcher[]>;
 	private activeMatcher: ILineMatcher | null;
+	private needMoreLinesMatcher: ILineMatcher | null;
 	protected _numberOfMatches: number;
 	private _maxMarkerSeverity?: MarkerSeverity;
 	private buffer: string[];
@@ -86,6 +87,7 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		});
 		this.buffer = [];
 		this.activeMatcher = null;
+		this.needMoreLinesMatcher = null;
 		this._numberOfMatches = 0;
 		this._maxMarkerSeverity = undefined;
 		this._sequenceNumber = 0;
@@ -128,6 +130,10 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		}
 	}
 
+	protected shouldProcessMoreLines(): boolean {
+		return this.buffer.length >= this.bufferLength && !this.needMoreLinesMatcher;
+	}
+
 	protected abstract processLineInternal(line: string): Promise<void>;
 
 	public override dispose() {
@@ -143,31 +149,38 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		return this._maxMarkerSeverity;
 	}
 
-	protected tryFindMarker(line: string): IProblemMatch | null {
+	protected tryFindMarker(line?: string): IProblemMatch | null {
 		let result: IProblemMatch | null = null;
+		if (line !== undefined) {
+			if (this.needMoreLinesMatcher) {
+				// When we have a needMoreLinesMatcher, bypass buffer length limit
+				this.buffer.push(line);
+			} else if (this.buffer.length < this.bufferLength) {
+				this.buffer.push(line);
+			} else {
+				const end = this.buffer.length - 1;
+				for (let i = 0; i < end; i++) {
+					this.buffer[i] = this.buffer[i + 1];
+				}
+				this.buffer[end] = line;
+			}
+		}
+
+		if (this.buffer.length === 0) {
+			return null;
+		}
+
 		if (this.activeMatcher) {
-			result = this.activeMatcher.next(line);
+			result = this.activeMatcher.next(this.buffer[0]);
 			if (result) {
+				this.buffer.splice(0, 1);
 				this.captureMatch(result);
 				return result;
 			}
-			this.clearBuffer();
 			this.activeMatcher = null;
-		}
-		if (this.buffer.length < this.bufferLength) {
-			this.buffer.push(line);
-		} else {
-			const end = this.buffer.length - 1;
-			for (let i = 0; i < end; i++) {
-				this.buffer[i] = this.buffer[i + 1];
-			}
-			this.buffer[end] = line;
 		}
 
 		result = this.tryMatchers();
-		if (result) {
-			this.clearBuffer();
-		}
 		return result;
 	}
 
@@ -193,7 +206,33 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 
 	private tryMatchers(): IProblemMatch | null {
 		this.activeMatcher = null;
-		const length = this.buffer.length;
+
+		// First check if we have a needMoreLinesMatcher
+		if (this.needMoreLinesMatcher) {
+			const result = this.needMoreLinesMatcher.handle(this.buffer, 0);
+			if (result.match) {
+				this.captureMatch(result.match);
+				if (result.continue) {
+					this.activeMatcher = this.needMoreLinesMatcher;
+				}
+				this.needMoreLinesMatcher = null;
+				// Handle consumed lines for multiLineMessage support
+				if (result.consumedLines && result.consumedLines > 0) {
+					// Remove consumed lines from buffer
+					this.buffer.splice(0, result.consumedLines);
+				}
+				return result.match;
+			} else if (result.needMoreLines) {
+				// Still needs more lines, keep the matcher
+				return null;
+			} else {
+				// No match and no need for more lines, clear the matcher
+				this.needMoreLinesMatcher = null;
+			}
+		}
+
+		const length = Math.min(this.buffer.length, this.bufferLength);
+
 		for (let startIndex = 0; startIndex < length; startIndex++) {
 			const candidates = this.matchers[length - startIndex];
 			if (!candidates) {
@@ -206,10 +245,26 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 					if (result.continue) {
 						this.activeMatcher = matcher;
 					}
+					// Handle consumed lines for multiLineMessage support
+					if (result.consumedLines && result.consumedLines > 0) {
+						// Remove consumed lines from buffer
+						const linesToRemove = Math.min(result.consumedLines, this.buffer.length - startIndex);
+						this.buffer.splice(startIndex, linesToRemove);
+					}
 					return result.match;
+				} else if (result.needMoreLines) {
+					// Matcher wants more lines but no result yet
+					this.needMoreLinesMatcher = matcher;
+					// Don't remove lines from buffer as matcher needs them for next call
+					return null;
 				}
 			}
 		}
+
+		if (this.buffer.length >= this.bufferLength) {
+			this.buffer.splice(0, 1);
+		}
+
 		return null;
 	}
 
@@ -222,12 +277,6 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 
 		if (this._maxMarkerSeverity === undefined || match.marker.severity > this._maxMarkerSeverity) {
 			this._maxMarkerSeverity = match.marker.severity;
-		}
-	}
-
-	private clearBuffer(): void {
-		if (this.buffer.length > 0) {
-			this.buffer = [];
 		}
 	}
 
@@ -302,10 +351,27 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		let existingMarker;
 		if (!markersPerResource.has(key)) {
 			markersPerResource.set(key, marker);
-		} else if (((existingMarker = markersPerResource.get(key)) !== undefined) && (existingMarker.message.length < marker.message.length) && isWindows) {
-			// Most likely https://github.com/microsoft/vscode/issues/77475
-			// Heuristic dictates that when the key is the same and message is smaller, we have hit this limitation.
-			markersPerResource.set(key, marker);
+		} else if (((existingMarker = markersPerResource.get(key)) !== undefined)) {
+			// Count sub-problems in all categories for both markers
+			const getSubProblemCount = (markerData: IMarkerData) => {
+				if (!markerData.subProblems) {
+					return 0;
+				}
+				return markerData.subProblems.reduce((total, category) => total + category.problems.length, 0);
+			};
+
+			// Replace marker if:
+			// 1. Most likely https://github.com/microsoft/vscode/issues/77475
+			//    Heuristic dictates that when the key is the same and message is smaller, we have hit this limitation.
+			// 2. Same message but new marker has more sub-problems
+			if ((existingMarker.message.length < marker.message.length && isWindows) ||
+				(existingMarker.message === marker.message && getSubProblemCount(marker) > getSubProblemCount(existingMarker))) {
+				markersPerResource.set(key, marker);
+
+				// Make sure to re-deliver the resoure if we already delivered it
+				const deliveredMarkersPerOwner = this.getDeliveredMarkersPerOwner(owner);
+				deliveredMarkersPerOwner.delete(resourceAsString);
+			}
 		}
 	}
 
@@ -385,29 +451,44 @@ export class StartStopProblemCollector extends AbstractProblemCollector implemen
 		});
 	}
 
+	private reportMarkersForCurrentResource(): void {
+		if (this.currentOwner && this.currentResource) {
+			this.deliverMarkersPerOwnerAndResource(this.currentOwner, this.currentResource);
+			this.currentOwner = undefined;
+			this.currentResource = undefined;
+		}
+	}
+
 	protected async processLineInternal(line: string): Promise<void> {
 		if (!this._hasStarted) {
 			this._hasStarted = true;
 			this._onDidStateChange.fire(IProblemCollectorEvent.create(ProblemCollectorEventKind.BackgroundProcessingBegins));
 		}
-		const markerMatch = this.tryFindMarker(line);
-		if (!markerMatch) {
-			return;
-		}
-
-		const owner = markerMatch.description.owner;
-		const resource = await markerMatch.resource;
-		const resourceAsString = resource.toString();
-		this.removeResourceToClean(owner, resourceAsString);
-		const shouldApplyMatch = await this.shouldApplyMatch(markerMatch);
-		if (shouldApplyMatch) {
-			this.recordMarker(markerMatch.marker, owner, resourceAsString);
-			if (this.currentOwner !== owner || this.currentResource !== resourceAsString) {
-				if (this.currentOwner && this.currentResource) {
-					this.deliverMarkersPerOwnerAndResource(this.currentOwner, this.currentResource);
+		let processLine: string | undefined = line;
+		while (true) {
+			const markerMatch = this.tryFindMarker(processLine);
+			processLine = undefined;
+			if (!markerMatch) {
+				if (this.shouldProcessMoreLines()) {
+					continue;
+				} else {
+					this.reportMarkersForCurrentResource(); // We don't have more to process, deliver so we don't hold on to anything
+					return;
 				}
-				this.currentOwner = owner;
-				this.currentResource = resourceAsString;
+			}
+
+			const owner = markerMatch.description.owner;
+			const resource = await markerMatch.resource;
+			const resourceAsString = resource.toString();
+			this.removeResourceToClean(owner, resourceAsString);
+			const shouldApplyMatch = await this.shouldApplyMatch(markerMatch);
+			if (shouldApplyMatch) {
+				this.recordMarker(markerMatch.marker, owner, resourceAsString, markerMatch.marker.resourceSequenceNumber);
+				if (this.currentOwner !== owner || this.currentResource !== resourceAsString) {
+					this.reportMarkersForCurrentResource();
+					this.currentOwner = owner;
+					this.currentResource = resourceAsString;
+				}
 			}
 		}
 	}
@@ -495,21 +576,31 @@ export class WatchingProblemCollector extends AbstractProblemCollector implement
 			return;
 		}
 		this.lines.push(line);
-		const markerMatch = this.tryFindMarker(line);
-		if (!markerMatch) {
-			return;
-		}
-		const resource = await markerMatch.resource;
-		const owner = markerMatch.description.owner;
-		const resourceAsString = resource.toString();
-		this.removeResourceToClean(owner, resourceAsString);
-		const shouldApplyMatch = await this.shouldApplyMatch(markerMatch);
-		if (shouldApplyMatch) {
-			this.recordMarker(markerMatch.marker, owner, resourceAsString);
-			if (this.currentOwner !== owner || this.currentResource !== resourceAsString) {
-				this.reportMarkersForCurrentResource();
-				this.currentOwner = owner;
-				this.currentResource = resourceAsString;
+
+		let processLine: string | undefined = line;
+		while (true) {
+			const markerMatch = this.tryFindMarker(processLine);
+			processLine = undefined;
+			if (!markerMatch) {
+				if (this.shouldProcessMoreLines()) {
+					continue;
+				} else {
+					return;
+				}
+			}
+
+			const resource = await markerMatch.resource;
+			const owner = markerMatch.description.owner;
+			const resourceAsString = resource.toString();
+			this.removeResourceToClean(owner, resourceAsString);
+			const shouldApplyMatch = await this.shouldApplyMatch(markerMatch);
+			if (shouldApplyMatch) {
+				this.recordMarker(markerMatch.marker, owner, resourceAsString, markerMatch.marker.resourceSequenceNumber);
+				if (this.currentOwner !== owner || this.currentResource !== resourceAsString) {
+					this.reportMarkersForCurrentResource();
+					this.currentOwner = owner;
+					this.currentResource = resourceAsString;
+				}
 			}
 		}
 	}
@@ -538,7 +629,7 @@ export class WatchingProblemCollector extends AbstractProblemCollector implement
 				const file = matches[background.begin.file!];
 				if (file) {
 					const resource = getResource(file, background.matcher);
-					this.recordResourceToClean(owner, await resource);
+					this.recordResourceToClean(owner, await resource.uri);
 				} else {
 					this.recordResourcesToClean(owner);
 				}

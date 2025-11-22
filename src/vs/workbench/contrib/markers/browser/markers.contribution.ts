@@ -282,6 +282,31 @@ registerAction2(class extends ViewAction<IMarkersView> {
 registerAction2(class extends ViewAction<IMarkersView> {
 	constructor() {
 		super({
+			id: `workbench.actions.${Markers.MARKERS_VIEW_ID}.toggleProblemDetails`,
+			title: localize('show problem details', "Show Problem Details"),
+			category: localize('problems', "Problems"),
+			toggled: MarkersContextKeys.ShowProblemDetailsFilterContextKey,
+			metadata: {
+				description: localize2('toggleProblemDetailsDescription', "Show or hide problem details (sub-problems and related information) in the problems view.")
+			},
+			menu: {
+				id: viewFilterSubmenu,
+				group: '1_filter',
+				when: ContextKeyExpr.equals('view', Markers.MARKERS_VIEW_ID),
+				order: 5
+			},
+			viewId: Markers.MARKERS_VIEW_ID
+		});
+	}
+
+	async runInView(serviceAccessor: ServicesAccessor, view: IMarkersView): Promise<void> {
+		view.filters.showProblemDetails = !view.filters.showProblemDetails;
+	}
+});
+
+registerAction2(class extends ViewAction<IMarkersView> {
+	constructor() {
+		super({
 			id: `workbench.actions.${Markers.MARKERS_VIEW_ID}.toggleActiveFile`,
 			title: localize('show active file', "Show Active File Only"),
 			metadata: {

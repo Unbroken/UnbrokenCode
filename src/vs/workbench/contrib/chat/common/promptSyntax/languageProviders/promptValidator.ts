@@ -504,7 +504,7 @@ export function isGithubTarget(promptType: PromptsType, target: string | undefin
 }
 
 function toMarker(message: string, range: Range, severity = MarkerSeverity.Error): IMarkerData {
-	return { severity, message, ...range };
+	return { severity, message, ...range, resourceSequenceNumber: 0, sequenceNumber: 0 };
 }
 
 export class PromptValidatorContribution extends Disposable {

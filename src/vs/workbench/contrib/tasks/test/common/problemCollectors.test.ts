@@ -38,7 +38,7 @@ suite('ProblemCollectors', () => {
 				override getModels(): ITextModel[] { return []; }
 			};
 			const matcher: ProblemMatcher = {
-				owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace',
+				owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace', resourceSequenceNumberMap: new Map(), resourceSequenceNumber: 0, matcherSequenceNumber: 0,
 				pattern: { regexp: /^(.*):(\d+): (.*)$/, file: 1, line: 2, message: 3 },
 				watching: { activeOnStart: true, beginsPattern: { regexp: /^begin$/ }, endsPattern: { regexp: /^end$/ } }
 			};
@@ -78,7 +78,7 @@ suite('ProblemCollectors', () => {
 			override getModels(): ITextModel[] { return []; }
 		};
 		const matcher: ProblemMatcher = {
-			owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace',
+			owner: 'test', applyTo: ApplyToKind.allDocuments, fileLocation: FileLocationKind.Relative, filePrefix: '/workspace', resourceSequenceNumberMap: new Map(), resourceSequenceNumber: 0, matcherSequenceNumber: 0,
 			pattern: { regexp: /^(.*):(\d+): (.*)$/, file: 1, line: 2, message: 3 },
 			watching: { activeOnStart: true, beginsPattern: { regexp: /^begin$/ }, endsPattern: { regexp: /^end$/ } }
 		};
@@ -133,6 +133,9 @@ suite('ProblemCollectors', () => {
 			owner: 'test',
 			applyTo: ApplyToKind.allDocuments,
 			fileLocation: FileLocationKind.Absolute,
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0,
 			pattern: { regexp: problemPattern },
 			watching: {
 				activeOnStart: true,

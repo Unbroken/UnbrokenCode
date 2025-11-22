@@ -275,7 +275,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = '    /workspace/app.cs(5,10): error CS1001: Sample message';
 		const result = matcher.handle([line]);
@@ -290,7 +293,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = '/workspace/app.cs(3,7): warning : Message without code';
 		const result = matcher.handle([line]);
@@ -305,7 +311,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = 'Main.cs: warning CS0168: The variable \'x\' is declared but never used';
 		const result = matcher.handle([line]);
@@ -321,7 +330,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = '  1>c:/workspace/app.cs(12): fatal error C1002: Fatal diagnostics';
 		const result = matcher.handle([line]);
@@ -337,7 +349,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = '2>/workspace/app.cs(20,5): info INF1001: Informational diagnostics';
 		const result = matcher.handle([line]);
@@ -353,7 +368,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = 'Main.cs(17,20): subcategory warning CS0168: The variable \'x\' is declared but never used';
 		const result = matcher.handle([line]);
@@ -369,7 +387,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = '  12>c:/workspace/Main.cs(42,7,43,2): subcategory fatal error CS9999: Complex diagnostics';
 		const result = matcher.handle([line]);
@@ -389,7 +410,10 @@ suite('ProblemPatternRegistry - msCompile', () => {
 			owner: 'msCompile',
 			applyTo: matchers.ApplyToKind.allDocuments,
 			fileLocation: matchers.FileLocationKind.Absolute,
-			pattern: matchers.ProblemPatternRegistry.get('msCompile')
+			pattern: matchers.ProblemPatternRegistry.get('msCompile'),
+			resourceSequenceNumberMap: new Map(),
+			resourceSequenceNumber: 0,
+			matcherSequenceNumber: 0
 		});
 		const line = 'warning: The variable \'x\' is declared but never used';
 		const result = matcher.handle([line]);

@@ -1063,7 +1063,7 @@ export class ExtHostChatSessions extends Disposable implements ExtHostChatSessio
 		const range = ref.range ? { start: ref.range[0], endExclusive: ref.range[1] } : undefined;
 
 		if (value && value instanceof extHostTypes.ChatReferenceDiagnostic && Array.isArray(value.diagnostics) && value.diagnostics.length && value.diagnostics[0][1].length) {
-			const marker = Diagnostic.from(value.diagnostics[0][1][0]);
+			const marker = Diagnostic.from(value.diagnostics[0][1][0], 0, 0);
 			const refValue: IDiagnosticVariableEntryFilterData = {
 				filterRange: { startLineNumber: marker.startLineNumber, startColumn: marker.startColumn, endLineNumber: marker.endLineNumber, endColumn: marker.endColumn },
 				filterSeverity: marker.severity,

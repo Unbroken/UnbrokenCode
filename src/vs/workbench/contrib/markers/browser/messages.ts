@@ -5,6 +5,7 @@
 
 import * as nls from '../../../../nls.js';
 import { basename } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
 import { MarkerSeverity, IRelatedInformation } from '../../../../platform/markers/common/markers.js';
 import { ILocalizedString } from '../../../../platform/action/common/action.js';
 import { Marker } from './markersModel.js';
@@ -32,6 +33,7 @@ export default class Messages {
 	public static MARKERS_PANEL_FILTER_LABEL_SHOW_ERRORS: string = nls.localize('markers.panel.filter.showErrors', "Show Errors");
 	public static MARKERS_PANEL_FILTER_LABEL_SHOW_WARNINGS: string = nls.localize('markers.panel.filter.showWarnings', "Show Warnings");
 	public static MARKERS_PANEL_FILTER_LABEL_SHOW_INFOS: string = nls.localize('markers.panel.filter.showInfos', "Show Infos");
+	public static MARKERS_PANEL_FILTER_LABEL_SHOW_PROBLEM_DETAILS: string = nls.localize('markers.panel.filter.showProblemDetails', "Show Problem Details");
 	public static MARKERS_PANEL_FILTER_LABEL_EXCLUDED_FILES: string = nls.localize('markers.panel.filter.useFilesExclude', "Hide Excluded Files");
 	public static MARKERS_PANEL_FILTER_LABEL_ACTIVE_FILE: string = nls.localize('markers.panel.filter.activeFile', "Show Active File Only");
 	public static MARKERS_PANEL_ACTION_TOOLTIP_FILTER: string = nls.localize('markers.panel.action.filter', "Filter Problems");
@@ -73,5 +75,7 @@ export default class Messages {
 		}
 	};
 	public static readonly MARKERS_TREE_ARIA_LABEL_RELATED_INFORMATION = (relatedInformation: IRelatedInformation): string => nls.localize('problems.tree.aria.label.relatedinfo.message', "{0} at line {1} and character {2} in {3}", relatedInformation.message, relatedInformation.startLineNumber, relatedInformation.startColumn, basename(relatedInformation.resource));
+	public static readonly MARKERS_TREE_ARIA_LABEL_CATEGORY = (name: string, count: number): string => nls.localize('problems.tree.aria.label.category', "Problem category {0} with {1} problems", name, count);
+	public static readonly MARKERS_TREE_ARIA_LABEL_SUBPROBLEM = (category: string, message: string, startLineNumber: number, startColumn: number, resource: URI): string => nls.localize('problems.tree.aria.label.subproblem', "Sub-problem in category {0}: {1} at line {2} and character {3} in {4}", category, message, startLineNumber, startColumn, basename(resource));
 	public static SHOW_ERRORS_WARNINGS_ACTION_LABEL: string = nls.localize('errors.warnings.show.label', "Show Errors and Warnings");
 }

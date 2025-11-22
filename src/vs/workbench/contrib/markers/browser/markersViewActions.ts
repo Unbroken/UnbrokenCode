@@ -22,6 +22,7 @@ export interface IMarkersFiltersChangeEvent {
 	showWarnings?: boolean;
 	showErrors?: boolean;
 	showInfos?: boolean;
+	showProblemDetails?: boolean;
 	activeFile?: boolean;
 }
 
@@ -30,6 +31,7 @@ export interface IMarkersFiltersOptions {
 	showErrors: boolean;
 	showWarnings: boolean;
 	showInfos: boolean;
+	showProblemDetails: boolean;
 	excludedFiles: boolean;
 	activeFile: boolean;
 }
@@ -56,6 +58,9 @@ export class MarkersFilters extends Disposable {
 
 		this._showErrors = MarkersContextKeys.ShowErrorsFilterContextKey.bindTo(contextKeyService);
 		this._showErrors.set(options.showErrors);
+
+		this._showProblemDetails = MarkersContextKeys.ShowProblemDetailsFilterContextKey.bindTo(contextKeyService);
+		this._showProblemDetails.set(options.showProblemDetails);
 
 		this.filterHistory = options.filterHistory;
 	}
@@ -114,6 +119,17 @@ export class MarkersFilters extends Disposable {
 		if (this._showInfos.get() !== showInfos) {
 			this._showInfos.set(showInfos);
 			this._onDidChange.fire({ showInfos: true });
+		}
+	}
+
+	private readonly _showProblemDetails: IContextKey<boolean>;
+	get showProblemDetails(): boolean {
+		return !!this._showProblemDetails.get();
+	}
+	set showProblemDetails(showProblemDetails: boolean) {
+		if (this._showProblemDetails.get() !== showProblemDetails) {
+			this._showProblemDetails.set(showProblemDetails);
+			this._onDidChange.fire({ showProblemDetails: true });
 		}
 	}
 

@@ -12,10 +12,10 @@ import { basename, extUri } from '../../../../base/common/resources.js';
 import { splitLines } from '../../../../base/common/strings.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IRange, Range } from '../../../../editor/common/core/range.js';
-import { IMarker, IMarkerData, IRelatedInformation, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
+import { IMarker, IMarkerData, IRelatedInformation, IResourceMarker, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { unsupportedSchemas } from '../../../../platform/markers/common/markerService.js';
 
-export type MarkerElement = ResourceMarkers | Marker | RelatedInformation;
+export type MarkerElement = ResourceMarkers | Marker | RelatedInformation | SubProblem | Category;
 
 export enum MarkerSortOrder {
 	PositionAndSeverity = 'positionAndSeverity',
@@ -122,6 +122,48 @@ export class ResourceMarkers {
 	}
 }
 
+export class Category {
+	constructor(
+		readonly id: string,
+		readonly name: string,
+		readonly problems: SubProblem[],
+	) { }
+
+	toString(): string {
+		return JSON.stringify({
+			category: this.name,
+			problems: this.problems.length,
+		}, null, '\t');
+	}
+}
+
+export class SubProblem {
+	get resource(): URI { return this.resourceMarker.resource; }
+	get range(): IRange { return this.resourceMarker.marker; }
+
+	private _lines: string[] | undefined;
+	get lines(): string[] {
+		if (!this._lines) {
+			this._lines = splitLines(this.resourceMarker.marker.message);
+		}
+		return this._lines;
+	}
+
+	constructor(
+		readonly id: string,
+		readonly resourceMarker: IResourceMarker,
+		readonly category: string,
+	) { }
+
+	toString(): string {
+		return JSON.stringify({
+			...this.resourceMarker.marker,
+			resource: this.resourceMarker.resource.path,
+			category: this.category
+		}, null, '\t');
+	}
+}
+
 export class Marker {
 
 	get resource(): URI { return this.marker.resource; }
@@ -138,14 +180,22 @@ export class Marker {
 	constructor(
 		readonly id: string,
 		readonly marker: IMarker,
-		readonly relatedInformation: RelatedInformation[] = []
+		readonly relatedInformation: RelatedInformation[] = [],
+		readonly categories: Category[] = [],
 	) { }
 
 	toString(): string {
 		return JSON.stringify({
 			...this.marker,
 			resource: this.marker.resource.path,
-			relatedInformation: this.relatedInformation.length ? this.relatedInformation.map(r => ({ ...r.raw, resource: r.raw.resource.path })) : undefined
+			relatedInformation: this.relatedInformation.length ? this.relatedInformation.map(r => ({ ...r.raw, resource: r.raw.resource.path })) : undefined,
+			categories: this.categories.length ? this.categories.map(c => ({
+				name: c.name,
+				problems: c.problems.map(p => ({
+					resource: p.resource.path,
+					marker: p.resourceMarker.marker
+				}))
+			})) : undefined
 		}, null, '\t');
 	}
 }
@@ -158,7 +208,7 @@ export class MarkerTableItem extends Marker {
 		readonly messageMatches?: IMatch[],
 		readonly fileMatches?: IMatch[]
 	) {
-		super(marker.id, marker.marker, marker.relatedInformation);
+		super(marker.id, marker.marker, marker.relatedInformation, marker.categories);
 	}
 }
 
@@ -273,7 +323,20 @@ export class MarkersModel {
 						relatedInformation = rawMarker.relatedInformation.map((r, index) => new RelatedInformation(this.id(markerId, r.resource.toString(), r.startLineNumber, r.startColumn, r.endLineNumber, r.endColumn, index), rawMarker, r));
 					}
 
-					return new Marker(markerId, rawMarker, relatedInformation);
+					let categories: Category[] = [];
+					if (rawMarker.subProblems && rawMarker.subProblems.length > 0) {
+						categories = rawMarker.subProblems.map((categoryGroup, categoryIndex) => {
+							const categoryId = this.id(markerId, 'category', categoryIndex);
+							const subProblems = categoryGroup.problems.map((resourceMarker, index) => {
+								const subProblemId = this.id(markerId, resourceMarker.resource.toString(), resourceMarker.marker.startLineNumber, resourceMarker.marker.startColumn, resourceMarker.marker.endLineNumber, resourceMarker.marker.endColumn, index, categoryGroup.category);
+								return new SubProblem(subProblemId, resourceMarker, categoryGroup.category);
+							});
+							return new Category(categoryId, categoryGroup.category, subProblems);
+						});
+					}
+					const marker = new Marker(markerId, rawMarker, relatedInformation, categories);
+
+					return marker;
 				});
 
 				this._total -= resourceMarkers.total;

@@ -27,6 +27,8 @@ export const debugIconStartForeground = registerColor('debugIcon.startForeground
 	hcLight: '#388A34'
 }, localize('debugIcon.startForeground', "Debug toolbar icon for start debugging."));
 
+export const debugConsoleBackground = registerColor('debugConsole.background', null, localize('debugConsole.background', "Background color for the debug console text area. When not set, the panel background color is used."));
+
 export function registerColors() {
 
 	const debugTokenExpressionName = registerColor('debugTokenExpression.name', { dark: '#c586c0', light: '#9b46b0', hcDark: foreground, hcLight: foreground }, 'Foreground color for the token names shown in the debug views (ie. the Variables or Watch view).');

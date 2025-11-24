@@ -318,7 +318,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 				if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 					XtermTerminal._suggestedRendererType = undefined;
 				}
-				if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration(LayoutSettings.MODERN_UI)) {
+				if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily') || e.affectsConfiguration(LayoutSettings.MODERN_UI)) {
 					this.updateConfig();
 				}
 				if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
@@ -656,6 +656,18 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		return (this._terminalConfigurationService.config.gpuAcceleration === 'auto' && XtermTerminal._suggestedRendererType === undefined) || this._terminalConfigurationService.config.gpuAcceleration === 'on';
 	}
 
+	private _resolveCustomGlyphs(): boolean {
+		const config = this._terminalConfigurationService.config;
+		if (config.customGlyphs === 'auto') {
+			// Use font glyphs for Unbroken fonts, otherwise use custom glyphs
+			// Check terminal font first, then fall back to editor font (matching getFont() logic)
+			const editorConfig = this._configurationService.getValue<IEditorOptions>('editor');
+			const fontFamily = config.fontFamily || editorConfig.fontFamily || '';
+			return !fontFamily.toLowerCase().includes('unbroken');
+		}
+		return config.customGlyphs === 'on';
+	}
+
 	forceRedraw() {
 		this.raw.clearTextureAtlas();
 	}
@@ -980,7 +992,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 
 	private _getWebglCustomGlyphs(): boolean {
 		// The custom glyph rasterizer creates a canvas through the rendering document, which is blocked in auxiliary windows.
-		return this._terminalConfigurationService.config.customGlyphs && this.raw.element?.ownerDocument === this._mainDocument;
+		return this._resolveCustomGlyphs() && this.raw.element?.ownerDocument === this._mainDocument;
 	}
 
 	@debounce(100)

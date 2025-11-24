@@ -201,7 +201,7 @@ export interface ITerminalConfiguration {
 	};
 	bellDuration: number;
 	defaultLocation: TerminalLocationConfigValue;
-	customGlyphs: boolean;
+	customGlyphs: 'auto' | 'on' | 'off';
 	persistentSessionReviveProcess: 'onExit' | 'onExitAndWindowClose' | 'never';
 	ignoreProcessNames: string[];
 	shellIntegration?: {

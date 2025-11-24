@@ -74,6 +74,7 @@ import { ReplEvaluationResult, ReplGroup } from '../common/replModel.js';
 import { FocusSessionActionViewItem } from './debugActionViewItems.js';
 import { DEBUG_COMMAND_CATEGORY, FOCUS_REPL_ID } from './debugCommands.js';
 import { DebugExpressionRenderer } from './debugExpressionRenderer.js';
+import { debugConsoleBackground } from './debugColors.js';
 import { debugConsoleClearAll, debugConsoleEvaluationPrompt } from './debugIcons.js';
 import './media/repl.css';
 import { ReplFilter } from './replFilter.js';
@@ -401,6 +402,11 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 
 				.repl .repl-input-wrapper .monaco-editor .lines-content {
 					background-color: ${this.replOptions.replConfiguration.backgroundColor};
+				}
+
+				.repl .repl-tree .monaco-list,
+				.repl .repl-tree .monaco-list-rows {
+					background-color: ${this.replOptions.replConfiguration.backgroundColor} !important;
 				}
 			`;
 			const cssFontFamily = this.replOptions.replConfiguration.fontFamily === 'default' ? 'var(--monaco-monospace-font)' : this.replOptions.replConfiguration.fontFamily;
@@ -894,12 +900,15 @@ class ReplOptions extends Disposable implements IReplOptions {
 
 	private update() {
 		const debugConsole = this.configurationService.getValue<IDebugConfiguration>('debug').console;
+		const theme = this.themeService.getColorTheme();
+		// Try to use debugConsole.background, fall back to location-based background if not set
+		const backgroundColor = theme.getColor(debugConsoleBackground) || theme.getColor(this.backgroundColorDelegate());
 		this._replConfig = {
 			fontSize: debugConsole.fontSize,
 			fontFamily: debugConsole.fontFamily,
 			lineHeight: debugConsole.lineHeight ? debugConsole.lineHeight : ReplOptions.lineHeightEm * debugConsole.fontSize,
 			cssLineHeight: debugConsole.lineHeight ? `${debugConsole.lineHeight}px` : `${ReplOptions.lineHeightEm}em`,
-			backgroundColor: this.themeService.getColorTheme().getColor(this.backgroundColorDelegate()),
+			backgroundColor,
 			fontSizeForTwistie: debugConsole.fontSize * ReplOptions.lineHeightEm / 2 - 8
 		};
 		this._onDidChange.fire();

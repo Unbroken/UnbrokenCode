@@ -27,7 +27,7 @@ import { ICodeEditor, isCodeEditor } from '../../../../editor/browser/editorBrow
 import { EditorAction, registerEditorAction } from '../../../../editor/browser/editorExtensions.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
+import { EditorOption, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -389,7 +389,7 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 			this.replInput.updateOptions({
 				fontSize: this.replOptions.replConfiguration.fontSize,
 				lineHeight: this.replOptions.replConfiguration.lineHeight,
-				fontFamily: this.replOptions.replConfiguration.fontFamily === 'default' ? EDITOR_FONT_DEFAULTS.fontFamily : this.replOptions.replConfiguration.fontFamily
+				fontFamily: this.replOptions.replConfiguration.fontFamily
 			});
 
 			const replInputLineHeight = this.replInput.getOption(EditorOption.lineHeight);
@@ -409,8 +409,7 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 					background-color: ${this.replOptions.replConfiguration.backgroundColor} !important;
 				}
 			`;
-			const cssFontFamily = this.replOptions.replConfiguration.fontFamily === 'default' ? 'var(--monaco-monospace-font)' : this.replOptions.replConfiguration.fontFamily;
-			this.container.style.setProperty(`--vscode-repl-font-family`, cssFontFamily);
+			this.container.style.setProperty(`--vscode-repl-font-family`, this.replOptions.replConfiguration.fontFamily);
 			this.container.style.setProperty(`--vscode-repl-font-size`, `${this.replOptions.replConfiguration.fontSize}px`);
 			this.container.style.setProperty(`--vscode-repl-font-size-for-twistie`, `${this.replOptions.replConfiguration.fontSizeForTwistie}px`);
 			this.container.style.setProperty(`--vscode-repl-line-height`, this.replOptions.replConfiguration.cssLineHeight);
@@ -900,12 +899,13 @@ class ReplOptions extends Disposable implements IReplOptions {
 
 	private update() {
 		const debugConsole = this.configurationService.getValue<IDebugConfiguration>('debug').console;
+		const editorConfig = this.configurationService.getValue<IEditorOptions>('editor');
 		const theme = this.themeService.getColorTheme();
 		// Try to use debugConsole.background, fall back to location-based background if not set
 		const backgroundColor = theme.getColor(debugConsoleBackground) || theme.getColor(this.backgroundColorDelegate());
 		this._replConfig = {
 			fontSize: debugConsole.fontSize,
-			fontFamily: debugConsole.fontFamily,
+			fontFamily: debugConsole.fontFamily || editorConfig.fontFamily || EDITOR_FONT_DEFAULTS.fontFamily,
 			lineHeight: debugConsole.lineHeight ? debugConsole.lineHeight : ReplOptions.lineHeightEm * debugConsole.fontSize,
 			cssLineHeight: debugConsole.lineHeight ? `${debugConsole.lineHeight}px` : `${ReplOptions.lineHeightEm}em`,
 			backgroundColor,

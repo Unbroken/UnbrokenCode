@@ -427,6 +427,13 @@ export class CursorStateChangedEvent {
 	}
 
 	public isNoOp(): boolean {
+		// JUMP/NAVIGATION events should never be considered no-op, even if the
+		// cursor position hasn't changed. This ensures navigation history is
+		// recorded properly when navigating to positions that match the current
+		// cursor position (e.g., navigating to the start of a file via import path).
+		if (this.source === 'code.jump' || this.source === 'code.navigation') {
+			return false;
+		}
 		return (
 			CursorStateChangedEvent._selectionsAreEqual(this.oldSelections, this.selections)
 			&& this.oldModelVersionId === this.modelVersionId

@@ -402,7 +402,13 @@ export class CursorsController extends Disposable {
 
 	private _emitStateChangedIfNecessary(eventsCollector: ViewModelEventsCollector, source: string | null | undefined, reason: CursorChangeReason, oldState: CursorModelState | null, reachedMaxCursorCount: boolean): boolean {
 		const newState = CursorModelState.from(this._model, this);
-		if (newState.equals(oldState)) {
+
+		// Always emit events for JUMP/NAVIGATION sources even if position unchanged.
+		// This ensures navigation history is recorded properly when navigating to
+		// positions that match the current cursor position (e.g., start of file).
+		const forceEmit = source === 'code.jump' || source === 'code.navigation';
+
+		if (newState.equals(oldState) && !forceEmit) {
 			return false;
 		}
 
@@ -416,6 +422,7 @@ export class CursorsController extends Disposable {
 		if (!oldState
 			|| oldState.cursorState.length !== newState.cursorState.length
 			|| newState.cursorState.some((newCursorState, i) => !newCursorState.modelState.equals(oldState.cursorState[i].modelState))
+			|| forceEmit
 		) {
 			const oldSelections = oldState ? oldState.cursorState.map(s => s.modelState.selection) : null;
 			const oldModelVersionId = oldState ? oldState.modelVersionId : 0;

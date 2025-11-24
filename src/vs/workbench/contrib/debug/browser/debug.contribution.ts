@@ -577,8 +577,7 @@ configurationRegistry.registerConfiguration({
 		},
 		'debug.console.fontFamily': {
 			type: 'string',
-			description: nls.localize('debug.console.fontFamily', "Controls the font family in the Debug Console."),
-			default: 'default'
+			markdownDescription: nls.localize('debug.console.fontFamily', "Controls the font family in the Debug Console. Defaults to {0}'s value.", '`#editor.fontFamily#`'),
 		},
 		'debug.console.lineHeight': {
 			type: 'number',

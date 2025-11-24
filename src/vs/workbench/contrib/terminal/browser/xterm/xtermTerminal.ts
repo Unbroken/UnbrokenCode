@@ -170,7 +170,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 
 	private _ensureFontLoaded(fontFamily: string): void {
 		// Use the Font Loading API if available to ensure fonts are loaded
-		if ('fonts' in document) {
+		if (document.fonts) {
 			// Try to load both regular and bold weights
 			Promise.all([
 				document.fonts.load(`400 10px "${fontFamily}"`),

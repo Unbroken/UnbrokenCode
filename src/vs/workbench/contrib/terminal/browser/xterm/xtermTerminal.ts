@@ -258,6 +258,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			},
 			ignoreBracketedPasteMode: config.ignoreBracketedPasteMode,
 			rescaleOverlappingGlyphs: config.rescaleOverlappingGlyphs,
+			customGlyphs: config.customGlyphs === 'auto' ? !(config.fontFamily || editorOptions.fontFamily || '').toLowerCase().includes('unbroken') : config.customGlyphs === 'on',
 			windowOptions: {
 				getWinSizePixels: true,
 				getCellSizePixels: true,
@@ -274,7 +275,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 				XtermTerminal._suggestedRendererType = undefined;
 			}
-			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier')) {
+			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily')) {
 				this.updateConfig();
 			}
 			if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
@@ -550,7 +551,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		this.raw.options.macOptionClickForcesSelection = config.macOptionClickForcesSelection;
 		this.raw.options.rightClickSelectsWord = config.rightClickBehavior === 'selectWord';
 		this.raw.options.wordSeparator = config.wordSeparators;
-		this.raw.options.customGlyphs = config.customGlyphs;
+		this.raw.options.customGlyphs = this._resolveCustomGlyphs();
 		this.raw.options.ignoreBracketedPasteMode = config.ignoreBracketedPasteMode;
 		this.raw.options.rescaleOverlappingGlyphs = config.rescaleOverlappingGlyphs;
 		this.raw.options.overviewRuler = {
@@ -576,6 +577,18 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 
 	private _shouldLoadWebgl(): boolean {
 		return (this._terminalConfigurationService.config.gpuAcceleration === 'auto' && XtermTerminal._suggestedRendererType === undefined) || this._terminalConfigurationService.config.gpuAcceleration === 'on';
+	}
+
+	private _resolveCustomGlyphs(): boolean {
+		const config = this._terminalConfigurationService.config;
+		if (config.customGlyphs === 'auto') {
+			// Use font glyphs for Unbroken fonts, otherwise use custom glyphs
+			// Check terminal font first, then fall back to editor font (matching getFont() logic)
+			const editorConfig = this._configurationService.getValue<IEditorOptions>('editor');
+			const fontFamily = config.fontFamily || editorConfig.fontFamily || '';
+			return !fontFamily.toLowerCase().includes('unbroken');
+		}
+		return config.customGlyphs === 'on';
 	}
 
 	forceRedraw() {

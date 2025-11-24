@@ -7,12 +7,12 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { EDITOR_FONT_DEFAULTS } from '../../../../editor/common/config/fontInfo.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ITerminalConfigurationService, LinuxDistro } from './terminal.js';
 import type { IXtermCore } from './xterm-private.js';
 import { DEFAULT_BOLD_FONT_WEIGHT, DEFAULT_FONT_WEIGHT, DEFAULT_LETTER_SPACING, DEFAULT_LINE_HEIGHT, FontWeight, ITerminalConfiguration, MAXIMUM_FONT_WEIGHT, MINIMUM_FONT_WEIGHT, MINIMUM_LETTER_SPACING, TERMINAL_CONFIG_SECTION, type ITerminalFont } from '../common/terminal.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
-import { TerminalLocation, TerminalLocationConfigValue } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalLocation, TerminalLocationConfigValue, TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
 import { isString } from '../../../../base/common/types.js';
 import { clamp } from '../../../../base/common/numbers.js';
 
@@ -58,6 +58,7 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 		const configValues = { ...this._configurationService.getValue<ITerminalConfiguration>(TERMINAL_CONFIG_SECTION) };
 		configValues.fontWeight = this._normalizeFontWeight(configValues.fontWeight, DEFAULT_FONT_WEIGHT);
 		configValues.fontWeightBold = this._normalizeFontWeight(configValues.fontWeightBold, DEFAULT_BOLD_FONT_WEIGHT);
+		configValues.customGlyphs = this._normalizeCustomGlyphs(configValues.customGlyphs);
 		this._config = configValues;
 		this._onConfigChanged.fire();
 	}
@@ -67,6 +68,31 @@ export class TerminalConfigurationService extends Disposable implements ITermina
 			return input;
 		}
 		return clampInt(input, MINIMUM_FONT_WEIGHT, MAXIMUM_FONT_WEIGHT, defaultWeight);
+	}
+
+	private _normalizeCustomGlyphs(input: string | boolean): 'auto' | 'on' | 'off' {
+		// Migrate legacy boolean values to new string format
+		if (input === true) {
+			this._migrateCustomGlyphsSetting('on');
+			return 'on';
+		}
+		if (input === false) {
+			this._migrateCustomGlyphsSetting('off');
+			return 'off';
+		}
+		if (input === 'on' || input === 'off') {
+			return input;
+		}
+		return 'auto';
+	}
+
+	private _migrateCustomGlyphsSetting(newValue: 'on' | 'off'): void {
+		// Only migrate user settings to avoid writing values that other VS Code-based IDEs
+		// might not understand to shared workspace/folder settings files
+		const inspected = this._configurationService.inspect(TerminalSettingId.CustomGlyphs);
+		if (typeof inspected.userValue === 'boolean') {
+			this._configurationService.updateValue(TerminalSettingId.CustomGlyphs, newValue, ConfigurationTarget.USER);
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ import './media/stickyScroll.css';
 import { localize } from '../../../../../nls.js';
 import { IMenu, IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IEditorOptions } from '../../../../../editor/common/config/editorOptions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -73,7 +74,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		private readonly _xtermColorProvider: IXtermColorProvider,
 		private readonly _commandDetection: ICommandDetectionCapability,
 		xtermCtor: Promise<typeof XTermTerminal>,
-		@IConfigurationService configurationService: IConfigurationService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IContextMenuService private readonly _contextMenuService: IContextMenuService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
@@ -91,12 +92,12 @@ export class TerminalStickyScrollOverlay extends Disposable {
 		}));
 
 		// React to configuration changes
-		this._register(Event.runAndSubscribe(configurationService.onDidChangeConfiguration, e => {
+		this._register(Event.runAndSubscribe(this._configurationService.onDidChangeConfiguration, e => {
 			if (!e || e.affectsConfiguration(TerminalStickyScrollSettingId.MaxLineCount)) {
-				this._rawMaxLineCount = configurationService.getValue(TerminalStickyScrollSettingId.MaxLineCount);
+				this._rawMaxLineCount = this._configurationService.getValue(TerminalStickyScrollSettingId.MaxLineCount);
 			}
 			if (!e || e.affectsConfiguration(TerminalStickyScrollSettingId.IgnoredCommands)) {
-				this._ignoredCommands = configurationService.getValue(TerminalStickyScrollSettingId.IgnoredCommands);
+				this._ignoredCommands = this._configurationService.getValue(TerminalStickyScrollSettingId.IgnoredCommands);
 			}
 		}));
 
@@ -116,7 +117,7 @@ export class TerminalStickyScrollOverlay extends Disposable {
 			}));
 			this._refreshGpuAcceleration();
 
-			this._register(configurationService.onDidChangeConfiguration(e => {
+			this._register(this._configurationService.onDidChangeConfiguration(e => {
 				if (e.affectsConfiguration(TERMINAL_CONFIG_SECTION)) {
 					this._syncOptions();
 				}
@@ -501,16 +502,17 @@ export class TerminalStickyScrollOverlay extends Disposable {
 
 	@throttle(0)
 	private async _refreshGpuAcceleration() {
-		if (this._shouldLoadWebgl() && (!this._webglAddon.value || this._webglAddonCustomGlyphs !== this._terminalConfigurationService.config.customGlyphs)) {
+		const customGlyphs = this._resolveCustomGlyphs();
+		if (this._shouldLoadWebgl() && (!this._webglAddon.value || this._webglAddonCustomGlyphs !== customGlyphs)) {
 			const WebglAddon = await this._xtermAddonLoader.importAddon('webgl');
 			if (this._store.isDisposed) {
 				return;
 			}
 			// Dispose of existing addon before creating a new one to avoid leaking WebGL contexts
 			this._webglAddon.value = new WebglAddon({
-				customGlyphs: this._terminalConfigurationService.config.customGlyphs
+				customGlyphs
 			});
-			this._webglAddonCustomGlyphs = this._terminalConfigurationService.config.customGlyphs;
+			this._webglAddonCustomGlyphs = customGlyphs;
 			this._stickyScrollOverlay?.loadAddon(this._webglAddon.value);
 		} else if (!this._shouldLoadWebgl() && this._webglAddon.value) {
 			this._webglAddon.clear();
@@ -519,6 +521,17 @@ export class TerminalStickyScrollOverlay extends Disposable {
 
 	private _shouldLoadWebgl(): boolean {
 		return this._terminalConfigurationService.config.gpuAcceleration === 'auto' || this._terminalConfigurationService.config.gpuAcceleration === 'on';
+	}
+
+	private _resolveCustomGlyphs(): boolean {
+		const config = this._terminalConfigurationService.config;
+		if (config.customGlyphs === 'auto') {
+			// Use font glyphs for Unbroken fonts, otherwise use custom glyphs
+			const editorConfig = this._configurationService.getValue<IEditorOptions>('editor');
+			const fontFamily = config.fontFamily || editorConfig.fontFamily || '';
+			return !fontFamily.toLowerCase().includes('unbroken');
+		}
+		return config.customGlyphs === 'on';
 	}
 
 	private _getTheme(isHovering: boolean): ITheme {

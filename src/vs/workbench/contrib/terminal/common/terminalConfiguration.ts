@@ -574,8 +574,14 @@ const terminalConfiguration: IStringDictionary<IConfigurationPropertySchema> = {
 			'- Git Branch Symbols (U+F5D0-U+F60D, Private Use Area)',
 			'- Symbols for Legacy Computing (U+1FB00-U+1FBFF)'
 		].join('\n'), `\`#${TerminalSettingId.GpuAcceleration}#\``),
-		type: 'boolean',
-		default: true
+		type: 'string',
+		enum: ['auto', 'on', 'off'],
+		markdownEnumDescriptions: [
+			localize('terminal.integrated.customGlyphs.auto', "Use font glyphs for Unbroken fonts, otherwise use custom glyphs."),
+			localize('terminal.integrated.customGlyphs.on', "Always use custom glyphs."),
+			localize('terminal.integrated.customGlyphs.off', "Always use font glyphs.")
+		],
+		default: 'auto'
 	},
 	[TerminalSettingId.RescaleOverlappingGlyphs]: {
 		markdownDescription: localize('terminal.integrated.rescaleOverlappingGlyphs', "Whether to rescale glyphs horizontally that are a single cell wide but have glyphs that would overlap following cell(s). This typically happens for ambiguous width characters (eg. the roman numeral characters U+2160+) which aren't featured in monospace fonts. Emoji glyphs are never rescaled."),

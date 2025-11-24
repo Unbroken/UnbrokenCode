@@ -325,7 +325,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 				if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 					XtermTerminal._suggestedRendererType = undefined;
 				}
-				if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration(LayoutSettings.MODERN_UI)) {
+				if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily') || e.affectsConfiguration(LayoutSettings.MODERN_UI)) {
 					this.updateConfig();
 				}
 				if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
@@ -669,6 +669,18 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		return (this._terminalConfigurationService.config.gpuAcceleration === 'auto' && XtermTerminal._suggestedRendererType === undefined) || this._terminalConfigurationService.config.gpuAcceleration === 'on';
 	}
 
+	private _resolveCustomGlyphs(): boolean {
+		const config = this._terminalConfigurationService.config;
+		if (config.customGlyphs === 'auto') {
+			// Use font glyphs for Unbroken fonts, otherwise use custom glyphs
+			// Check terminal font first, then fall back to editor font (matching getFont() logic)
+			const editorConfig = this._configurationService.getValue<IEditorOptions>('editor');
+			const fontFamily = config.fontFamily || editorConfig?.fontFamily || '';
+			return !fontFamily.toLowerCase().includes('unbroken');
+		}
+		return config.customGlyphs === 'on';
+	}
+
 	forceRedraw() {
 		this.raw.clearTextureAtlas();
 	}
@@ -952,7 +964,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		if (!this.raw.element) {
 			return;
 		}
-		const customGlyphs = this._terminalConfigurationService.config.customGlyphs;
+		const customGlyphs = this._resolveCustomGlyphs();
 		if ((this._webglAddon || this._webglAddonLoading) && this._webglAddonCustomGlyphs === customGlyphs) {
 			return;
 		}
@@ -984,7 +996,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			return;
 		}
 
-		const currentCustomGlyphs = this._terminalConfigurationService.config.customGlyphs;
+		const currentCustomGlyphs = this._resolveCustomGlyphs();
 		if (customGlyphs !== currentCustomGlyphs) {
 			this._webglAddonCustomGlyphs = undefined;
 			await this._enableWebglRenderer();

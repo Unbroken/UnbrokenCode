@@ -127,7 +127,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 	private _searchAddon?: SearchAddonType;
 	private _unicode11Addon?: Unicode11AddonType;
 	private _webglAddon?: WebglAddonType;
-	private _webglAddonCustomGlyphs?: boolean = false;
+	private _webglAddonCustomGlyphs?: boolean;
 	private _serializeAddon?: SerializeAddonType;
 	private _imageAddon?: ImageAddonType;
 	private readonly _ligaturesAddon: MutableDisposable<LigaturesAddonType> = this._register(new MutableDisposable());
@@ -297,7 +297,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 				XtermTerminal._suggestedRendererType = undefined;
 			}
-			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier')) {
+			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily')) {
 				this.updateConfig();
 			}
 			if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
@@ -603,6 +603,18 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		return (this._terminalConfigurationService.config.gpuAcceleration === 'auto' && XtermTerminal._suggestedRendererType === undefined) || this._terminalConfigurationService.config.gpuAcceleration === 'on';
 	}
 
+	private _resolveCustomGlyphs(): boolean {
+		const config = this._terminalConfigurationService.config;
+		if (config.customGlyphs === 'auto') {
+			// Use font glyphs for Unbroken fonts, otherwise use custom glyphs
+			// Check terminal font first, then fall back to editor font (matching getFont() logic)
+			const editorConfig = this._configurationService.getValue<IEditorOptions>('editor');
+			const fontFamily = config.fontFamily || editorConfig.fontFamily || '';
+			return !fontFamily.toLowerCase().includes('unbroken');
+		}
+		return config.customGlyphs === 'on';
+	}
+
 	forceRedraw() {
 		this.raw.clearTextureAtlas();
 	}
@@ -856,18 +868,19 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 
 	private async _enableWebglRenderer(): Promise<void> {
 		// Currently webgl options can only be specified on addon creation
-		if (!this.raw.element || this._webglAddon && this._webglAddonCustomGlyphs === this._terminalConfigurationService.config.customGlyphs) {
+		const customGlyphs = this._resolveCustomGlyphs();
+		if (!this.raw.element || this._webglAddon && this._webglAddonCustomGlyphs === customGlyphs) {
 			return;
 		}
 
 		// Dispose of existing addon before creating a new one to avoid leaking WebGL contexts
 		this._disposeOfWebglRenderer();
 
-		this._webglAddonCustomGlyphs = this._terminalConfigurationService.config.customGlyphs;
+		this._webglAddonCustomGlyphs = customGlyphs;
 
 		const Addon = await this._xtermAddonLoader.importAddon('webgl');
 		this._webglAddon = new Addon({
-			customGlyphs: this._terminalConfigurationService.config.customGlyphs
+			customGlyphs
 		});
 		try {
 			this.raw.loadAddon(this._webglAddon);

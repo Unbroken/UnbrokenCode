@@ -46,11 +46,28 @@ import { equals } from '../../../../../base/common/objects.js';
 import type { IProgressState } from '@xterm/addon-progress';
 import type { CommandDetectionCapability } from '../../../../../platform/terminal/common/capabilities/commandDetectionCapability.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Color } from '../../../../../base/common/color.js';
 
 const enum RenderConstants {
 	SmoothScrollDuration = 125
 }
 
+/**
+ * Converts a Color to a string format that xterm.js can parse.
+ * xterm.js only supports hex (#RRGGBB), rgb(), and rgba() formats,
+ * not CSS Color Level 4 color() function syntax (e.g., display-p3).
+ */
+function toXtermColor(color: Color | undefined): string | undefined {
+	if (!color) {
+		return undefined;
+	}
+	// Always use hex for opaque colors, rgba for transparent
+	// This avoids the color() function format that xterm doesn't support
+	if (color.isOpaque()) {
+		return Color.Format.CSS.formatHex(color);
+	}
+	return Color.Format.CSS.formatRGBA(color);
+}
 
 function getFullBufferLineAsString(lineIndex: number, buffer: IBuffer): { lineData: string | undefined; lineIndex: number } {
 	let line = buffer.getLine(lineIndex);
@@ -626,14 +643,16 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		const findMatchHighlightBackground = theme.getColor(TERMINAL_FIND_MATCH_HIGHLIGHT_BACKGROUND_COLOR);
 		const findMatchHighlightBorder = theme.getColor(TERMINAL_FIND_MATCH_HIGHLIGHT_BORDER_COLOR);
 		const findMatchHighlightOverviewRuler = theme.getColor(TERMINAL_OVERVIEW_RULER_FIND_MATCH_FOREGROUND_COLOR);
+		// Use toXtermColor() to convert colors to a format xterm.js understands.
+		// xterm.js doesn't support CSS Color Level 4 color() function (e.g., display-p3).
 		searchOptions.decorations = {
-			activeMatchBackground: findMatchBackground?.toString(),
-			activeMatchBorder: findMatchBorder?.toString() || 'transparent',
-			activeMatchColorOverviewRuler: findMatchOverviewRuler?.toString() || 'transparent',
+			activeMatchBackground: toXtermColor(findMatchBackground),
+			activeMatchBorder: toXtermColor(findMatchBorder) || 'transparent',
+			activeMatchColorOverviewRuler: toXtermColor(findMatchOverviewRuler) || 'transparent',
 			// decoration bgs don't support the alpha channel so blend it with the regular bg
-			matchBackground: terminalBackground ? findMatchHighlightBackground?.blend(terminalBackground).toString() : undefined,
-			matchBorder: findMatchHighlightBorder?.toString() || 'transparent',
-			matchOverviewRuler: findMatchHighlightOverviewRuler?.toString() || 'transparent'
+			matchBackground: terminalBackground && findMatchHighlightBackground ? toXtermColor(findMatchHighlightBackground.blend(terminalBackground)) : undefined,
+			matchBorder: toXtermColor(findMatchHighlightBorder) || 'transparent',
+			matchOverviewRuler: toXtermColor(findMatchHighlightOverviewRuler) || 'transparent'
 		};
 	}
 
@@ -940,34 +959,36 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		const selectionInactiveBackgroundColor = theme.getColor(TERMINAL_INACTIVE_SELECTION_BACKGROUND_COLOR);
 		const selectionForegroundColor = theme.getColor(TERMINAL_SELECTION_FOREGROUND_COLOR) || undefined;
 
+		// Use toXtermColor() to convert colors to a format xterm.js understands.
+		// xterm.js doesn't support CSS Color Level 4 color() function (e.g., display-p3).
 		return {
-			background: backgroundColor?.toString(),
-			foreground: foregroundColor?.toString(),
-			cursor: cursorColor?.toString(),
-			cursorAccent: cursorAccentColor?.toString(),
-			selectionBackground: selectionBackgroundColor?.toString(),
-			selectionInactiveBackground: selectionInactiveBackgroundColor?.toString(),
-			selectionForeground: selectionForegroundColor?.toString(),
-			overviewRulerBorder: hideOverviewRuler ? '#0000' : theme.getColor(TERMINAL_OVERVIEW_RULER_BORDER_COLOR)?.toString(),
-			scrollbarSliderActiveBackground: theme.getColor(scrollbarSliderActiveBackground)?.toString(),
-			scrollbarSliderBackground: theme.getColor(scrollbarSliderBackground)?.toString(),
-			scrollbarSliderHoverBackground: theme.getColor(scrollbarSliderHoverBackground)?.toString(),
-			black: theme.getColor(ansiColorIdentifiers[0])?.toString(),
-			red: theme.getColor(ansiColorIdentifiers[1])?.toString(),
-			green: theme.getColor(ansiColorIdentifiers[2])?.toString(),
-			yellow: theme.getColor(ansiColorIdentifiers[3])?.toString(),
-			blue: theme.getColor(ansiColorIdentifiers[4])?.toString(),
-			magenta: theme.getColor(ansiColorIdentifiers[5])?.toString(),
-			cyan: theme.getColor(ansiColorIdentifiers[6])?.toString(),
-			white: theme.getColor(ansiColorIdentifiers[7])?.toString(),
-			brightBlack: theme.getColor(ansiColorIdentifiers[8])?.toString(),
-			brightRed: theme.getColor(ansiColorIdentifiers[9])?.toString(),
-			brightGreen: theme.getColor(ansiColorIdentifiers[10])?.toString(),
-			brightYellow: theme.getColor(ansiColorIdentifiers[11])?.toString(),
-			brightBlue: theme.getColor(ansiColorIdentifiers[12])?.toString(),
-			brightMagenta: theme.getColor(ansiColorIdentifiers[13])?.toString(),
-			brightCyan: theme.getColor(ansiColorIdentifiers[14])?.toString(),
-			brightWhite: theme.getColor(ansiColorIdentifiers[15])?.toString()
+			background: toXtermColor(backgroundColor),
+			foreground: toXtermColor(foregroundColor),
+			cursor: toXtermColor(cursorColor),
+			cursorAccent: toXtermColor(cursorAccentColor),
+			selectionBackground: toXtermColor(selectionBackgroundColor),
+			selectionInactiveBackground: toXtermColor(selectionInactiveBackgroundColor),
+			selectionForeground: toXtermColor(selectionForegroundColor),
+			overviewRulerBorder: hideOverviewRuler ? '#0000' : toXtermColor(theme.getColor(TERMINAL_OVERVIEW_RULER_BORDER_COLOR)),
+			scrollbarSliderActiveBackground: toXtermColor(theme.getColor(scrollbarSliderActiveBackground)),
+			scrollbarSliderBackground: toXtermColor(theme.getColor(scrollbarSliderBackground)),
+			scrollbarSliderHoverBackground: toXtermColor(theme.getColor(scrollbarSliderHoverBackground)),
+			black: toXtermColor(theme.getColor(ansiColorIdentifiers[0])),
+			red: toXtermColor(theme.getColor(ansiColorIdentifiers[1])),
+			green: toXtermColor(theme.getColor(ansiColorIdentifiers[2])),
+			yellow: toXtermColor(theme.getColor(ansiColorIdentifiers[3])),
+			blue: toXtermColor(theme.getColor(ansiColorIdentifiers[4])),
+			magenta: toXtermColor(theme.getColor(ansiColorIdentifiers[5])),
+			cyan: toXtermColor(theme.getColor(ansiColorIdentifiers[6])),
+			white: toXtermColor(theme.getColor(ansiColorIdentifiers[7])),
+			brightBlack: toXtermColor(theme.getColor(ansiColorIdentifiers[8])),
+			brightRed: toXtermColor(theme.getColor(ansiColorIdentifiers[9])),
+			brightGreen: toXtermColor(theme.getColor(ansiColorIdentifiers[10])),
+			brightYellow: toXtermColor(theme.getColor(ansiColorIdentifiers[11])),
+			brightBlue: toXtermColor(theme.getColor(ansiColorIdentifiers[12])),
+			brightMagenta: toXtermColor(theme.getColor(ansiColorIdentifiers[13])),
+			brightCyan: toXtermColor(theme.getColor(ansiColorIdentifiers[14])),
+			brightWhite: toXtermColor(theme.getColor(ansiColorIdentifiers[15]))
 		};
 	}
 

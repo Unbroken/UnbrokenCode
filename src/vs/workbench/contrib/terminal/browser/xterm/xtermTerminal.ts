@@ -259,6 +259,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			ignoreBracketedPasteMode: config.ignoreBracketedPasteMode,
 			rescaleOverlappingGlyphs: config.rescaleOverlappingGlyphs,
 			customGlyphs: config.customGlyphs === 'auto' ? !(config.fontFamily || editorOptions.fontFamily || '').toLowerCase().includes('unbroken') : config.customGlyphs === 'on',
+			colorSpace: this._getColorSpace(),
 			windowOptions: {
 				getWinSizePixels: true,
 				getCellSizePixels: true,
@@ -275,18 +276,21 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 				XtermTerminal._suggestedRendererType = undefined;
 			}
-			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily')) {
+			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily') || e.affectsConfiguration('workbench.colorSpace')) {
 				this.updateConfig();
 			}
 			if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
 				this._updateUnicodeVersion();
 			}
-			if (e.affectsConfiguration(TerminalSettingId.ShellIntegrationDecorationsEnabled)) {
+			if (e.affectsConfiguration(TerminalSettingId.ShellIntegrationDecorationsEnabled) || e.affectsConfiguration('workbench.colorSpace')) {
 				this._updateTheme();
 			}
 		}));
 
-		this._register(this._themeService.onDidColorThemeChange(theme => this._updateTheme(theme)));
+		this._register(this._themeService.onDidColorThemeChange(theme => {
+			this.updateConfig();
+			this._updateTheme(theme);
+		}));
 		this._register(this._logService.onDidChangeLogLevel(e => this.raw.options.logLevel = vscodeToXtermLogLevel(e)));
 
 		// Refire events
@@ -554,6 +558,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		this.raw.options.customGlyphs = this._resolveCustomGlyphs();
 		this.raw.options.ignoreBracketedPasteMode = config.ignoreBracketedPasteMode;
 		this.raw.options.rescaleOverlappingGlyphs = config.rescaleOverlappingGlyphs;
+		this.raw.options.colorSpace = this._getColorSpace();
 		this.raw.options.overviewRuler = {
 			width: 14,
 			showTopBorder: true,
@@ -589,6 +594,18 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			return !fontFamily.toLowerCase().includes('unbroken');
 		}
 		return config.customGlyphs === 'on';
+	}
+
+	private _getColorSpace(): 'srgb' | 'display-p3' {
+		const configSpace = this._configurationService.getValue<string>('workbench.colorSpace');
+		if (configSpace && configSpace !== 'default') {
+			// Canvas only supports 'srgb' and 'display-p3', so map any wide-gamut
+			// color space (display-p3, a98-rgb, prophoto-rgb, rec2020) to display-p3
+			return configSpace === 'srgb' ? 'srgb' : 'display-p3';
+		}
+		const theme = this._themeService.getColorTheme();
+		// Same logic for theme color space - any wide-gamut space maps to display-p3
+		return theme.colorSpace && theme.colorSpace !== 'srgb' ? 'display-p3' : 'srgb';
 	}
 
 	forceRedraw() {

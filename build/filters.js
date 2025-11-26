@@ -33,6 +33,7 @@ module.exports.all = [
 	'!extensions/codelldb/**',
 	'!extensions/vscode-clangd/**',
 	'!extensions/vscode-copilot-chat/**',
+	'!packages/**',
 ];
 
 module.exports.unicodeFilter = [

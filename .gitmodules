@@ -13,3 +13,6 @@
 [submodule "extensions/vscode-copilot-chat"]
 	path = extensions/vscode-copilot-chat
 	url = https://github.com/Unbroken/vscode-copilot-chat
+[submodule "packages/xterm.js"]
+	path = packages/xterm.js
+	url = https://github.com/Unbroken/xterm.js.git

@@ -285,7 +285,8 @@ if (import.meta.main) {
 					l !== 'extensions/malterlib' &&
 					l !== 'extensions/vscode-clangd' &&
 					l !== 'extensions/codelldb' &&
-					l !== 'extensions/vscode-copilot-chat'
+					l !== 'extensions/vscode-copilot-chat' &&
+					l !== 'packages/xterm.js'
 				);
 
 

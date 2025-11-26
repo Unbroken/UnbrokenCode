@@ -32,6 +32,7 @@ export const all = Object.freeze<string[]>([
 	'!extensions/codelldb/**',
 	'!extensions/vscode-clangd/**',
 	'!extensions/vscode-copilot-chat/**',
+	'!packages/**',
 ]);
 
 export const unicodeFilter = Object.freeze<string[]>([

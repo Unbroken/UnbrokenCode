@@ -475,14 +475,14 @@ export function filterLatestExtensionVersionsForTargetPlatform(versions: IRawGal
 				if (quarantinedPreReleaseVersionIndex === -1) {
 					quarantinedPreReleaseVersionIndex = latestQuarantinedVersions.length;
 					latestQuarantinedVersions.push(version);
-				} else if (versionTargetPlatform === targetPlatform) {
+				} else if (versionTargetPlatform === targetPlatform && version.version === latestQuarantinedVersions[quarantinedPreReleaseVersionIndex].version) {
 					latestQuarantinedVersions[quarantinedPreReleaseVersionIndex] = version;
 				}
 			} else {
 				if (preReleaseVersionIndex === -1) {
 					preReleaseVersionIndex = latestVersions.length;
 					latestVersions.push(version);
-				} else if (versionTargetPlatform === targetPlatform) {
+				} else if (versionTargetPlatform === targetPlatform && version.version === latestVersions[preReleaseVersionIndex].version) {
 					latestVersions[preReleaseVersionIndex] = version;
 				}
 			}
@@ -491,14 +491,14 @@ export function filterLatestExtensionVersionsForTargetPlatform(versions: IRawGal
 				if (quarantinedReleaseVersionIndex === -1) {
 					quarantinedReleaseVersionIndex = latestQuarantinedVersions.length;
 					latestQuarantinedVersions.push(version);
-				} else if (versionTargetPlatform === targetPlatform) {
+				} else if (versionTargetPlatform === targetPlatform && version.version === latestQuarantinedVersions[quarantinedReleaseVersionIndex].version) {
 					latestQuarantinedVersions[quarantinedReleaseVersionIndex] = version;
 				}
 			} else {
 				if (releaseVersionIndex === -1) {
 					releaseVersionIndex = latestVersions.length;
 					latestVersions.push(version);
-				} else if (versionTargetPlatform === targetPlatform) {
+				} else if (versionTargetPlatform === targetPlatform && version.version === latestVersions[releaseVersionIndex].version) {
 					latestVersions[releaseVersionIndex] = version;
 				}
 			}

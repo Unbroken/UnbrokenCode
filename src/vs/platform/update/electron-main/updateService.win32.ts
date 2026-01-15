@@ -109,8 +109,9 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 		if (this.productService.win32VersionedUpdate) {
 			const cachePath = await this.cachePath;
-			app.setPath('appUpdate', cachePath);
-			await this.unlink(path.join(cachePath, 'session-ending.flag'));
+			try {
+				await this.unlink(path.join(cachePath, 'session-ending.flag'));
+			} catch { }
 		}
 
 		// Send telemetry

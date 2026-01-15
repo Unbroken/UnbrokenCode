@@ -94,7 +94,6 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 	protected override async initialize(): Promise<void> {
 		if (this.productService.win32VersionedUpdate) {
 			const cachePath = await this.cachePath;
-			app.setPath('appUpdate', cachePath);
 			try {
 				await unlink(path.join(cachePath, 'session-ending.flag'));
 			} catch { }

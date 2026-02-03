@@ -369,6 +369,7 @@
 	color: var(--vscode-editor-foreground);
 	font-size: inherit;
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .review-widget .body .comment-form-container .review-thread-reply-button:focus {

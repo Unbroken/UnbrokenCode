@@ -224,6 +224,9 @@ function configureCommandlineSwitchesSync(cliArgs: NativeParsedArgs) {
 		// disable LCD font rendering, a Chromium flag
 		'disable-lcd-text',
 
+		// override font render hinting, a Chromium flag
+		'font-render-hinting',
+
 		// bypass any specified proxy for the given semi-colon-separated list of hosts
 		'proxy-bypass-list',
 
@@ -319,6 +322,12 @@ function configureCommandlineSwitchesSync(cliArgs: NativeParsedArgs) {
 		}
 	});
 
+	// Default to no font hinting on Windows for better font rendering.
+	// This disables DirectWrite grid fitting (DWRITE_GRID_FIT_MODE_DISABLED)
+	if (process.platform === 'win32' && !argvConfig['font-render-hinting'] && !app.commandLine.hasSwitch('font-render-hinting')) {
+		app.commandLine.appendSwitch('font-render-hinting', 'none');
+	}
+
 	// Following features are enabled from the runtime:
 	// `NetAdapterMaxBufSizeFeature` - Specify the max buffer size for NetToMojoPendingBuffer, refs https://github.com/microsoft/vscode/issues/268800
 	// `DocumentPolicyIncludeJSCallStacksInCrashReports` - https://www.electronjs.org/docs/latest/api/web-frame-main#framecollectjavascriptcallstack-experimental
@@ -363,6 +372,7 @@ interface IArgvConfig {
 	[key: string]: string | string[] | boolean | undefined;
 	readonly locale?: string;
 	readonly 'disable-lcd-text'?: boolean;
+	readonly 'font-render-hinting'?: string;
 	readonly 'proxy-bypass-list'?: string;
 	readonly 'disable-hardware-acceleration'?: boolean;
 	readonly 'force-color-profile'?: string;

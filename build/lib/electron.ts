@@ -137,11 +137,10 @@ function darwinBundleDocumentTypes(types: { [name: string]: string | string[] },
 	});
 }
 
-const { electronVersion, msBuildId } = util.getElectronVersion();
+const { electronVersion } = util.getElectronVersion();
 
 export const config = {
 	version: electronVersion,
-	tag: product.electronRepository ? `v${electronVersion}-${msBuildId}` : undefined,
 	productAppName: product.nameLong,
 	companyName: 'Microsoft Corporation',
 	copyright: 'Copyright (C) 2025 Microsoft. All rights reserved',
@@ -238,15 +237,32 @@ export const config = {
 	linuxExecutableName: product.applicationName,
 	winIcon: 'resources/win32/code.ico',
 	token: process.env['GITHUB_TOKEN'],
-	repo: product.electronRepository || undefined,
 	validateChecksum: true,
 	checksumFile: path.join(root, 'build', 'checksums', 'electron.txt'),
 };
+
+/**
+ * Returns platform-specific Electron config overrides for custom Electron builds.
+ * Currently only Windows uses the custom Electron from Unbroken/electron.
+ * Other platforms use the standard Electron from electronjs.org.
+ */
+export function getCustomElectronConfig(platform: string): Record<string, unknown> {
+	if (platform === 'win32' && product.electronRepository) {
+		return {
+			repo: product.electronRepository,
+			tag: `v${electronVersion}`,
+			token: process.env['GITHUB_TOKEN'],
+			validateChecksum: false,
+		};
+	}
+	return {};
+}
 
 function getElectron(arch: string): () => NodeJS.ReadWriteStream {
 	return () => {
 		const electronOpts = {
 			...config,
+			...getCustomElectronConfig(process.platform),
 			platform: process.platform,
 			arch: arch === 'armhf' ? 'arm' : arch,
 			ffmpegChromium: false,

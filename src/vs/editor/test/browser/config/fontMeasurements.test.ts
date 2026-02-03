@@ -30,6 +30,7 @@ suite('FontMeasurements', () => {
 		fontSize: 14,
 		fontFeatureSettings: '"liga" off, "calt" off',
 		fontVariationSettings: 'normal',
+		disableFontHinting: false,
 		lineHeight: 19,
 		letterSpacing: 0,
 		isMonospace: true,

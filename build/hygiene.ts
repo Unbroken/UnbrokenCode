@@ -60,12 +60,16 @@ export function checkNoNewJavaScriptFiles(repoRoot: string): string | undefined 
 	);
 
 	// `git ls-files` lists tracked files relative to repo root using forward slashes.
-	const out = cp.execSync('git ls-files "*.js" "*.cjs" "*.mjs"', {
+	// Use --stage so gitlinks (mode 160000) can be filtered out: a submodule whose
+	// directory name ends in `.js` (e.g. `packages/xterm.js`) is not a JavaScript file.
+	const out = cp.execSync('git ls-files --stage "*.js" "*.cjs" "*.mjs"', {
 		cwd: repoRoot,
 		encoding: 'utf8',
 		maxBuffer: 10 * 1024 * 1024,
 	});
-	const tracked = out.split(/\r?\n/).filter(line => !!line);
+	const tracked = out.split(/\r?\n/)
+		.filter(line => !!line && !line.startsWith('160000'))
+		.map(line => line.split('\t')[1]);
 
 	const unknown = tracked.filter(file => !allowed.has(file));
 	if (unknown.length > 0) {

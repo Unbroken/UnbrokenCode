@@ -168,6 +168,7 @@
 
 .monaco-workbench .notebookOverlay .cell-chat-part .inline-chat .markdownMessage .message code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	font-size: 12px;
 	color: var(--vscode-textPreformat-foreground);
 	background-color: var(--vscode-textPreformat-background);

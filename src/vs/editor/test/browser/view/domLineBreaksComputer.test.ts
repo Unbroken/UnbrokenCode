@@ -25,6 +25,7 @@ function measure(text: string, useTwoCellFullwidthCharacters: boolean): { breakO
 		fontSize: 14,
 		fontFeatureSettings: '',
 		fontVariationSettings: '',
+		disableFontHinting: false,
 		lineHeight: 19,
 		letterSpacing: 0,
 		isMonospace: true,

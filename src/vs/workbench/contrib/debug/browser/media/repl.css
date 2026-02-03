@@ -21,6 +21,7 @@
 	font-family: var(--vscode-repl-font-family);
 	font-size: var(--vscode-repl-font-size);
 	line-height: var(--vscode-repl-line-height);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .monaco-workbench .repl .repl-tree .monaco-tl-contents .expression .lazy-button {

@@ -27,7 +27,7 @@ import product from '../product.json' with { type: 'json' };
 import * as crypto from 'crypto';
 import * as i18n from './lib/i18n.ts';
 import { getProductionDependencies } from './lib/dependencies.ts';
-import { config, stripDarwinCFBundleIconFileExtension } from './lib/electron.ts';
+import { config, getCustomElectronConfig, stripDarwinCFBundleIconFileExtension } from './lib/electron.ts';
 import { createAsar } from './lib/asar.ts';
 import minimist from 'minimist';
 import { compileBuildWithoutManglingTask, compileBuildWithManglingTask } from './gulpfile.compile.ts';
@@ -461,7 +461,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			.pipe(util.skipDirectories())
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(filter(['**', '!**/.github/**'], { dot: true })) // https://github.com/microsoft/vscode/issues/116523
-			.pipe(electron({ ...config, platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }));
+			.pipe(electron({ ...config, ...getCustomElectronConfig(platform), platform, arch: arch === 'armhf' ? 'arm' : arch, ffmpegChromium: false }));
 
 		if (platform === 'darwin') {
 			result = result.pipe(stripDarwinCFBundleIconFileExtension(appIconName));

@@ -97,6 +97,7 @@
 
 .monaco-editor .parameter-hints-widget .docs code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	border-radius: 3px;
 	padding: 0 0.4em;
 	background-color: var(--vscode-textCodeBlock-background);
@@ -136,6 +137,7 @@
 	height: 12px;
 	line-height: 12px;
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .monaco-editor .parameter-hints-widget .signature .parameter.active {

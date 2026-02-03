@@ -218,3 +218,6 @@ for (const dir of dirs) {
 
 child_process.execSync('git config pull.rebase merges');
 child_process.execSync('git config blame.ignoreRevsFile .git-blame-ignore-revs');
+
+// Apply patches to node_modules
+run('node', [path.join(root, 'build', 'patches', 'gulp-electron-asset-names.cjs')], { cwd: root, stdio: 'inherit', shell: true });

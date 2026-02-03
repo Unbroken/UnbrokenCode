@@ -3,8 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as platform from '../../../base/common/platform.js';
 import { EditorOption, EditorOptions } from './editorOptions.js';
 import { IValidatedEditorOptions, BareFontInfo } from './fontInfo.js';
+
+export function resolveDisableFontHinting(disableFontHinting: 'auto' | 'on' | 'off', fontFamily: string): boolean {
+	if (disableFontHinting === 'on') {
+		return true;
+	}
+	if (disableFontHinting === 'off') {
+		return false;
+	}
+	// 'auto': enable on Windows when using an Unbroken font
+	return platform.isWindows && /(?:^|,)\s*(?:"|')?Unbroken/i.test(fontFamily);
+}
 
 export function createBareFontInfoFromValidatedSettings(options: IValidatedEditorOptions, pixelRatio: number, ignoreEditorZoom: boolean): BareFontInfo {
 	const fontFamily = options.get(EditorOption.fontFamily);
@@ -14,7 +26,9 @@ export function createBareFontInfoFromValidatedSettings(options: IValidatedEdito
 	const fontVariationSettings = options.get(EditorOption.fontVariations);
 	const lineHeight = options.get(EditorOption.lineHeight);
 	const letterSpacing = options.get(EditorOption.letterSpacing);
-	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
+	const disableFontHintingSetting = options.get(EditorOption.disableFontHinting);
+	const disableFontHinting = resolveDisableFontHinting(disableFontHintingSetting, fontFamily);
+	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom, disableFontHinting);
 }
 
 export function createBareFontInfoFromRawSettings(opts: {
@@ -25,6 +39,7 @@ export function createBareFontInfoFromRawSettings(opts: {
 	fontVariations?: unknown;
 	lineHeight?: unknown;
 	letterSpacing?: unknown;
+	disableFontHinting?: unknown;
 }, pixelRatio: number, ignoreEditorZoom: boolean = false): BareFontInfo {
 	const fontFamily = EditorOptions.fontFamily.validate(opts.fontFamily);
 	const fontWeight = EditorOptions.fontWeight.validate(opts.fontWeight);
@@ -33,5 +48,7 @@ export function createBareFontInfoFromRawSettings(opts: {
 	const fontVariationSettings = EditorOptions.fontVariations.validate(opts.fontVariations);
 	const lineHeight = EditorOptions.lineHeight.validate(opts.lineHeight);
 	const letterSpacing = EditorOptions.letterSpacing.validate(opts.letterSpacing);
-	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
+	const disableFontHintingSetting = EditorOptions.disableFontHinting.validate(opts.disableFontHinting);
+	const disableFontHinting = resolveDisableFontHinting(disableFontHintingSetting, fontFamily);
+	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom, disableFontHinting);
 }

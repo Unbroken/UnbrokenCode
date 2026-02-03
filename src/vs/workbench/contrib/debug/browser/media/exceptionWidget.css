@@ -31,6 +31,7 @@
 .monaco-editor .zone-widget .zone-widget-container.exception-widget .description,
 .monaco-editor .zone-widget .zone-widget-container.exception-widget .stack-trace {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .monaco-editor .zone-widget .zone-widget-container.exception-widget .stack-trace {

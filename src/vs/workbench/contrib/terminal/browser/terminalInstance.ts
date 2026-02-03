@@ -24,6 +24,7 @@ import { OS, OperatingSystem, isMacintosh, isWindows } from '../../../../base/co
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { TabFocus } from '../../../../editor/browser/config/tabFocus.js';
+import { resolveDisableFontHinting } from '../../../../editor/common/config/fontInfoFromSettings.js';
 import * as nls from '../../../../nls.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
@@ -1983,6 +1984,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.xterm.raw.options.fontFamily = font.fontFamily;
 			this.xterm.raw.options.fontWeight = config.fontWeight;
 			this.xterm.raw.options.fontWeightBold = config.fontWeightBold;
+			const editorOptions = this._configurationService.getValue<{ disableFontHinting?: 'auto' | 'on' | 'off' }>('editor');
+			this.xterm.raw.options.disableFontHinting = resolveDisableFontHinting(editorOptions.disableFontHinting ?? 'auto', font.fontFamily);
 
 			// Any of the above setting changes could have changed the dimensions of the
 			// terminal, re-evaluate now.

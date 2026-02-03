@@ -224,6 +224,9 @@ function configureCommandlineSwitchesSync(cliArgs: NativeParsedArgs) {
 		// disable LCD font rendering, a Chromium flag
 		'disable-lcd-text',
 
+		// override font render hinting, a Chromium flag
+		'font-render-hinting',
+
 		// bypass any specified proxy for the given semi-colon-separated list of hosts
 		'proxy-bypass-list',
 
@@ -367,6 +370,7 @@ interface IArgvConfig {
 	[key: string]: string | string[] | boolean | undefined;
 	readonly locale?: string;
 	readonly 'disable-lcd-text'?: boolean;
+	readonly 'font-render-hinting'?: string;
 	readonly 'proxy-bypass-list'?: string;
 	readonly 'disable-hardware-acceleration'?: boolean;
 	readonly 'force-color-profile'?: string;

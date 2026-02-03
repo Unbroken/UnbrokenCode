@@ -30,7 +30,7 @@ import { registerNotificationCommands } from './parts/notifications/notification
 import { NotificationsToasts } from './parts/notifications/notificationsToasts.js';
 import { setARIAContainer } from '../../base/browser/ui/aria/aria.js';
 import { FontMeasurements } from '../../editor/browser/config/fontMeasurements.js';
-import { createBareFontInfoFromRawSettings } from '../../editor/common/config/fontInfoFromSettings.js';
+import { createBareFontInfoFromRawSettings, resolveDisableFontHinting } from '../../editor/common/config/fontInfoFromSettings.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { toErrorMessage } from '../../base/common/errorMessage.js';
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
@@ -232,6 +232,7 @@ export class Workbench extends Layout {
 
 		// Configuration changes
 		this._register(configurationService.onDidChangeConfiguration(e => this.updateFontAliasing(e, configurationService)));
+		this._register(configurationService.onDidChangeConfiguration(e => this.updateFontHinting(e, configurationService)));
 
 		// Font Info
 		if (isNative) {
@@ -265,6 +266,23 @@ export class Workbench extends Layout {
 		// Dialogs showing/hiding
 		this._register(dialogService.onWillShowDialog(() => this.mainContainer.classList.add('modal-dialog-visible')));
 		this._register(dialogService.onDidShowDialog(() => this.mainContainer.classList.remove('modal-dialog-visible')));
+	}
+
+	private disableFontHintingResolved: boolean | undefined;
+	private updateFontHinting(e: IConfigurationChangeEvent | undefined, configurationService: IConfigurationService) {
+		if (e && !e.affectsConfiguration('editor.disableFontHinting') && !e.affectsConfiguration('editor.fontFamily')) {
+			return;
+		}
+
+		const setting = configurationService.getValue<'auto' | 'on' | 'off'>('editor.disableFontHinting') ?? 'auto';
+		const fontFamily = configurationService.getValue<string>('editor.fontFamily') ?? '';
+		const resolved = resolveDisableFontHinting(setting, fontFamily);
+		if (this.disableFontHintingResolved === resolved) {
+			return;
+		}
+
+		this.disableFontHintingResolved = resolved;
+		this.mainContainer.style.setProperty('--monaco-monospace-text-rendering', resolved ? 'geometricPrecision' : 'auto');
 	}
 
 	private fontAliasing: 'default' | 'antialiased' | 'none' | 'auto' | undefined;
@@ -338,6 +356,9 @@ export class Workbench extends Layout {
 
 		// Apply font aliasing
 		this.updateFontAliasing(undefined, configurationService);
+
+		// Apply font hinting
+		this.updateFontHinting(undefined, configurationService);
 
 		// Warm up font cache information before building up too many dom elements
 		this.restoreFontInfo(storageService, configurationService);

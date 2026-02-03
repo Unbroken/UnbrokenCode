@@ -16,6 +16,7 @@ import { IXtermCore } from '../xterm-private.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { IEditorOptions } from '../../../../../editor/common/config/editorOptions.js';
+import { resolveDisableFontHinting } from '../../../../../editor/common/config/fontInfoFromSettings.js';
 import { IShellIntegration, ITerminalLogService, TerminalSettingId, type IDecorationAddon } from '../../../../../platform/terminal/common/terminal.js';
 import { ITerminalFont, ITerminalConfiguration } from '../../common/terminal.js';
 import { IMarkTracker, IInternalXtermTerminal, IXtermTerminal, IXtermColorProvider, XtermTerminalConstants, IXtermAttachToElementOptions, IDetachedXtermTerminal, ITerminalConfigurationService } from '../terminal.js';
@@ -273,6 +274,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 				kittyKeyboard: config.enableKittyKeyboardProtocol,
 				win32InputMode: config.enableWin32InputMode,
 			},
+			disableFontHinting: resolveDisableFontHinting(editorOptions?.disableFontHinting ?? 'auto', font.fontFamily),
 			colorSpace: this._getColorSpace(),
 			windowOptions: {
 				getWinSizePixels: true,
@@ -290,7 +292,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			if (e.affectsConfiguration(TerminalSettingId.GpuAcceleration)) {
 				XtermTerminal._suggestedRendererType = undefined;
 			}
-			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily') || e.affectsConfiguration('workbench.colorSpace')) {
+			if (e.affectsConfiguration('terminal.integrated') || e.affectsConfiguration('editor.fastScrollSensitivity') || e.affectsConfiguration('editor.mouseWheelScrollSensitivity') || e.affectsConfiguration('editor.multiCursorModifier') || e.affectsConfiguration('editor.fontFamily') || e.affectsConfiguration('editor.disableFontHinting') || e.affectsConfiguration('workbench.colorSpace')) {
 				this.updateConfig();
 			}
 			if (e.affectsConfiguration(TerminalSettingId.UnicodeVersion)) {
@@ -576,6 +578,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			win32InputMode: config.enableWin32InputMode,
 		};
 		this.raw.options.colorSpace = this._getColorSpace();
+		this.raw.options.disableFontHinting = resolveDisableFontHinting(editorOptions?.disableFontHinting ?? 'auto', this.raw.options.fontFamily ?? '');
 
 		this._updateSmoothScrolling();
 		if (this._attached) {

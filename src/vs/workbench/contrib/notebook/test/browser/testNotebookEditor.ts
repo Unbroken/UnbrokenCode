@@ -387,6 +387,7 @@ function _createTestNotebookEditor(instantiationService: TestInstantiationServic
 					fontVariationSettings: EditorFontVariations.OFF,
 					lineHeight: 19,
 					letterSpacing: 1.5,
+					disableFontHinting: false,
 					isMonospace: true,
 					typicalHalfwidthCharacterWidth: 10,
 					typicalFullwidthCharacterWidth: 20,

@@ -110,6 +110,7 @@
 
 .comments-panel .comments-panel-container .tree-container .comment-thread-container .comment-snippet-container .text code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .comments-panel .comments-panel-container .tree-container .monaco-icon-label {

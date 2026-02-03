@@ -265,6 +265,7 @@
 
 .debug-pane .debug-watch .monaco-inputbox {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .debug-pane .monaco-inputbox > .ibwrapper {
@@ -289,6 +290,7 @@
 	text-overflow: ellipsis;
 	overflow: hidden;
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	font-weight: normal;
 }
 .debug-view-content .monaco-tl-contents .highlight {

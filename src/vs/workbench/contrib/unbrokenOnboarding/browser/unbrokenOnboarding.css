@@ -582,6 +582,7 @@
 	font-size: 10px;
 	font-family: UnbrokenEmbedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
 	font-weight: normal;
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .font-size-comparison-table {
@@ -590,6 +591,7 @@
 	font-size: 10px;
 	font-weight: normal;
 	font-family: UnbrokenEmbedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .font-size-comparison-table th,
@@ -604,11 +606,13 @@
 .font-size-comparison-table tr.font-size-12 td {
 	font-size: 12px;
 	font-family: Unbroken12Embedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .font-size-comparison-table tr.font-size-15 td {
 	font-size: 15px;
 	font-family: Unbroken10Embedded, 'Unbroken Retina', Unbroken, Menlo, Monaco, 'Courier New', monospace;
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .font-size-comparison-table th {

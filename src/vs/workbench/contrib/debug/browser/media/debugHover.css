@@ -71,6 +71,7 @@
 	color: rgba(108, 108, 108, 0.8);
 	overflow: auto;
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	max-height: 500px;
 	padding: 4px 5px;
 	white-space: pre-wrap;

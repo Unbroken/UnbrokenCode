@@ -442,4 +442,5 @@
 
 .workbench-suggest-widget .suggest-details p code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }

@@ -53,6 +53,7 @@
 .monaco-workbench .notebookOverlay > .cell-list-container .notebook-folded-hint-label {
 	font-size: var(--notebook-cell-output-font-size);
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	font-style: italic;
 	opacity: 0.7;
 }

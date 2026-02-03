@@ -342,6 +342,14 @@ export const troubleshootingOptions = (cliName: string): Fig.Option[] => [
 		description: 'Disable LCD font rendering',
 	},
 	{
+		name: '--font-render-hinting',
+		description: 'Sets font render hinting (none, slight, medium, full)',
+		args: {
+			name: 'hinting',
+			description: 'Font render hinting level',
+		},
+	},
+	{
 		name: '--disable-chromium-sandbox',
 		description: 'Use this option only when there is requirement to launch the application as sudo user on Linux or when running as an elevated user in an applocker environment on Windows.',
 	},

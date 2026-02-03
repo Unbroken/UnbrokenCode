@@ -27,7 +27,7 @@ import product from '../product.json' with { type: 'json' };
 import * as crypto from 'crypto';
 import * as i18n from './lib/i18n.ts';
 import { getProductionDependencies } from './lib/dependencies.ts';
-import { config, stripDarwinCFBundleIconFileExtension } from './lib/electron.ts';
+import { config, getCustomElectronConfig, stripDarwinCFBundleIconFileExtension } from './lib/electron.ts';
 import { createAsar } from './lib/asar.ts';
 import minimist from 'minimist';
 import { compileBuildWithoutManglingTask, compileBuildWithManglingTask } from './gulpfile.compile.ts';
@@ -506,7 +506,8 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			...config,
 			platform,
 			arch: arch === 'armhf' ? 'arm' : arch,
-			ffmpegChromium: false
+			ffmpegChromium: false,
+			...getCustomElectronConfig(platform)
 		};
 
 		let result: NodeJS.ReadWriteStream = all

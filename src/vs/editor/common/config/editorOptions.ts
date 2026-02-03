@@ -299,6 +299,11 @@ export interface IEditorOptions {
 	 */
 	disableLayerHinting?: boolean;
 	/**
+	 * Disables font hinting for fixed-width fonts, using geometric precision text rendering instead.
+	 * Defaults to 'auto'.
+	 */
+	disableFontHinting?: 'auto' | 'on' | 'off';
+	/**
 	 * Disable the optimizations for monospace fonts.
 	 * Defaults to false.
 	 */
@@ -2012,6 +2017,7 @@ class EditorFontInfo extends ComputedEditorOption<EditorOption.fontInfo, FontInf
 			fontVariationSettings: '',
 			lineHeight: 0,
 			letterSpacing: 0,
+			disableFontHinting: false,
 			isMonospace: false,
 			typicalHalfwidthCharacterWidth: 0,
 			typicalFullwidthCharacterWidth: 0,
@@ -5810,6 +5816,7 @@ export const enum EditorOption {
 	cursorWidth,
 	cursorHeight,
 	disableLayerHinting,
+	disableFontHinting,
 	disableMonospaceOptimizations,
 	domReadOnly,
 	dragAndDrop,
@@ -6230,6 +6237,19 @@ export const EditorOptions = {
 	)),
 	disableLayerHinting: register(new EditorBooleanOption(
 		EditorOption.disableLayerHinting, 'disableLayerHinting', false,
+	)),
+	disableFontHinting: register(new EditorStringEnumOption(
+		EditorOption.disableFontHinting, 'disableFontHinting',
+		'auto' as 'auto' | 'on' | 'off',
+		['auto', 'on', 'off'] as const,
+		{
+			enumDescriptions: [
+				nls.localize('editor.disableFontHinting.auto', "Automatically disable font hinting for Unbroken fonts on Windows."),
+				nls.localize('editor.disableFontHinting.on', "Always disable font hinting, using geometric precision text rendering."),
+				nls.localize('editor.disableFontHinting.off', "Never disable font hinting, using default text rendering."),
+			],
+			description: nls.localize('disableFontHinting', "Controls whether font hinting is disabled for fixed-width fonts, using geometric precision text rendering instead.")
+		}
 	)),
 	disableMonospaceOptimizations: register(new EditorBooleanOption(
 		EditorOption.disableMonospaceOptimizations, 'disableMonospaceOptimizations', false

@@ -24,6 +24,7 @@
 
 .tiw-token {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .tiw-metadata-separator {
@@ -43,6 +44,7 @@
 
 .tiw-metadata-value {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	word-break: break-word;
 }
 
@@ -76,4 +78,5 @@
 
 .tiw-theme-selector {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }

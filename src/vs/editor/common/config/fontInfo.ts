@@ -31,7 +31,7 @@ export class BareFontInfo {
 	/**
 	 * @internal
 	 */
-	public static _create(fontFamily: string, fontWeight: string, fontSize: number, fontFeatureSettings: string, fontVariationSettings: string, lineHeight: number, letterSpacing: number, pixelRatio: number, ignoreEditorZoom: boolean): BareFontInfo {
+	public static _create(fontFamily: string, fontWeight: string, fontSize: number, fontFeatureSettings: string, fontVariationSettings: string, lineHeight: number, letterSpacing: number, pixelRatio: number, ignoreEditorZoom: boolean, disableFontHinting: boolean): BareFontInfo {
 		if (lineHeight === 0) {
 			lineHeight = GOLDEN_LINE_HEIGHT_RATIO * fontSize;
 		} else if (lineHeight < MINIMUM_LINE_HEIGHT) {
@@ -67,7 +67,8 @@ export class BareFontInfo {
 			fontFeatureSettings: fontFeatureSettings,
 			fontVariationSettings,
 			lineHeight: lineHeight,
-			letterSpacing: letterSpacing
+			letterSpacing: letterSpacing,
+			disableFontHinting: disableFontHinting
 		});
 	}
 
@@ -79,6 +80,7 @@ export class BareFontInfo {
 	readonly fontVariationSettings: string;
 	readonly lineHeight: number;
 	readonly letterSpacing: number;
+	readonly disableFontHinting: boolean;
 
 	/**
 	 * @internal
@@ -92,6 +94,7 @@ export class BareFontInfo {
 		fontVariationSettings: string;
 		lineHeight: number;
 		letterSpacing: number;
+		disableFontHinting: boolean;
 	}) {
 		this.pixelRatio = opts.pixelRatio;
 		this.fontFamily = String(opts.fontFamily);
@@ -101,13 +104,14 @@ export class BareFontInfo {
 		this.fontVariationSettings = opts.fontVariationSettings;
 		this.lineHeight = opts.lineHeight | 0;
 		this.letterSpacing = opts.letterSpacing;
+		this.disableFontHinting = opts.disableFontHinting;
 	}
 
 	/**
 	 * @internal
 	 */
 	public getId(): string {
-		return `${this.pixelRatio}-${this.fontFamily}-${this.fontWeight}-${this.fontSize}-${this.fontFeatureSettings}-${this.fontVariationSettings}-${this.lineHeight}-${this.letterSpacing}`;
+		return `${this.pixelRatio}-${this.fontFamily}-${this.fontWeight}-${this.fontSize}-${this.fontFeatureSettings}-${this.fontVariationSettings}-${this.lineHeight}-${this.letterSpacing}-${this.disableFontHinting}`;
 	}
 
 	/**
@@ -136,7 +140,7 @@ export class BareFontInfo {
 }
 
 // change this whenever `FontInfo` members are changed
-export const SERIALIZED_FONT_INFO_VERSION = 2;
+export const SERIALIZED_FONT_INFO_VERSION = 3;
 
 export class FontInfo extends BareFontInfo {
 	readonly _editorStylingBrand: void = undefined;
@@ -164,6 +168,7 @@ export class FontInfo extends BareFontInfo {
 		fontVariationSettings: string;
 		lineHeight: number;
 		letterSpacing: number;
+		disableFontHinting: boolean;
 		isMonospace: boolean;
 		typicalHalfwidthCharacterWidth: number;
 		typicalFullwidthCharacterWidth: number;
@@ -197,6 +202,7 @@ export class FontInfo extends BareFontInfo {
 			&& this.fontVariationSettings === other.fontVariationSettings
 			&& this.lineHeight === other.lineHeight
 			&& this.letterSpacing === other.letterSpacing
+			&& this.disableFontHinting === other.disableFontHinting
 			&& this.typicalHalfwidthCharacterWidth === other.typicalHalfwidthCharacterWidth
 			&& this.typicalFullwidthCharacterWidth === other.typicalFullwidthCharacterWidth
 			&& this.canUseHalfwidthRightwardsArrow === other.canUseHalfwidthRightwardsArrow

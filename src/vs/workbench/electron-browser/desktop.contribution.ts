@@ -413,6 +413,11 @@ import product from '../../platform/product/common/product.js';
 				type: 'boolean',
 				description: localize('argv.disableLcdText', 'Disables LCD font antialiasing.')
 			},
+			'font-render-hinting': {
+				type: 'string',
+				enum: ['none', 'slight', 'medium', 'full'],
+				description: localize('argv.fontRenderHinting', "Sets font render hinting. Values are 'none', 'slight', 'medium', 'full'. Defaults to 'none' on Windows to disable grid fitting for better font rendering.")
+			},
 			'proxy-bypass-list': {
 				type: 'string',
 				description: localize('argv.proxyBypassList', 'Bypass any specified proxy for the given semi-colon-separated list of hosts. Example value "<local>;*.microsoft.com;*foo.com;1.2.3.4:5678", will use the proxy server for all hosts except for local addresses (localhost, 127.0.0.1 etc.), microsoft.com subdomains, hosts that contain the suffix foo.com and anything at 1.2.3.4:5678')

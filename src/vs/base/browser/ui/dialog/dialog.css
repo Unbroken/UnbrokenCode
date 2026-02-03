@@ -172,6 +172,7 @@
 /** Dialog: File Path */
 .monaco-dialog-box code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 /** Dialog: Buttons Row */

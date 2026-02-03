@@ -201,6 +201,7 @@
 
 .keybindings-editor > .keybindings-body > .keybindings-table-container .monaco-table-tr .monaco-table-td .code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	font-size: 90%;
 	display: flex;
 	overflow: hidden;

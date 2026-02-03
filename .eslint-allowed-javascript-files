@@ -23,6 +23,7 @@ build/next/devTunnelsShims/empty.cjs
 build/next/devTunnelsShims/process.js
 build/next/devTunnelsShims/utf8Validate.cjs
 build/next/devTunnelsShims/vscodeJsonrpc.cjs
+build/patches/gulp-electron-asset-names.cjs
 eslint.config.js
 extensions/copilot/.mocha-multi-reporters.js
 extensions/copilot/.mocharc.js

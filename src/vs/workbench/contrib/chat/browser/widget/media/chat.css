@@ -902,6 +902,7 @@
 
 			.output-error-details {
 				font-family: var(--monaco-monospace-font);
+				text-rendering: var(--monaco-monospace-text-rendering, auto);
 				font-size: var(--vscode-chat-font-size-body-xs);
 			}
 		}
@@ -978,6 +979,7 @@ have to be updated for changes to the rules above, or to support more deeply nes
 	.monaco-tokenized-source,
 	code {
 		font-family: var(--monaco-monospace-font);
+		text-rendering: var(--monaco-monospace-text-rendering, auto);
 		font-size: var(--vscode-chat-font-size-body-xs);
 		color: var(--vscode-textPreformat-foreground);
 		background-color: var(--vscode-textPreformat-background);
@@ -2625,6 +2627,7 @@ have to be updated for changes to the rules above, or to support more deeply nes
 
 .interactive-session .interactive-input-part .interactive-input-followups .interactive-session-followups code {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	font-size: var(--vscode-fontSize-body2);
 }
 

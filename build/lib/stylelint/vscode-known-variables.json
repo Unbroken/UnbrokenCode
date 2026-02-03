@@ -1023,6 +1023,7 @@
 		"--list-scroll-right-offset",
 		"--monaco-monospace-font",
 		"--monaco-monospace-font",
+		"--monaco-monospace-text-rendering",
 		"--notebook-cell-input-preview-font-family",
 		"--notebook-cell-input-preview-font-size",
 		"--notebook-cell-output-font-size",

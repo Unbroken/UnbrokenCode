@@ -218,6 +218,7 @@
 .conflict-zone-root pre {
 	display: 'inline';
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .conflict-zone-root .text {

@@ -24,6 +24,7 @@
 
 .monaco-editor .tokens-inspect-widget .tm-token {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }
 
 .monaco-editor .tokens-inspect-widget .tm-token-length {
@@ -38,9 +39,11 @@
 
 .monaco-editor .tokens-inspect-widget .tm-metadata-value {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 	text-align: right;
 }
 
 .monaco-editor .tokens-inspect-widget .tm-token-type {
 	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
 }

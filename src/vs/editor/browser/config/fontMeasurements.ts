@@ -24,6 +24,7 @@ export interface ISerializedFontInfo {
 	readonly fontVariationSettings: string;
 	readonly lineHeight: number;
 	readonly letterSpacing: number;
+	readonly disableFontHinting: boolean;
 	readonly isMonospace: boolean;
 	readonly typicalHalfwidthCharacterWidth: number;
 	readonly typicalFullwidthCharacterWidth: number;
@@ -177,6 +178,7 @@ export class FontMeasurementsImpl extends Disposable {
 					fontVariationSettings: readConfig.fontVariationSettings,
 					lineHeight: readConfig.lineHeight,
 					letterSpacing: readConfig.letterSpacing,
+					disableFontHinting: readConfig.disableFontHinting,
 					isMonospace: readConfig.isMonospace,
 					typicalHalfwidthCharacterWidth: Math.max(readConfig.typicalHalfwidthCharacterWidth, 5),
 					typicalFullwidthCharacterWidth: Math.max(readConfig.typicalFullwidthCharacterWidth, 5),
@@ -328,6 +330,7 @@ export class FontMeasurementsImpl extends Disposable {
 			fontVariationSettings: bareFontInfo.fontVariationSettings,
 			lineHeight: bareFontInfo.lineHeight,
 			letterSpacing: bareFontInfo.letterSpacing,
+			disableFontHinting: bareFontInfo.disableFontHinting,
 			isMonospace: isMonospace,
 			typicalHalfwidthCharacterWidth: typicalHalfwidthCharacter.width,
 			typicalFullwidthCharacterWidth: typicalFullwidthCharacter.width,

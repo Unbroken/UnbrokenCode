@@ -34,6 +34,7 @@ export class FastDomNode<T extends HTMLElement> {
 	private _layerHint: boolean = false;
 	private _contain: 'none' | 'strict' | 'content' | 'size' | 'layout' | 'style' | 'paint' = 'none';
 	private _boxShadow: string = '';
+	private _textRendering: string = '';
 
 	constructor(
 		public readonly domNode: T
@@ -276,6 +277,14 @@ export class FastDomNode<T extends HTMLElement> {
 		}
 		this._layerHint = layerHint;
 		this.domNode.style.transform = this._layerHint ? 'translate3d(0px, 0px, 0px)' : '';
+	}
+
+	public setTextRendering(textRendering: string): void {
+		if (this._textRendering === textRendering) {
+			return;
+		}
+		this._textRendering = textRendering;
+		this.domNode.style.textRendering = this._textRendering;
 	}
 
 	public setBoxShadow(boxShadow: string): void {

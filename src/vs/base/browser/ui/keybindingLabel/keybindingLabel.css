@@ -16,11 +16,12 @@
 	border-width: 1px;
 	border-radius: 3px;
 	justify-content: center;
-	min-width: 12px;
 	font-size: 10px;
-	padding: 3px 5px;
-	margin: 0px 0px;
-}
+	padding: 0px 3px;
+	padding-top: 1px;
+	margin: 0px 3px;
+	margin-top: -1px;
+	height: 8px;	}
 
 .monaco-keybinding > .monaco-keybinding-key:first-child {
 	margin-left: 0;

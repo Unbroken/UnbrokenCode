@@ -16,7 +16,7 @@
 
 .explorer-folders-view .explorer-item,
 .explorer-folders-view .editor-group {
-	height: 12px;
+	height: 100%;
 	line-height: 12px;
 }
 

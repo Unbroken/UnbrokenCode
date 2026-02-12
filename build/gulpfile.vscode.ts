@@ -468,7 +468,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		}
 
 		result = result
-			.pipe(filter(['**', '!LICENSE', '!version'], { dot: true }));
+			.pipe(filter(['**', '!LICENSE', '!version', ...(platform === 'darwin' ? ['!**/Contents/Applications/**'] : [])], { dot: true }));
 
 		if (platform === 'linux') {
 			result = es.merge(result, gulp.src('resources/completions/bash/code', { base: '.' })

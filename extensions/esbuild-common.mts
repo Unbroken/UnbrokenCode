@@ -73,6 +73,7 @@ async function watchWithParcel(options: esbuild.BuildOptions, srcDir: string, di
 			clearTimeout(debounce);
 		}
 		debounce = setTimeout(async () => {
+			console.log('[watch] build started');
 			try {
 				// Also instead of retaining the esbuild context, we are re-running the entire build on each change.
 				// This reduces memory usage since most projects don't need to be re-built often.
@@ -82,6 +83,8 @@ async function watchWithParcel(options: esbuild.BuildOptions, srcDir: string, di
 				}
 			} catch (error) {
 				console.error('[watch] build error:', error);
+			} finally {
+				console.log('[watch] build finished');
 			}
 		}, 100);
 	};

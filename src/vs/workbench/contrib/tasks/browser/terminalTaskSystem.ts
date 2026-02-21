@@ -894,11 +894,11 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 					this._fireTaskEvent(TaskEvent.general(TaskEventKind.Active, task, terminal?.instanceId));
 				} else if (event.kind === ProblemCollectorEventKind.BackgroundProcessingEnds) {
 					eventCounter--;
-					if (this._busyTasks[mapKey]) {
-						delete this._busyTasks[mapKey];
-					}
-					this._fireTaskEvent(TaskEvent.inactive(task, terminal?.instanceId, this._takeTaskDuration(terminal?.instanceId)));
 					if (eventCounter === 0) {
+						if (this._busyTasks[mapKey]) {
+							delete this._busyTasks[mapKey];
+						}
+						this._fireTaskEvent(TaskEvent.inactive(task, terminal?.instanceId, this._takeTaskDuration(terminal?.instanceId)));
 						if ((watchingProblemMatcher.numberOfMatches > 0) && watchingProblemMatcher.maxMarkerSeverity &&
 							(watchingProblemMatcher.maxMarkerSeverity >= MarkerSeverity.Error)) {
 							this._taskErrors[task.getMapKey()] = true;

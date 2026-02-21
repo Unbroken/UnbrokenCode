@@ -634,17 +634,70 @@ export function translatePackageJSON(packageJSON: string, packageNLSPath: string
 const extensionsPath = path.join(root, 'extensions');
 
 export async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { script: string; outputRoot?: string }[]): Promise<void> {
-	function reporter(stdError: string, script: string, isIncremental: boolean) {
-		const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-		if (!isIncremental) {
-			fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+	function reporter(stdError: string, scriptDir: string) {
+		const errorRegex = /\> (.+):(\d+):(\d+): error: (.+)/g;
+		const matches = [...(stdError || '').matchAll(errorRegex)];
+		for (const match of matches) {
+			const [, filePath, line, col, message] = match;
+			const absolutePath = path.resolve(scriptDir, filePath);
+			fancyLog.error(ansiColors.red(`> ${absolutePath}:${line}:${col}: error: ${message}`));
 		}
-		for (const match of matches || []) {
-			fancyLog.error(ansiColors.red(match));
+		return matches.length;
+	}
+
+	// Shared state for aggregating watch builds across all esbuild processes
+	let initialBuildsRemaining = isWatch ? scripts.length : 0;
+	let pendingBuilds = 0;
+	let totalErrors = 0;
+	let flushTimer: ReturnType<typeof setTimeout> | undefined;
+	let isCompiling = false;
+
+	if (isWatch) {
+		// Emit starting marker once before launching processes
+		fancyLog('Starting esbuild compilation...');
+		isCompiling = true;
+	}
+
+	function onBuildStarted() {
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+			flushTimer = undefined;
 		}
+		if (!isCompiling) {
+			totalErrors = 0;
+			fancyLog('Starting esbuild compilation...');
+			isCompiling = true;
+		}
+		pendingBuilds++;
+	}
+
+	function onBuildFinished(errorCount: number, completesInitialBuild: boolean) {
+		totalErrors += errorCount;
+		if (completesInitialBuild) {
+			initialBuildsRemaining--;
+		}
+		if (pendingBuilds > 0) {
+			pendingBuilds--;
+		}
+		if (initialBuildsRemaining > 0 || pendingBuilds > 0 || !isCompiling) {
+			return;
+		}
+		// Flush after a short delay to allow other processes to finish in the same cycle
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+		}
+		flushTimer = setTimeout(() => {
+			if (initialBuildsRemaining === 0 && pendingBuilds === 0 && isCompiling) {
+				fancyLog(`Finished esbuild compilation with ${totalErrors} errors.`);
+				totalErrors = 0;
+				isCompiling = false;
+			}
+			flushTimer = undefined;
+		}, 100);
 	}
 
 	const tasks = scripts.map(({ script, outputRoot }) => {
+		const scriptDir = path.dirname(script);
 		return new Promise<void>((resolve, reject) => {
 			const args = [script];
 			if (isWatch) {
@@ -654,20 +707,59 @@ export async function esbuildExtensions(taskName: string, isWatch: boolean, scri
 				args.push('--outputRoot', outputRoot);
 			}
 			const proc = cp.execFile(process.argv[0], args, {}, (error, _stdout, stderr) => {
+				const errorCount = reporter(stderr, scriptDir);
 				if (error) {
-					return reject(error);
+					return reject(errorCount > 0 ? new Error(`esbuild ${script} failed with ${errorCount} errors`, { cause: error }) : error);
 				}
-				reporter(stderr, script, false);
 				return resolve();
 			});
 
-			proc.stdout!.on('data', (data) => {
-				fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
-			});
+			if (isWatch) {
+				let stderrBuffer = '';
+				let initialBuildCompleted = false;
 
-			proc.stderr!.on('data', (data) => {
-				reporter(data, script, true);
-			});
+				proc.stdout!.on('data', (data) => {
+					const str = data.toString('utf8');
+					fancyLog(`${ansiColors.green(taskName)}: ${str}`);
+					const watchEvents = [...str.matchAll(/\[watch\] build (started|finished)/g)].map(match => match[1]);
+					if (watchEvents.length === 0) {
+						return;
+					}
+
+					const processWatchEvents = (errorCount: number) => {
+						let reportedErrors = false;
+						for (const event of watchEvents) {
+							if (event === 'started') {
+								onBuildStarted();
+							} else {
+								const completesInitialBuild = !initialBuildCompleted;
+								initialBuildCompleted = true;
+								onBuildFinished(reportedErrors ? 0 : errorCount, completesInitialBuild);
+								reportedErrors = true;
+							}
+						}
+					};
+
+					if (watchEvents.includes('finished')) {
+						// Defer to let pending stderr data events flush first
+						setImmediate(() => {
+							const errorCount = reporter(stderrBuffer, scriptDir);
+							stderrBuffer = '';
+							processWatchEvents(errorCount);
+						});
+					} else {
+						processWatchEvents(0);
+					}
+				});
+
+				proc.stderr!.on('data', (data) => {
+					stderrBuffer += data.toString('utf8');
+				});
+			} else {
+				proc.stdout!.on('data', (data) => {
+					fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
+				});
+			}
 		});
 	});
 

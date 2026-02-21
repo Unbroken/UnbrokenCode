@@ -58,6 +58,7 @@ async function watchWithParcel(ctx: esbuild.BuildContext, srcDir: string, didBui
 			clearTimeout(debounce);
 		}
 		debounce = setTimeout(async () => {
+			console.log('[watch] build started');
 			try {
 				await ctx.cancel();
 				const result = await ctx.rebuild();
@@ -66,6 +67,8 @@ async function watchWithParcel(ctx: esbuild.BuildContext, srcDir: string, didBui
 				}
 			} catch (error) {
 				console.error('[watch] build error:', error);
+			} finally {
+				console.log('[watch] build finished');
 			}
 		}, 100);
 	};

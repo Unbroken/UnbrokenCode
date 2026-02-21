@@ -43,11 +43,13 @@ async function build(options, didBuild) {
  * @param {(outDir: string) => unknown} [didBuild]
  */
 async function tryBuild(options, didBuild) {
+	console.log('[watch] build started');
 	try {
 		await build(options, didBuild);
 	} catch (err) {
 		console.error(err);
 	}
+	console.log('[watch] build finished');
 }
 
 /**

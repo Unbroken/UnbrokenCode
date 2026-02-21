@@ -686,17 +686,64 @@ export async function webpackExtensions(taskName: string, isWatch: boolean, webp
 }
 
 async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { script: string; outputRoot?: string }[]) {
-	function reporter(stdError: string, script: string, isIncremental: boolean,) {
-		const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-		if (!isIncremental) {
-			fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+	function reporter(stdError: string, scriptDir: string) {
+		const errorRegex = /\> (.+):(\d+):(\d+): error: (.+)/g;
+		const matches = [...(stdError || '').matchAll(errorRegex)];
+		for (const match of matches) {
+			const [, filePath, line, col, message] = match;
+			const absolutePath = path.resolve(scriptDir, filePath);
+			fancyLog.error(ansiColors.red(`> ${absolutePath}:${line}:${col}: error: ${message}`));
 		}
-		for (const match of matches || []) {
-			fancyLog.error(ansiColors.red(match));
+		return matches.length;
+	}
+
+	// Shared state for aggregating watch builds across all esbuild processes
+	let initialBuildsRemaining = isWatch ? scripts.length : 0;
+	let pendingBuilds = 0;
+	let totalErrors = 0;
+	let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+	if (isWatch) {
+		// Emit starting marker once before launching processes
+		fancyLog('Starting esbuild compilation...');
+	}
+
+	function onBuildStarted() {
+		if (initialBuildsRemaining > 0) {
+			// Initial build phase - starting marker already emitted
+			return;
 		}
+		if (pendingBuilds === 0) {
+			totalErrors = 0;
+			fancyLog('Starting esbuild compilation...');
+		}
+		pendingBuilds++;
+	}
+
+	function onBuildFinished(errorCount: number) {
+		totalErrors += errorCount;
+		if (initialBuildsRemaining > 0) {
+			initialBuildsRemaining--;
+			if (initialBuildsRemaining === 0) {
+				fancyLog(`Finished esbuild compilation with ${totalErrors} errors.`);
+				totalErrors = 0;
+			}
+			return;
+		}
+		pendingBuilds--;
+		// Flush after a short delay to allow other processes to finish in the same cycle
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+		}
+		flushTimer = setTimeout(() => {
+			if (pendingBuilds === 0) {
+				fancyLog(`Finished esbuild compilation with ${totalErrors} errors.`);
+			}
+		}, 100);
 	}
 
 	const tasks = scripts.map(({ script, outputRoot }) => {
+		const scriptDir = path.dirname(script);
 		return new Promise<void>((resolve, reject) => {
 			const args = [script];
 			if (isWatch) {
@@ -709,17 +756,40 @@ async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { 
 				if (error) {
 					return reject(error);
 				}
-				reporter(stderr, script, false);
+				const errorCount = reporter(stderr, scriptDir);
+				if (errorCount > 0) {
+					return reject(new Error(`esbuild ${script} failed with ${errorCount} errors`));
+				}
 				return resolve();
 			});
 
-			proc.stdout!.on('data', (data) => {
-				fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
-			});
+			if (isWatch) {
+				let stderrBuffer = '';
 
-			proc.stderr!.on('data', (data) => {
-				reporter(data, script, true);
-			});
+				proc.stdout!.on('data', (data) => {
+					const str = data.toString('utf8');
+					fancyLog(`${ansiColors.green(taskName)}: ${str}`);
+					if (str.includes('build started')) {
+						onBuildStarted();
+					}
+					if (str.includes('build finished')) {
+						// Defer to let pending stderr data events flush first
+						setImmediate(() => {
+							const errorCount = reporter(stderrBuffer, scriptDir);
+							stderrBuffer = '';
+							onBuildFinished(errorCount);
+						});
+					}
+				});
+
+				proc.stderr!.on('data', (data) => {
+					stderrBuffer += data.toString('utf8');
+				});
+			} else {
+				proc.stdout!.on('data', (data) => {
+					fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
+				});
+			}
 		});
 	});
 	return Promise.all(tasks);

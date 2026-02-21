@@ -35,11 +35,13 @@ async function build(options: BuildOptions, didBuild?: (outDir: string) => unkno
  * Build the source code once using esbuild, logging errors instead of throwing.
  */
 async function tryBuild(options: BuildOptions, didBuild?: (outDir: string) => unknown): Promise<void> {
+	console.log('[watch] build started');
 	try {
 		await build(options, didBuild);
 	} catch (err) {
 		console.error(err);
 	}
+	console.log('[watch] build finished');
 }
 
 export async function run(

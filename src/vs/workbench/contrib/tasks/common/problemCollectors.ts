@@ -42,8 +42,10 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	private matchers: INumberDictionary<ILineMatcher[]>;
 	private activeMatcher: ILineMatcher | null;
 	private needMoreLinesMatcher: ILineMatcher | null;
-	protected _numberOfMatches: number;
-	private _maxMarkerSeverity?: MarkerSeverity;
+	// [owner] -> match count
+	protected _numberOfMatchesPerOwner: Map<string, number>;
+	// [owner] -> max severity
+	private _maxMarkerSeverityPerOwner: Map<string, MarkerSeverity | undefined>;
 	private buffer: string[];
 	private bufferLength: number;
 	private openModels: IStringDictionary<boolean>;
@@ -90,8 +92,8 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 		this.buffer = [];
 		this.activeMatcher = null;
 		this.needMoreLinesMatcher = null;
-		this._numberOfMatches = 0;
-		this._maxMarkerSeverity = undefined;
+		this._numberOfMatchesPerOwner = new Map();
+		this._maxMarkerSeverityPerOwner = new Map();
 		this._sequenceNumber = 0;
 		this.openModels = Object.create(null);
 		this.applyToByOwner = new Map<string, ApplyToKind>();
@@ -144,11 +146,21 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	}
 
 	public get numberOfMatches(): number {
-		return this._numberOfMatches;
+		let total = 0;
+		for (const count of this._numberOfMatchesPerOwner.values()) {
+			total += count;
+		}
+		return total;
 	}
 
 	public get maxMarkerSeverity(): MarkerSeverity | undefined {
-		return this._maxMarkerSeverity;
+		let max: MarkerSeverity | undefined = undefined;
+		for (const severity of this._maxMarkerSeverityPerOwner.values()) {
+			if (severity !== undefined && (max === undefined || severity > max)) {
+				max = severity;
+			}
+		}
+		return max;
 	}
 
 	protected tryFindMarker(line?: string): IProblemMatch | null {
@@ -271,14 +283,17 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	}
 
 	private captureMatch(match: IProblemMatch): void {
-		this._numberOfMatches++;
 		this._sequenceNumber++;
 
 		// Add sequence number to the marker data
 		match.marker.sequenceNumber = this._sequenceNumber;
 
-		if (this._maxMarkerSeverity === undefined || match.marker.severity > this._maxMarkerSeverity) {
-			this._maxMarkerSeverity = match.marker.severity;
+		const owner = match.description.owner;
+		this._numberOfMatchesPerOwner.set(owner, (this._numberOfMatchesPerOwner.get(owner) ?? 0) + 1);
+
+		const currentMax = this._maxMarkerSeverityPerOwner.get(owner);
+		if (currentMax === undefined || match.marker.severity > currentMax) {
+			this._maxMarkerSeverityPerOwner.set(owner, match.marker.severity);
 		}
 	}
 
@@ -415,11 +430,21 @@ export abstract class AbstractProblemCollector extends Disposable implements IDi
 	}
 
 	protected cleanMarkerCaches(): void {
-		this._numberOfMatches = 0;
-		this._maxMarkerSeverity = undefined;
+		this._numberOfMatchesPerOwner.clear();
+		this._maxMarkerSeverityPerOwner.clear();
 		this._sequenceNumber = 0;
 		this.markers.clear();
 		this.deliveredMarkers.clear();
+	}
+
+	protected cleanMarkerCachesForOwner(owner: string): void {
+		this.markers.delete(owner);
+		this.deliveredMarkers.delete(owner);
+	}
+
+	protected resetOwnerMatchCount(owner: string): void {
+		this._numberOfMatchesPerOwner.delete(owner);
+		this._maxMarkerSeverityPerOwner.delete(owner);
 	}
 
 	public done(): void {
@@ -635,9 +660,10 @@ export class WatchingProblemCollector extends AbstractProblemCollector implement
 					this.lines.push(line);
 				}
 				this._onDidStateChange.fire(IProblemCollectorEvent.create(ProblemCollectorEventKind.BackgroundProcessingBegins));
-				this.cleanMarkerCaches();
-				this.resetCurrentResource();
 				const owner = background.matcher.owner;
+				this.resetOwnerMatchCount(owner);
+				this.cleanMarkerCachesForOwner(owner);
+				this.resetCurrentResource();
 				const file = matches[background.begin.file!];
 				if (file) {
 					const resource = getResource(file, background.matcher);
@@ -660,9 +686,9 @@ export class WatchingProblemCollector extends AbstractProblemCollector implement
 				this.logService?.trace(`ProblemMatcher: slow end regexp took ${elapsed}ms to execute`, background.end.regexp.source);
 			}
 			if (matches) {
-				if (this._numberOfMatches > 0) {
+				if ((this._numberOfMatchesPerOwner.get(background.matcher.owner) ?? 0) > 0) {
 					this._onDidFindErrors.fire(this.markerService.read({ owner: background.matcher.owner }));
-				} else {
+				} else if (this.numberOfMatches === 0) {
 					this._onDidRequestInvalidateLastMarker.fire();
 				}
 				if (this._activeBackgroundMatchers.delete(background.key)) {
@@ -675,7 +701,7 @@ export class WatchingProblemCollector extends AbstractProblemCollector implement
 					}
 					const owner = background.matcher.owner;
 					this.cleanMarkers(owner);
-					this.cleanMarkerCaches();
+					this.cleanMarkerCachesForOwner(owner);
 				}
 			}
 		}

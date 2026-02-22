@@ -105,8 +105,8 @@ Source: "bin\code.cmd"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBi
 Source: "bin\code"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirApplicationFilename}"; Flags: ignoreversion
 Source: "{#ProductJsonPath}"; DestDir: "{code:GetDestDir}\{#VersionedResourcesFolder}\resources\app"; Flags: ignoreversion
 #ifdef AppxPackageName
-Source: "appx\{#AppxPackage}"; DestDir: "{code:GetDestDir}\{#VersionedResourcesFolder}\appx"; BeforeInstall: RemoveAppxPackage; Flags: ignoreversion; Check: IsWindows11OrLater
-Source: "appx\{#AppxPackageDll}"; DestDir: "{code:GetDestDir}\{#VersionedResourcesFolder}\appx"; AfterInstall: AddAppxPackage; Flags: ignoreversion; Check: IsWindows11OrLater
+Source: "appx\{#AppxPackage}"; DestDir: "{app}\{#VersionedResourcesFolder}\appx"; BeforeInstall: RemoveAppxPackage; Flags: ignoreversion; Check: IsWindows11OrLater
+Source: "appx\{#AppxPackageDll}"; DestDir: "{app}\{#VersionedResourcesFolder}\appx"; AfterInstall: AddAppxPackage; Flags: ignoreversion; Check: IsWindows11OrLater
 #endif
 
 [Icons]

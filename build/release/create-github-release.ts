@@ -201,17 +201,6 @@ function sortReleaseTagsByVersion(tags: string[]): string[] {
 	});
 }
 
-function getCommitsBetween(fromCommit: string, toCommit: string, excludeMerges: boolean = true): string[] {
-	try {
-		const noMerges = excludeMerges ? ' --no-merges' : '';
-		const output = execSync(`git rev-list --reverse${noMerges} ${fromCommit}..${toCommit}`, { encoding: 'utf8' }).trim();
-		return output ? output.split('\n') : [];
-	} catch (error) {
-		console.warn(`Warning: Could not get commits between ${fromCommit} and ${toCommit}`);
-		return [];
-	}
-}
-
 function getCommitSetBetween(fromCommit: string | null, toCommit: string | null): Set<string> {
 	const result = new Set<string>();
 	if (!fromCommit || !toCommit || fromCommit === toCommit) {
@@ -228,15 +217,6 @@ function getCommitSetBetween(fromCommit: string | null, toCommit: string | null)
 		// ignore
 	}
 	return result;
-}
-
-function getCommitMessage(commit: string): string {
-	try {
-		return execSync(`git log -1 --pretty=format:"%B" ${commit}`, { encoding: 'utf8' }).trim();
-	} catch (error) {
-		console.warn(`Warning: Could not get commit message for ${commit}`);
-		return '';
-	}
 }
 
 function getCommitSubjectsBetween(fromCommit: string, toCommit: string): Set<string> {
@@ -283,19 +263,6 @@ function remoteExists(remote: string): boolean {
 	}
 }
 
-function isCommitOnUpstream(commit: string): boolean {
-	if (!remoteExists('upstream')) {
-		return false;
-	}
-	try {
-		const output = execSync(`git branch -r --list 'upstream/*' --contains ${commit}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-		return output.length > 0;
-	} catch (error) {
-		// If the command fails (e.g., commit not found), assume not on upstream
-		return false;
-	}
-}
-
 function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 	const shaSet = new Set<string>();
 	const subjectSet = new Set<string>();
@@ -317,7 +284,7 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 	}
 
 	try {
-		const shasOutput = execSync('git rev-list upstream/main', { encoding: 'utf8', maxBuffer: 1024 * 1024 * 256 }).trim();
+		const shasOutput = execSync('git rev-list --remotes=upstream', { encoding: 'utf8', maxBuffer: 1024 * 1024 * 256 }).trim();
 		if (shasOutput) {
 			for (const sha of shasOutput.split('\n')) {
 				shaSet.add(sha);
@@ -398,37 +365,68 @@ async function generateReleaseNotes(buildCommit: string, currentTag: string): Pr
 		debugLog('No rebase detected. Base for range is previous release commit.');
 	}
 
-	const commits = getCommitsBetween(baseForRange, buildCommit, true);
 	const { shaSet: upstreamShaSet, subjectSet: upstreamSubjectSet } = getUpstreamSets();
 
-	debugLog('Candidate commits count:', commits.length);
+	// Batch-fetch all commit hashes and subjects in a single git command
+	console.log('Collecting commits...');
+	const commitSubjects = new Map<string, string>();
+	const commitOrder: string[] = [];
+	try {
+		const output = execSync(
+			`git log --no-merges --reverse --format="%H %s" ${baseForRange}..${buildCommit}`,
+			{ encoding: 'utf8', maxBuffer: 1024 * 1024 * 64 }
+		).trim();
+		if (output) {
+			for (const line of output.split('\n')) {
+				const spaceIdx = line.indexOf(' ');
+				if (spaceIdx > 0) {
+					commitSubjects.set(line.substring(0, spaceIdx), line.substring(spaceIdx + 1));
+					commitOrder.push(line.substring(0, spaceIdx));
+				}
+			}
+		}
+	} catch (error) {
+		console.warn('Warning: Could not batch-fetch commit subjects');
+	}
+
+	// Batch-detect commits tagged with [no release notes]
+	const noReleaseNotesCommits = new Set<string>();
+	try {
+		const output = execSync(
+			`git log --no-merges --format="%H" --grep="\\[no release notes\\]" -i ${baseForRange}..${buildCommit}`,
+			{ encoding: 'utf8', maxBuffer: 1024 * 1024 * 16 }
+		).trim();
+		if (output) {
+			for (const line of output.split('\n')) {
+				noReleaseNotesCommits.add(line.trim());
+			}
+		}
+	} catch (error) {
+		debugLog('Error fetching no-release-notes commits:', error);
+	}
+
+	debugLog('Candidate commits count:', commitOrder.length);
 	debugLog('Upstream filter sizes:', { shas: upstreamShaSet.size, subjects: upstreamSubjectSet.size });
 
 	const releaseNotes: string[] = [];
 	const seenSubjects = new Set<string>();
 
-	for (const commit of commits) {
-		// Fast checks first: filter by upstream SHA before calling git commands
+	console.log(`Processing ${commitOrder.length} commits...`);
+	for (const commit of commitOrder) {
+		// Filter by upstream SHA
 		if (upstreamShaSet.size > 0 && upstreamShaSet.has(commit)) {
 			debugLog('[skip upstream-sha]', commit.substring(0, 7));
 			continue;
 		}
 
-		// Now fetch the commit message (requires git command)
-		const message = getCommitMessage(commit);
-		if (!message) {
-			debugLog('Skipping commit with empty message:', commit.substring(0, 7));
-			continue;
-		}
-		// Take only the first line of the commit message
-		const firstLine = message.split('\n')[0].trim();
+		const firstLine = commitSubjects.get(commit) || '';
 
 		// Skip obvious non-notes
 		if (!firstLine || firstLine === 'Bump version') {
 			debugLog('[skip trivial]', commit.substring(0, 7), firstLine);
 			continue;
 		}
-		if (message.toLowerCase().includes('[no release notes]')) {
+		if (noReleaseNotesCommits.has(commit)) {
 			debugLog('[skip tag no release notes]', commit.substring(0, 7), firstLine);
 			continue;
 		}
@@ -448,12 +446,6 @@ async function generateReleaseNotes(buildCommit: string, currentTag: string): Pr
 		// De-duplicate within current set by subject
 		if (seenSubjects.has(firstLine)) {
 			debugLog('[skip duplicate-current]', commit.substring(0, 7), firstLine);
-			continue;
-		}
-
-		// Slow check last: check if this commit exists on any upstream branch (handles version branches, not just main)
-		if (isCommitOnUpstream(commit)) {
-			debugLog('[skip upstream-branch]', commit.substring(0, 7), firstLine);
 			continue;
 		}
 

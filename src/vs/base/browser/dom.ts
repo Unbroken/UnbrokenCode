@@ -1748,13 +1748,14 @@ export function triggerUpload(): Promise<FileList | undefined> {
 
 export interface INotification extends IDisposable {
 	readonly onClick: event.Event<void>;
+	readonly onDidClose: event.Event<void>;
 }
 
 function sanitizeNotificationText(text: string): string {
 	return text.replace(/`/g, '\''); // convert backticks to single quotes
 }
 
-export async function triggerNotification(message: string, options?: { detail?: string; sticky?: boolean }): Promise<INotification | undefined> {
+export async function triggerNotification(message: string, options?: { detail?: string; sticky?: boolean; tag?: string }): Promise<INotification | undefined> {
 	const permission = await Notification.requestPermission();
 	if (permission !== 'granted') {
 		return;
@@ -1765,16 +1766,22 @@ export async function triggerNotification(message: string, options?: { detail?: 
 	const notification = new Notification(sanitizeNotificationText(message), {
 		body: options?.detail ? sanitizeNotificationText(options.detail) : undefined,
 		requireInteraction: options?.sticky,
+		tag: options?.tag,
 	});
 
 	const onClick = new event.Emitter<void>();
+	const onDidClose = new event.Emitter<void>();
 	disposables.add(addDisposableListener(notification, 'click', () => onClick.fire()));
-	disposables.add(addDisposableListener(notification, 'close', () => disposables.dispose()));
+	disposables.add(addDisposableListener(notification, 'close', () => {
+		onDidClose.fire();
+		disposables.dispose();
+	}));
 
 	disposables.add(toDisposable(() => notification.close()));
 
 	return {
 		onClick: onClick.event,
+		onDidClose: onDidClose.event,
 		dispose: () => disposables.dispose()
 	};
 }

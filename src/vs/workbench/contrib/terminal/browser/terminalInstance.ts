@@ -37,6 +37,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { ResultKind } from '../../../../platform/keybinding/common/keybindingResolver.js';
+import { FocusMode } from '../../../../platform/native/common/native.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
@@ -56,9 +57,10 @@ import { IWorkspaceContextService, IWorkspaceFolder } from '../../../../platform
 import { IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { PANEL_BACKGROUND, SIDE_BAR_BACKGROUND } from '../../../common/theme.js';
 import { IViewDescriptorService, ViewContainerLocation } from '../../../common/views.js';
+import { IHostService } from '../../../services/host/browser/host.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibilityConfiguration.js';
-import { IRequestAddInstanceToGroupEvent, ITerminalConfigurationService, ITerminalContribution, ITerminalInstance, IXtermColorProvider, TerminalDataTransfers } from './terminal.js';
+import { IRequestAddInstanceToGroupEvent, ITerminalConfigurationService, ITerminalContribution, ITerminalInstance, ITerminalService, IXtermColorProvider, TerminalDataTransfers } from './terminal.js';
 import { TerminalLaunchHelpAction } from './terminalActions.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
@@ -400,6 +402,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@ICommandService private readonly _commandService: ICommandService,
 		@IAccessibilitySignalService private readonly _accessibilitySignalService: IAccessibilitySignalService,
 		@IViewDescriptorService private readonly _viewDescriptorService: IViewDescriptorService,
+		@IHostService private readonly _hostService: IHostService,
+		@ITerminalService private readonly _terminalService: ITerminalService,
 	) {
 		super();
 
@@ -849,6 +853,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 						icon: Codicon.bell,
 						tooltip: nls.localize('bellStatus', "Bell")
 					}, this._terminalConfigurationService.config.bellDuration);
+				}
+				if (this._configurationService.getValue(TerminalSettingId.EnableFlashBell)) {
+					this._flashTerminal();
+				}
+				if (this._configurationService.getValue(TerminalSettingId.EnableBellNotification)) {
+					this._showBellNotification();
 				}
 				this._accessibilitySignalService.playSignal(AccessibilitySignal.terminalBell);
 			}));
@@ -1403,6 +1413,74 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		if (didChange) {
 			this._onDidChangeVisibility.fire(visible);
+		}
+	}
+
+	private _flashTerminal(): void {
+		const el = this._wrapperElement;
+		el.classList.remove('bell-flash');
+		// Force reflow to restart animation on rapid successive bells
+		void el.offsetHeight;
+		el.classList.add('bell-flash');
+		const listener = dom.addDisposableListener(el, 'animationend', () => {
+			el.classList.remove('bell-flash');
+			listener.dispose();
+		});
+	}
+
+	private _bellNotification: dom.INotification | undefined;
+	private _bellNotificationTitle: string | undefined;
+	private _bellNotificationId = generateUuid();
+
+	private async _showBellNotification(): Promise<void> {
+		// Only show when terminal is not visible in the currently focused window.
+		// _isVisible=false covers: panel hidden, different tab, different editor tab.
+		// ownerDocument.hasFocus()=false covers: terminal's window not focused (auxiliary windows, minimized).
+		const windowHasFocus = this._wrapperElement.ownerDocument?.hasFocus() ?? false;
+		if (this._isVisible && windowHasFocus) {
+			return;
+		}
+
+		const title = this.title || nls.localize('terminal', "Terminal");
+
+		// If there's already a notification for this terminal with the same
+		// title, keep it - no need to replace.
+		if (this._bellNotification && this._bellNotificationTitle === title) {
+			return;
+		}
+
+		// Dispose the previous notification if present.
+		if (this._bellNotification) {
+			this._bellNotification.dispose();
+			this._bellNotification = undefined;
+			this._bellNotificationTitle = undefined;
+		}
+
+		const targetWindow = dom.getWindow(this._wrapperElement);
+
+		// Use a unique tag per notification to avoid Electron's flaky
+		// tag-replacement behaviour where reusing a tag can cause the
+		// new notification to be immediately auto-closed.
+		this._bellNotificationId = generateUuid();
+		const notification = await dom.triggerNotification(
+			nls.localize('terminalBellNotification', "Bell in terminal: {0}", title),
+			{ tag: `terminal-bell-${this._bellNotificationId}` }
+		);
+
+		if (notification) {
+			this._bellNotification = notification;
+			this._bellNotificationTitle = title;
+			this._register(Event.once(notification.onClick)(async () => {
+				await this._hostService.focus(targetWindow, { mode: FocusMode.Force });
+				await this._terminalService.focusInstance(this as ITerminalInstance);
+				notification.dispose();
+				this._bellNotification = undefined;
+				this._bellNotificationTitle = undefined;
+			}));
+			this._register(Event.once(notification.onDidClose)(() => {
+				this._bellNotification = undefined;
+				this._bellNotificationTitle = undefined;
+			}));
 		}
 	}
 

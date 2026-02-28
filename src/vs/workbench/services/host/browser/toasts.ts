@@ -17,7 +17,8 @@ export interface IShowToastController {
 export async function showBrowserToast(controller: IShowToastController, options: IToastOptions, token: CancellationToken): Promise<IToastResult> {
 	const toast = await triggerBrowserToast(options.title, {
 		detail: options.body,
-		sticky: !options.silent
+		sticky: !options.silent,
+		tag: options.tag
 	});
 
 	if (!toast) {
@@ -55,7 +56,7 @@ interface INotification extends IDisposable {
 	readonly onError: Event<void>;
 }
 
-async function triggerBrowserToast(message: string, options?: { detail?: string; sticky?: boolean }): Promise<INotification | undefined> {
+async function triggerBrowserToast(message: string, options?: { detail?: string; sticky?: boolean; tag?: string }): Promise<INotification | undefined> {
 	const permission = await Notification.requestPermission();
 	if (permission !== 'granted') {
 		return;
@@ -66,6 +67,7 @@ async function triggerBrowserToast(message: string, options?: { detail?: string;
 	const notification = new Notification(message, {
 		body: options?.detail,
 		requireInteraction: options?.sticky,
+		tag: options?.tag,
 	});
 
 	const onClick = disposables.add(new Emitter<void>());

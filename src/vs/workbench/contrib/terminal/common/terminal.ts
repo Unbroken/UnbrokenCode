@@ -174,6 +174,8 @@ export interface ITerminalConfiguration {
 	confirmOnExit: ConfirmOnExit;
 	confirmOnKill: ConfirmOnKill;
 	enableBell: boolean;
+	enableFlashBell: boolean;
+	enableBellNotification: boolean;
 	env: {
 		linux: { [key: string]: string };
 		osx: { [key: string]: string };

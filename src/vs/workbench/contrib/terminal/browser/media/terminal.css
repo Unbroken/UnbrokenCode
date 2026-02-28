@@ -634,3 +634,24 @@
 .monaco-workbench .xterm.terminal.hide {
 	visibility: hidden;
 }
+
+.monaco-workbench .terminal-wrapper {
+	position: relative;
+}
+
+.monaco-workbench .terminal-wrapper.bell-flash::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background-color: var(--vscode-terminal-foreground);
+	opacity: 0;
+	pointer-events: none;
+	z-index: 35;
+	animation: terminal-bell-flash 0.2s ease-out;
+}
+
+@keyframes terminal-bell-flash {
+	0% { opacity: 0; }
+	40% { opacity: 0.2; }
+	100% { opacity: 0; }
+}

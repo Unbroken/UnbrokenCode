@@ -385,6 +385,9 @@ import './contrib/welcomeViews/common/newFile.contribution.js';
 // Unbroken Code Onboarding
 import './contrib/unbrokenOnboarding/browser/unbrokenOnboarding.contribution.js';
 
+// Unbroken Code Migration (applicationName change)
+import './contrib/unbrokenMigration/browser/unbrokenMigration.contribution.js';
+
 // Welcome Onboarding
 import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 

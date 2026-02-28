@@ -76,12 +76,12 @@ class UnbrokenMigrationEditorResolverContribution extends Disposable {
 				canSupportResource: uri => uri.scheme === UnbrokenMigrationInput.RESOURCE.scheme && uri.authority === 'unbroken_migration',
 			},
 			{
-				createEditorInput: ({ resource, options }) => {
+				createEditorInput: ({ options }) => {
 					return {
 						editor: disposables.add(this.instantiationService.createInstance(UnbrokenMigrationInput)),
 						options: {
 							...options,
-							pinned: false
+							pinned: options?.pinned ?? false
 						}
 					};
 				}

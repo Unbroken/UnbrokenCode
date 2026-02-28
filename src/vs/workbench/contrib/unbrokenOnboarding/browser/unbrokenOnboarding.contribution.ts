@@ -21,6 +21,7 @@ import { registerAction2, Action2, MenuId } from '../../../../platform/actions/c
 import { localize, localize2 } from '../../../../nls.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 import { IEditorResolverService, RegisteredEditorPriority } from '../../../services/editor/common/editorResolverService.js';
+import { GettingStartedInput } from '../../welcomeGettingStarted/browser/gettingStartedInput.js';
 
 // Import to ensure the configuration override manager contribution is registered
 import './configurationOverrideManager.contribution.js';
@@ -79,12 +80,12 @@ class UnbrokenOnboardingEditorResolverContribution extends Disposable {
 				canSupportResource: uri => uri.scheme === UnbrokenOnboardingInput.RESOURCE.scheme && uri.authority === 'unbroken_onboarding',
 			},
 			{
-				createEditorInput: ({ resource, options }) => {
+				createEditorInput: ({ options }) => {
 					return {
 						editor: disposables.add(this.instantiationService.createInstance(UnbrokenOnboardingInput)),
 						options: {
 							...options,
-							pinned: false
+							pinned: options?.pinned ?? false
 						}
 					};
 				}
@@ -141,12 +142,23 @@ class UnbrokenOnboardingContribution extends Disposable {
 				StorageTarget.MACHINE
 			);
 
-			// Open the onboarding editor
+			// Open the welcome page behind the onboarding editor so it's
+			// visible when the user finishes or closes onboarding.
+			await this.editorService.openEditor({
+				resource: GettingStartedInput.RESOURCE,
+				options: {
+					override: GettingStartedInput.ID,
+					pinned: true,
+					inactive: true
+				}
+			});
+
+			// Open the onboarding editor on top
 			await this.editorService.openEditor({
 				resource: UnbrokenOnboardingInput.RESOURCE,
 				options: {
 					override: UnbrokenOnboardingInput.ID,
-					pinned: false
+					pinned: true
 				}
 			});
 		}

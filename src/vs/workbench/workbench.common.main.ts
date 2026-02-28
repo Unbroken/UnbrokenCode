@@ -394,6 +394,9 @@ import './contrib/welcomeWalkthrough/browser/walkThrough.contribution.js';
 import './contrib/welcomeViews/common/viewsWelcome.contribution.js';
 import './contrib/welcomeViews/common/newFile.contribution.js';
 
+// Unbroken Code Migration (applicationName change)
+import './contrib/unbrokenMigration/browser/unbrokenMigration.contribution.js';
+
 // Welcome Onboarding
 import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 

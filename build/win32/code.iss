@@ -74,6 +74,8 @@ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\nod
 Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\node_modules.asar.unpacked"; Check: IsNotBackgroundUpdate
 Type: files; Name: "{app}\{#VersionedResourcesFolder}\resources\app\node_modules.asar"; Check: IsNotBackgroundUpdate
 Type: files; Name: "{app}\{#VersionedResourcesFolder}\resources\app\Credits_45.0.2454.85.html"; Check: IsNotBackgroundUpdate
+Type: files; Name: "{app}\bin\code.cmd"
+Type: files; Name: "{app}\bin\code"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_"
@@ -1480,9 +1482,16 @@ var
 begin
   ShouldRestartTunnelService := False;
  	if CheckForMutexes('{#TunnelServiceMutex}') then begin
-		// stop the tunnel service
-		Log('Stopping the tunnel service using ' + ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'));
-		ShellExec('', ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'), 'tunnel service uninstall', '', SW_HIDE, ewWaitUntilTerminated, StopServiceResultCode);
+		// stop the tunnel service, trying new name first then falling back to old name
+		if FileExists(ExpandConstant('{app}\bin\{#ApplicationName}.cmd')) then begin
+			Log('Stopping the tunnel service using ' + ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'));
+			ShellExec('', ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'), 'tunnel service uninstall', '', SW_HIDE, ewWaitUntilTerminated, StopServiceResultCode);
+		end else if FileExists(ExpandConstant('{app}\bin\code.cmd')) then begin
+			Log('Stopping the tunnel service using old binary: ' + ExpandConstant('"{app}\bin\code.cmd"'));
+			ShellExec('', ExpandConstant('{app}\bin\code.cmd'), 'tunnel service uninstall', '', SW_HIDE, ewWaitUntilTerminated, StopServiceResultCode);
+		end else begin
+			Log('No tunnel service binary found to stop the service');
+		end;
 
 		Log('Stopping the tunnel service completed with result code ' + IntToStr(StopServiceResultCode));
 

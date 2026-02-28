@@ -283,6 +283,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/unbrokenMigration",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/watermark",
 			"project": "vscode-workbench"
 		},

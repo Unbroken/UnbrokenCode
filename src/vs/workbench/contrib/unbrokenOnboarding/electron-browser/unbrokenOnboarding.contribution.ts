@@ -16,6 +16,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { ILifecycleService, LifecyclePhase, StartupKind } from '../../../services/lifecycle/common/lifecycle.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { UNBROKEN_ONBOARDING_STORAGE_KEY } from '../common/unbrokenOnboardingConstants.js';
+import { UNBROKEN_MIGRATION_STORAGE_KEY } from '../../unbrokenMigration/common/unbrokenMigrationConstants.js';
 import { registerAction2, Action2, MenuId } from '../../../../platform/actions/common/actions.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
@@ -127,6 +128,16 @@ class UnbrokenOnboardingContribution extends Disposable {
 			this.storageService.store(
 				UNBROKEN_ONBOARDING_STORAGE_KEY,
 				true,
+				StorageScope.APPLICATION,
+				StorageTarget.MACHINE
+			);
+
+			// New users don't need the migration screen.
+			// Set this here in case migration contribution runs after us
+			// and sees onboarding as "completed".
+			this.storageService.store(
+				UNBROKEN_MIGRATION_STORAGE_KEY,
+				'true',
 				StorageScope.APPLICATION,
 				StorageTarget.MACHINE
 			);

@@ -413,6 +413,16 @@ const terminalConfiguration: IStringDictionary<IConfigurationPropertySchema> = {
 		type: 'boolean',
 		default: false
 	},
+	[TerminalSettingId.EnableFlashBell]: {
+		description: localize('terminal.integrated.enableFlashBell', "Controls whether the terminal flashes when a bell event is triggered."),
+		type: 'boolean',
+		default: true
+	},
+	[TerminalSettingId.EnableBellNotification]: {
+		description: localize('terminal.integrated.enableBellNotification', "Controls whether a desktop notification is shown when a bell event is triggered in a terminal that is not currently visible. Clicking the notification focuses the terminal."),
+		type: 'boolean',
+		default: true
+	},
 	[TerminalSettingId.CommandsToSkipShell]: {
 		markdownDescription: localize(
 			'terminal.integrated.commandsToSkipShell',

@@ -34,7 +34,7 @@ export interface ILanguageSample {
 export interface IPreviewEditorConfig {
 	languages: ILanguageSample[];
 	defaultLanguage?: string;
-	configOverrides?: Record<string, any>;
+	configOverrides?: Record<string, unknown>;
 	readOnly?: boolean;
 }
 
@@ -51,7 +51,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 	protected configOverrideManager: ConfigurationOverrideManager;
 	protected languageSamples: ILanguageSample[] = [];
 	protected currentLanguageIndex: number = 0;
-	protected currentConfigOverrides?: Record<string, any>;
+	protected currentConfigOverrides?: Record<string, unknown>;
 
 	constructor(
 		@IInstantiationService protected readonly instantiationService: IInstantiationService,
@@ -143,7 +143,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 			const note = append(footer, $('.onboarding-footer-note'));
 			note.textContent = options.settingsApplyMode === 'realtime'
 				? 'Try it out - changes save instantly'
-				: 'Review your choices, then click Finish to apply';
+				: 'Review your choices, then click Continue to apply';
 		}
 
 		const buttonGroup = append(footer, $('.onboarding-button-group'));
@@ -219,11 +219,13 @@ export abstract class BaseOnboardingScreen extends Disposable {
 		// Add language switcher if multiple languages are available
 		if (this.languageSamples.length > 1) {
 			const languageSwitcher = append(previewHeader, $('.language-switcher'));
+			const languageButtons: HTMLButtonElement[] = [];
 
 			this.languageSamples.forEach((langSample, index) => {
 				const button = append(languageSwitcher, $('button.language-button')) as HTMLButtonElement;
 				button.textContent = langSample.language;
 				button.type = 'button';
+				languageButtons.push(button);
 
 				if (index === this.currentLanguageIndex) {
 					button.classList.add('active');
@@ -232,8 +234,9 @@ export abstract class BaseOnboardingScreen extends Disposable {
 				this._register(this.addDisposableListener(button, 'click', () => {
 					if (this.currentLanguageIndex !== index) {
 						// Remove active class from all buttons
-						const buttons = languageSwitcher.querySelectorAll('.language-button');
-						buttons.forEach(btn => btn.classList.remove('active'));
+						for (const btn of languageButtons) {
+							btn.classList.remove('active');
+						}
 
 						// Add active class to clicked button
 						button.classList.add('active');
@@ -369,7 +372,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 	/**
 	 * Update editor options
 	 */
-	protected updateEditorOptions(options: any): void {
+	protected updateEditorOptions(options: IEditorOptions): void {
 		if (this.previewEditor) {
 			this.previewEditor.updateOptions(options);
 		}

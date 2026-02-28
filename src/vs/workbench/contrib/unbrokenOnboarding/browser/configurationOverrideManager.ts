@@ -10,7 +10,7 @@ import { IExtensionService } from '../../../services/extensions/common/extension
 
 interface ConfigurationState {
 	existed: boolean;
-	value: any;
+	value: unknown;
 }
 
 // Singleton service to manage temporary configuration overrides for preview features
@@ -97,7 +97,7 @@ export class ConfigurationOverrideManager {
 		});
 	}
 
-	async enableForPreview(extensionService: IExtensionService, configs: Record<string, any>): Promise<void> {
+	async enableForPreview(extensionService: IExtensionService, configs: Record<string, unknown>): Promise<void> {
 		// Wait for startup restoration to complete first
 
 		await this.withLock(async () => {

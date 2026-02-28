@@ -18,6 +18,7 @@ import { FontSizeScreen } from './screens/fontSizeScreen.js';
 import { ColorDesignScreen } from './screens/colorDesignScreen.js';
 import { ColorThemeScreen } from './screens/colorThemeScreen.js';
 import { EditorIntrusiveScreen } from './screens/editorIntrusiveScreen.js';
+import { ShellCommandScreen } from './screens/shellCommandScreen.js';
 import './unbrokenOnboarding.css';
 import './screens/editorIntrusiveScreen.css';
 import { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
@@ -65,6 +66,11 @@ export class UnbrokenOnboardingPage extends EditorPane {
 		const editorIntrusiveScreen = this.instantiationService.createInstance(EditorIntrusiveScreen);
 		this.screens.push(editorIntrusiveScreen);
 		this._register(editorIntrusiveScreen);
+
+		// Add shell command install screen
+		const shellCommandScreen = this.instantiationService.createInstance(ShellCommandScreen);
+		this.screens.push(shellCommandScreen);
+		this._register(shellCommandScreen);
 
 		// Register navigation handlers for each screen
 		this.screens.forEach(screen => {

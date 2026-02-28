@@ -225,7 +225,7 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 		this.createSettingsPreviewEditor(this.previewColumn);
 
 		// Create footer with navigation
-		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Finish', settingsApplyMode: 'onfinish' });
+		this.createFooter(this.container, { showSkip: true, showPrevious: true, nextLabel: 'Continue', settingsApplyMode: 'onfinish' });
 	}
 
 	private createOptionSelector(parent: HTMLElement): void {

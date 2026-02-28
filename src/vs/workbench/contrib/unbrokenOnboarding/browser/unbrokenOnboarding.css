@@ -24,7 +24,8 @@
 .font-size-screen,
 .color-design-screen,
 .color-theme-screen,
-.editor-intrusive-screen {
+.editor-intrusive-screen,
+.shell-command-screen {
 	display: flex;
 	flex-direction: column;
 	max-width: 900px;
@@ -631,4 +632,84 @@
 .color-design-screen .preview-editor {
 	flex: 0 0 auto;
 	height: auto;
+}
+
+/* Shell command screen */
+.shell-command-explanation {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 20px;
+	background-color: var(--vscode-textBlockQuote-background);
+	border-left: 3px solid var(--vscode-textBlockQuote-border);
+	border-radius: 4px;
+}
+
+.shell-command-intro {
+	font-size: 14px;
+	line-height: 1.6;
+	color: var(--vscode-foreground);
+	margin: 0;
+}
+
+.shell-command-uses-title {
+	font-size: 14px;
+	font-weight: 600;
+	margin: 4px 0 0 0;
+	color: var(--vscode-foreground);
+}
+
+.shell-command-uses {
+	margin: 0;
+	padding-left: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.shell-command-uses li {
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--vscode-foreground);
+}
+
+.shell-command-cmd {
+	font-family: var(--monaco-monospace-font);
+	font-size: 10px;
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 3px;
+	padding: 2px 6px;
+}
+
+.shell-command-desc {
+	font-size: 13px;
+}
+
+.shell-command-note {
+	font-size: 12px;
+	font-style: italic;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+	margin: 4px 0 0 0;
+}
+
+.shell-command-actions {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-top: 8px;
+}
+
+.shell-command-status {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.shell-command-status.success {
+	color: var(--vscode-testing-iconPassed);
+}
+
+.shell-command-status.error {
+	color: var(--vscode-errorForeground);
 }

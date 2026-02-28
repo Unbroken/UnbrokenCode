@@ -998,9 +998,11 @@ export class GettingStartedPage extends EditorPane {
 		} else if (!this.productService.openToWelcomeMainPage && this.showFeaturedWalkthrough && this.storageService.isNew(StorageScope.APPLICATION)) {
 			const firstSessionDateString = this.storageService.get(firstSessionDateStorageKey, StorageScope.APPLICATION) || new Date().toUTCString();
 			const daysSinceFirstSession = ((+new Date()) - (+new Date(firstSessionDateString))) / 1000 / 60 / 60 / 24;
-			const fistContentBehaviour = daysSinceFirstSession < 1 ? 'openToFirstCategory' : 'index';
+			const hasOpenedFirstCategory = this.storageService.getBoolean('workbench.welcomePage.openedFirstCategory', StorageScope.APPLICATION);
+			const fistContentBehaviour = daysSinceFirstSession < 1 && !hasOpenedFirstCategory ? 'openToFirstCategory' : 'index';
 
 			if (fistContentBehaviour === 'openToFirstCategory') {
+				this.storageService.store('workbench.welcomePage.openedFirstCategory', true, StorageScope.APPLICATION, StorageTarget.MACHINE);
 				const first = this.gettingStartedCategories.filter(c => !c.when || this.contextService.contextMatchesRules(c.when))[0];
 				if (first && this.editorInput) {
 					this.currentWalkthrough = first;

@@ -101,8 +101,8 @@ Source: "{#ExeBasename}.VisualElementsManifest.xml"; DestDir: "{code:GetDestDir}
 Source: "{#SourceDir}\tools\*"; DestDir: "{app}\{#VersionedResourcesFolder}\tools"; Flags: ignoreversion
 Source: "policies\*"; DestDir: "{code:GetDestDir}\{#VersionedResourcesFolder}\policies"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "bin\{#TunnelApplicationName}.exe"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirTunnelApplicationFilename}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "bin\code.cmd"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirApplicationCmdFilename}"; Flags: ignoreversion
-Source: "bin\code"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirApplicationFilename}"; Flags: ignoreversion
+Source: "bin\{#ApplicationName}.cmd"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirApplicationCmdFilename}"; Flags: ignoreversion
+Source: "bin\{#ApplicationName}"; DestDir: "{code:GetDestDir}\bin"; DestName: "{code:GetBinDirApplicationFilename}"; Flags: ignoreversion
 Source: "{#ProductJsonPath}"; DestDir: "{code:GetDestDir}\{#VersionedResourcesFolder}\resources\app"; Flags: ignoreversion
 #ifdef AppxPackageName
 Source: "appx\{#AppxPackage}"; DestDir: "{app}\{#VersionedResourcesFolder}\appx"; BeforeInstall: RemoveAppxPackage; Flags: ignoreversion; Check: IsWindows11OrLater
@@ -1397,8 +1397,8 @@ begin
   ShouldRestartTunnelService := False;
  	if CheckForMutexes('{#TunnelServiceMutex}') then begin
 		// stop the tunnel service
-		Log('Stopping the tunnel service using ' + ExpandConstant('"{app}\bin\code.cmd"'));
-		ShellExec('', ExpandConstant('"{app}\bin\code.cmd"'), 'tunnel service uninstall', '', SW_HIDE, ewWaitUntilTerminated, StopServiceResultCode);
+		Log('Stopping the tunnel service using ' + ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'));
+		ShellExec('', ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'), 'tunnel service uninstall', '', SW_HIDE, ewWaitUntilTerminated, StopServiceResultCode);
 
 		Log('Stopping the tunnel service completed with result code ' + IntToStr(StopServiceResultCode));
 
@@ -1500,17 +1500,17 @@ end;
 function GetBinDirApplicationFilename(Value: string): string;
 begin
   if IsBackgroundUpdate() and IsVersionedUpdate() then
-    Result := 'new_code'
+    Result := ExpandConstant('new_{#ApplicationName}')
   else
-    Result := 'code';
+    Result := ExpandConstant('{#ApplicationName}');
 end;
 
 function GetBinDirApplicationCmdFilename(Value: string): string;
 begin
   if IsBackgroundUpdate() and IsVersionedUpdate() then
-    Result := 'new_code.cmd'
+    Result := ExpandConstant('new_{#ApplicationName}.cmd')
   else
-    Result := 'code.cmd';
+    Result := ExpandConstant('{#ApplicationName}.cmd');
 end;
 
 function BoolToStr(Value: Boolean): String;
@@ -1653,7 +1653,7 @@ begin
     begin
       // start the tunnel service
       Log('Restarting the tunnel service...');
-      ShellExec('', ExpandConstant('"{app}\bin\code.cmd"'), 'tunnel service install', '', SW_HIDE, ewWaitUntilTerminated, StartServiceResultCode);
+      ShellExec('', ExpandConstant('"{app}\bin\{#ApplicationName}.cmd"'), 'tunnel service install', '', SW_HIDE, ewWaitUntilTerminated, StartServiceResultCode);
       Log('Starting the tunnel service completed with result code ' + IntToStr(StartServiceResultCode));
       ShouldRestartTunnelService := False
     end;

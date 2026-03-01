@@ -35,6 +35,8 @@ import { IEditorGroupsService } from '../../../services/editor/common/editorGrou
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { forcedExpandRecursively } from './searchActionsTopBar.js';
 import { RenderableMatch, ISearchTreeFileMatch, ISearchTreeFolderMatchWithResource, ISearchResult, isSearchTreeFileMatch, isSearchTreeMatch } from './searchTreeModel/searchTreeCommon.js';
+import { IEditor } from '../../../../editor/common/editorCommon.js';
+import { getSelectionTextFromEditor } from './searchView.js';
 
 //#region Interfaces
 export interface IFindInFilesArgs {
@@ -275,6 +277,74 @@ registerAction2(class FindInFilesAction extends Action2 {
 	}
 });
 
+registerAction2(class FindInFilesWithSelectionAction extends Action2 {
+
+	constructor() {
+		super({
+			id: Constants.SearchCommandIds.FindInFilesWithSelectionActionId,
+			title: nls.localize2('findInFilesWithSelection', "Find in Files with Selection"),
+			category,
+			keybinding: {
+				weight: KeybindingWeight.WorkbenchContrib,
+				primary: 0,
+			},
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editorService = accessor.get(IEditorService);
+		const viewsService = accessor.get(IViewsService);
+
+		const activeEditor: IEditor = editorService.activeTextEditorControl as IEditor;
+		const selectedText = activeEditor ? getSelectionTextFromEditor(false, activeEditor) : null;
+
+		if (selectedText) {
+			findInFilesCommand(accessor, { query: selectedText });
+		} else {
+			const searchView = await openSearchView(viewsService, true);
+			if (searchView) {
+				searchView.updateTextFromFindWidgetOrSelection({ allowUnselectedWord: false });
+				searchView.searchAndReplaceWidget.focus(undefined, true, true);
+			}
+		}
+	}
+});
+
+registerAction2(class FindInFilesWithSelectionActionNoFocus extends Action2 {
+
+	constructor() {
+		super({
+			id: Constants.SearchCommandIds.FindInFilesWithSelectionActionId + 'NoFocus',
+			title: nls.localize2('findInFilesWithSelectionNoFocus', "Find in Files with Selection (Keep focus in editor)"),
+			category,
+			keybinding: {
+				weight: KeybindingWeight.WorkbenchContrib,
+				primary: 0,
+			},
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editorService = accessor.get(IEditorService);
+		const viewsService = accessor.get(IViewsService);
+
+		const activeEditor: IEditor = editorService.activeTextEditorControl as IEditor;
+		const selectedText = activeEditor ? getSelectionTextFromEditor(false, activeEditor) : null;
+
+		if (!selectedText) {
+			return;
+		}
+
+		const searchView = await openSearchView(viewsService, false);
+		if (searchView) {
+			searchView.searchAndReplaceWidget.suppressGlobalFindBufferOnNextFocus();
+			searchView.setSearchParameters({ query: selectedText, triggerSearch: true });
+		}
+	}
+});
+
 registerAction2(class FindInFolderAction extends Action2 {
 	// from explorer
 	constructor() {
@@ -478,7 +548,7 @@ export async function findInFilesCommand(accessor: ServicesAccessor, _args: IFin
 					openedView.toggleQueryDetails(false, args.showIncludesExcludes);
 				}
 
-				openedView.searchAndReplaceWidget.focus(undefined, updatedText, updatedText);
+				openedView.searchAndReplaceWidget.focus(undefined, updatedText, true);
 			}
 		});
 	} else {

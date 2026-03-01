@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter } from '../../../../base/common/event.js';
+import * as path from '../../../../base/common/path.js';
 import { IProcessEnvironment, isMacintosh, isWindows, OperatingSystem } from '../../../../base/common/platform.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -21,6 +22,7 @@ import { TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import { LocalPty } from './localPty.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { IShellEnvironmentService } from '../../../services/environment/electron-browser/shellEnvironmentService.js';
+import { INativeWorkbenchEnvironmentService } from '../../../services/environment/electron-browser/environmentService.js';
 import { IHistoryService } from '../../../services/history/common/history.js';
 import * as terminalEnvironment from '../common/terminalEnvironment.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
@@ -95,6 +97,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 		@INativeHostService private readonly _nativeHostService: INativeHostService,
 		@IStatusbarService statusBarService: IStatusbarService,
 		@IRemoteAgentService private readonly _remoteAgentService: IRemoteAgentService,
+		@INativeWorkbenchEnvironmentService private readonly _environmentService: INativeWorkbenchEnvironmentService,
 	) {
 		super(_localPtyService, logService, historyService, _configurationResolverService, statusBarService, workspaceContextService);
 
@@ -211,6 +214,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 		shouldPersist: boolean
 	): Promise<ITerminalChildProcess> {
 		await this._connectToDirectProxy();
+		this._addCompatBinToPath(env);
 		const executableEnv = await this._shellEnvironmentService.getShellEnv();
 		const id = await this._proxy.createProcess(shellLaunchConfig, cwd, cols, rows, unicodeVersion, env, executableEnv, options, shouldPersist, this._getWorkspaceId(), this._getWorkspaceName());
 		const pty = new LocalPty(id, shouldPersist, this._proxy);
@@ -368,7 +372,56 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
 			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
 		}
+		this._addCompatBinToPath(env);
 		return env;
+	}
+
+	/**
+	 * Prepend the app's bin_compat/ directory to PATH so that a 'code' CLI
+	 * command is available inside integrated terminals. This provides
+	 * compatibility with VS Code extensions (e.g. Claude Code) that invoke
+	 * the 'code' command to install extensions or open files.
+	 */
+	private _addCompatBinToPath(env: IProcessEnvironment): void {
+		const appRoot = this._environmentService.appRoot;
+		let compatBinDir: string;
+		if (this._environmentService.isBuilt) {
+			// Built mode:
+			// macOS: bin_compat/ is inside the app bundle (appRoot/bin_compat/)
+			// Linux/Windows: bin_compat/ is at the install root (appRoot/../../bin_compat/)
+			compatBinDir = isMacintosh
+				? path.join(appRoot, 'bin_compat')
+				: path.join(appRoot, '..', '..', 'bin_compat');
+		} else {
+			// Dev mode: bin_compat/ is in the source root (appRoot/bin_compat/)
+			compatBinDir = path.join(appRoot, 'bin_compat');
+		}
+		const pathSep = isWindows ? ';' : ':';
+		if (env['PATH']) {
+			env['PATH'] = compatBinDir + pathSep + env['PATH'];
+		} else {
+			env['PATH'] = compatBinDir;
+		}
+
+		// Also add to VSCODE_ENV_PREPEND so the shell integration script
+		// re-applies it after the shell profile runs (e.g. macOS path_helper
+		// reorders PATH, pushing our prepend behind /usr/local/bin).
+		// Format matches environmentVariableCollection.ts: "VAR=encoded_value"
+		// entries separated by ':', with colons in values encoded as '\x3a'.
+		if (!isWindows) {
+			const encodedValue = (compatBinDir + pathSep).replaceAll(':', '\\x3a');
+			const entry = `PATH=${encodedValue}`;
+			if (env['VSCODE_ENV_PREPEND']) {
+				env['VSCODE_ENV_PREPEND'] = entry + ':' + env['VSCODE_ENV_PREPEND'];
+			} else {
+				env['VSCODE_ENV_PREPEND'] = entry;
+			}
+		}
+
+		// Pass the running instance's user-data-dir so that the compat 'code'
+		// script can match the singleton IPC handle (e.g. when the debug launcher
+		// uses a custom --user-data-dir that differs from the VSCODE_DEV default).
+		env['VSCODE_COMPAT_USER_DATA_DIR'] = this._environmentService.userDataPath;
 	}
 
 	private _getWorkspaceName(): string {

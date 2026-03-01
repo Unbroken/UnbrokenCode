@@ -8,6 +8,44 @@ if [[ -n "${VSCODE_SHELL_INTEGRATION:-}" ]]; then
 	builtin return
 fi
 
+# Shell integration is disabled and this only runs to apply environment changes after the startup
+# files. If those install shell integration manually it runs as it normally would, without this
+# injection.
+if [ -n "${VSCODE_ENV_ONLY:-}" ]; then
+	builtin unset VSCODE_ENV_ONLY VSCODE_INJECTION VSCODE_STABLE
+	__vsc_env_prepend="${VSCODE_ENV_PREPEND:-}"
+	builtin unset VSCODE_ENV_PREPEND
+	if [ -z "${VSCODE_SHELL_LOGIN:-}" ]; then
+		if [ -r ~/.bashrc ]; then
+			. ~/.bashrc
+		fi
+	else
+		builtin unset VSCODE_SHELL_LOGIN
+		if [ -r /etc/profile ]; then
+			. /etc/profile
+		fi
+		if [ -r ~/.bash_profile ]; then
+			. ~/.bash_profile
+		elif [ -r ~/.bash_login ]; then
+			. ~/.bash_login
+		elif [ -r ~/.profile ]; then
+			. ~/.profile
+		fi
+		if [ -n "${VSCODE_PATH_PREFIX:-}" ]; then
+			export PATH="$VSCODE_PATH_PREFIX$PATH"
+			builtin unset VSCODE_PATH_PREFIX
+		fi
+	fi
+	IFS=':' read -ra __vsc_env_items <<< "$__vsc_env_prepend"
+	for __vsc_env_item in "${__vsc_env_items[@]}"; do
+		__vsc_env_name="$(echo $__vsc_env_item | cut -d "=" -f 1)"
+		__vsc_env_value="$(echo -e "$__vsc_env_item" | cut -d "=" -f 2-)"
+		export $__vsc_env_name="$__vsc_env_value${!__vsc_env_name}"
+	done
+	builtin unset __vsc_env_prepend __vsc_env_items __vsc_env_item __vsc_env_name __vsc_env_value
+	builtin return 0
+fi
+
 VSCODE_SHELL_INTEGRATION=1
 
 vsc_env_keys=()

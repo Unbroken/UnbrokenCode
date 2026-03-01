@@ -10,6 +10,31 @@ if [ -n "$VSCODE_SHELL_INTEGRATION" ]; then
 	builtin return
 fi
 
+# Shell integration is disabled and this only runs to apply environment changes after the startup
+# files. If those install shell integration manually it runs as it normally would, without this
+# injection.
+if [ -n "${VSCODE_ENV_ONLY:-}" ]; then
+	builtin unset VSCODE_ENV_ONLY VSCODE_INJECTION VSCODE_STABLE
+	__vsc_env_prepend="${VSCODE_ENV_PREPEND:-}"
+	builtin unset VSCODE_ENV_PREPEND
+	HISTFILE=$USER_ZDOTDIR/.zsh_history
+	if [[ $options[norcs] = off && -f $USER_ZDOTDIR/.zshrc ]]; then
+		VSCODE_ZDOTDIR=$ZDOTDIR
+		ZDOTDIR=$USER_ZDOTDIR
+		. $USER_ZDOTDIR/.zshrc
+	fi
+	IFS=':' read -rA __vsc_env_items <<< "$__vsc_env_prepend"
+	for __vsc_env_item in "${__vsc_env_items[@]}"; do
+		__vsc_env_name="$(echo ${__vsc_env_item%%=*})"
+		export $__vsc_env_name="$(echo -e ${__vsc_env_item#*=})${(P)__vsc_env_name}"
+	done
+	builtin unset __vsc_env_prepend __vsc_env_items __vsc_env_item __vsc_env_name
+	if [[ $options[login] = off && $USER_ZDOTDIR != $VSCODE_ZDOTDIR ]]; then
+		ZDOTDIR=$USER_ZDOTDIR
+	fi
+	builtin return 0
+fi
+
 # This variable allows the shell to both detect that VS Code's shell integration is enabled as well
 # as disable it by unsetting the variable.
 VSCODE_SHELL_INTEGRATION=1

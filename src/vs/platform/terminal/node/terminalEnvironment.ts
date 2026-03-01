@@ -49,6 +49,20 @@ export interface IShellIntegrationInjectionFailure {
  * that creates the process to ensure accuracy. Returns undefined if shell integration cannot be
  * enabled.
  */
+/**
+ * Set for a shell whose scripts should only apply environment changes, because shell integration is
+ * disabled.
+ */
+export const ENVIRONMENT_ONLY_INJECTION_VARIABLE = 'VSCODE_ENV_ONLY';
+
+function isEnvironmentOnlyInjectionNeeded(shellLaunchConfig: IShellLaunchConfig, env: ITerminalEnvironment | undefined): boolean {
+	if (!shellLaunchConfig.executable || !env?.['VSCODE_ENV_PREPEND']) {
+		return false;
+	}
+	const shell = path.basename(shellLaunchConfig.executable).toLowerCase();
+	return shell === 'bash' || shell === 'bash.exe' || shell === 'zsh';
+}
+
 export async function getShellIntegrationInjection(
 	shellLaunchConfig: IShellLaunchConfig,
 	options: ITerminalProcessOptions,
@@ -57,8 +71,11 @@ export async function getShellIntegrationInjection(
 	productService: IProductService,
 	skipStickyBit: boolean = false
 ): Promise<IShellIntegrationConfigInjection | IShellIntegrationInjectionFailure> {
-	// The global setting is disabled
-	if (!options.shellIntegration.enabled) {
+	// The global setting is disabled. Bash and zsh still run the first part of their scripts if there
+	// are environment changes to apply, as only they can apply them after the shell's startup files,
+	// such as /etc/profile, which on macOS reorders PATH.
+	const applyEnvironmentOnly = !options.shellIntegration.enabled && isEnvironmentOnlyInjectionNeeded(shellLaunchConfig, env);
+	if (!options.shellIntegration.enabled && !applyEnvironmentOnly) {
 		return { type: 'failure', reason: ShellIntegrationInjectionFailureReason.InjectionSettingDisabled };
 	}
 	// There is no executable (so there's no way to determine how to inject)
@@ -88,12 +105,14 @@ export async function getShellIntegrationInjection(
 		'VSCODE_INJECTION': '1'
 	};
 
-	if (options.shellIntegration.nonce) {
+	if (applyEnvironmentOnly) {
+		envMixin[ENVIRONMENT_ONLY_INJECTION_VARIABLE] = '1';
+	} else if (options.shellIntegration.nonce) {
 		envMixin['VSCODE_NONCE'] = options.shellIntegration.nonce;
 	}
 	// Temporarily pass list of hardcoded env vars for shell env api
 	const scopedDownShellEnvs = ['PATH', 'VIRTUAL_ENV', 'HOME', 'SHELL', 'PWD'];
-	if (shellLaunchConfig.shellIntegrationEnvironmentReporting) {
+	if (shellLaunchConfig.shellIntegrationEnvironmentReporting && !applyEnvironmentOnly) {
 		if (isWindows) {
 			const enableWindowsEnvReporting = options.windowsUseConptyDll || windowsBuildNumber >= 22631 && shell !== 'bash.exe';
 			if (enableWindowsEnvReporting) {

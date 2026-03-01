@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { IBuffer, IBufferCell, IBufferLine, IMarker, Terminal } from '@xterm/headless';
-import { throttle } from '../../../../../base/common/decorators.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ILogService, LogLevel } from '../../../../log/common/log.js';
@@ -87,6 +86,10 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	private _shellType: TerminalShellType | undefined;
 
 	private _lastUserInput: string = '';
+
+	private static readonly _SYNC_DEBOUNCE = 50;
+	private _syncTimer: ReturnType<typeof setTimeout> | undefined;
+	private _lastSyncEventTime: number = 0;
 
 	private _value: string = '';
 	get value() { return this._value; }
@@ -270,13 +273,26 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 		this._onDidChangeInput.fire(this._createStateObject());
 	}
 
-	@throttle(0)
 	private _sync() {
-		try {
-			this._doSync();
-		} catch (e) {
-			this._logService.error('Error while syncing prompt input model', e);
-		}
+		this._lastSyncEventTime = performance.now();
+		clearTimeout(this._syncTimer);
+		this._scheduleSync();
+	}
+
+	private _scheduleSync(): void {
+		this._syncTimer = setTimeout(() => {
+			const timeSinceLastEvent = performance.now() - this._lastSyncEventTime;
+			if (timeSinceLastEvent < PromptInputModel._SYNC_DEBOUNCE) {
+				this._scheduleSync();
+				return;
+			}
+			this._syncTimer = undefined;
+			try {
+				this._doSync();
+			} catch (e) {
+				this._logService.error('Error while syncing prompt input model', e);
+			}
+		}, PromptInputModel._SYNC_DEBOUNCE);
 	}
 
 	private _doSync() {

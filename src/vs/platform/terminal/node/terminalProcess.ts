@@ -18,7 +18,7 @@ import { ILogService, LogLevel } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
 import { FlowControlConstants, IShellLaunchConfig, ITerminalChildProcess, ITerminalLaunchError, IProcessProperty, IProcessPropertyMap, ProcessPropertyType, TerminalShellType, IProcessReadyEvent, ITerminalProcessOptions, PosixShellType, IProcessReadyWindowsPty, GeneralShellType, ITerminalLaunchResult } from '../common/terminal.js';
 import { ChildProcessMonitor } from './childProcessMonitor.js';
-import { getShellIntegrationInjection, IShellIntegrationConfigInjection, sanitizeEnvForLogging } from './terminalEnvironment.js';
+import { ENVIRONMENT_ONLY_INJECTION_VARIABLE, getShellIntegrationInjection, IShellIntegrationConfigInjection, sanitizeEnvForLogging } from './terminalEnvironment.js';
 import { WindowsShellHelper } from './windowsShellHelper.js';
 import { IPty, IPtyForkOptions, IWindowsPtyForkOptions, spawn } from 'node-pty';
 import { isNumber } from '../../../base/common/types.js';
@@ -212,7 +212,9 @@ export class TerminalProcess extends Disposable implements ITerminalChildProcess
 
 		const injection = await getShellIntegrationInjection(this.shellLaunchConfig, this._options, this._ptyOptions.env, this._logService, this._productService);
 		if (injection.type === 'injection') {
-			this._onDidChangeProperty.fire({ type: ProcessPropertyType.UsedShellIntegrationInjection, value: true });
+			if (!injection.envMixin?.[ENVIRONMENT_ONLY_INJECTION_VARIABLE]) {
+				this._onDidChangeProperty.fire({ type: ProcessPropertyType.UsedShellIntegrationInjection, value: true });
+			}
 			if (injection.envMixin) {
 				for (const [key, value] of Object.entries(injection.envMixin)) {
 					this._ptyOptions.env ||= {};

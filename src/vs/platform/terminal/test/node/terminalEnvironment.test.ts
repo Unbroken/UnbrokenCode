@@ -13,8 +13,8 @@ import { join } from '../../../../base/common/path.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { NullLogService } from '../../../log/common/log.js';
 import { IProductService } from '../../../product/common/productService.js';
-import { ITerminalProcessOptions } from '../../common/terminal.js';
-import { getShellIntegrationInjection, IShellIntegrationConfigInjection, type IShellIntegrationInjectionFailure, sanitizeEnvForLogging } from '../../node/terminalEnvironment.js';
+import { ITerminalProcessOptions, ShellIntegrationInjectionFailureReason } from '../../common/terminal.js';
+import { ENVIRONMENT_ONLY_INJECTION_VARIABLE, getShellIntegrationInjection, IShellIntegrationConfigInjection, type IShellIntegrationInjectionFailure, sanitizeEnvForLogging } from '../../node/terminalEnvironment.js';
 import { getWindowsBuildNumberSync } from '../../../../base/node/windowsVersion.js';
 
 const enabledProcessOptions: ITerminalProcessOptions = { shellIntegration: { enabled: true, suggestEnabled: false, nonce: '' }, windowsUseConptyDll: false, environmentVariableCollections: undefined, workspaceFolder: undefined, isScreenReaderOptimized: false };
@@ -42,6 +42,36 @@ suite('platform - terminalEnvironment', async () => {
 				strictEqual((await getShellIntegrationInjection({ executable: pwshExe, args: ['-l', '-NoLogo'], isFeatureTerminal: false }, enabledProcessOptions, defaultEnvironment, logService, productService, true)).type, 'injection');
 			});
 		});
+
+		if (process.platform !== 'win32') {
+			suite('when shell integration is disabled', async () => {
+				const pendingEnvironment = { VSCODE_ENV_PREPEND: 'PATH=/compat\\x3a' };
+
+				test('only bash and zsh with environment changes are injected, to apply them', async () => {
+					const reason = ShellIntegrationInjectionFailureReason.InjectionSettingDisabled;
+					const inject = async (executable: string, env: Record<string, string>) => {
+						const injection = await getShellIntegrationInjection({ executable, args: [] }, disabledProcessOptions, env, logService, productService, true);
+						return injection.type === 'injection' ? injection.envMixin?.[ENVIRONMENT_ONLY_INJECTION_VARIABLE] : injection.reason;
+					};
+					deepStrictEqual({
+						bash: await inject('bash', pendingEnvironment),
+						zsh: await inject('zsh', pendingEnvironment),
+						fish: await inject('fish', pendingEnvironment),
+						bashWithoutChanges: await inject('bash', defaultEnvironment),
+					}, {
+						bash: '1',
+						zsh: '1',
+						fish: reason,
+						bashWithoutChanges: reason,
+					});
+				});
+
+				test('does not turn on anything else of shell integration', async () => {
+					const injection = await getShellIntegrationInjection({ executable: 'bash', args: [], shellIntegrationEnvironmentReporting: true }, { ...disabledProcessOptions, shellIntegration: { ...disabledProcessOptions.shellIntegration, nonce: 'nonce' } }, pendingEnvironment, logService, productService, true);
+					deepStrictEqual(injection.type === 'injection' ? Object.keys(injection.envMixin ?? {}).sort() : injection, ['VSCODE_ENV_ONLY', 'VSCODE_INJECTION', 'VSCODE_STABLE']);
+				});
+			});
+		}
 
 		// These tests are only expected to work on Windows 10 build 18309 and above
 		(getWindowsBuildNumberSync() < 18309 ? suite.skip : suite)('pwsh', async () => {

@@ -577,9 +577,13 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(replace('@@NAME@@', product.nameShort))
 				.pipe(rename('bin/code'));
+			const compatShortcut = gulp.src('resources/darwin/bin/code.sh')
+				.pipe(replace('@@APPNAME@@', product.applicationName))
+				.pipe(replace('@@NAME@@', product.nameShort))
+				.pipe(rename('bin_compat/code'));
 			const policyDest = gulp.src('.build/policies/darwin/**', { base: '.build/policies/darwin' })
 				.pipe(rename(f => f.dirname = `policies/${f.dirname}`));
-			all = es.merge(all, shortcut, policyDest);
+			all = es.merge(all, shortcut, compatShortcut, policyDest);
 		}
 
 		const electronConfig = {
@@ -638,6 +642,23 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', quality!))
 					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
+
+				// VS Code CLI compatibility: provide 'code' command for extensions that expect it
+				result = es.merge(result, gulp.src('resources/win32/versioned/bin/code.cmd', { base: 'resources/win32/versioned' })
+					.pipe(replace('@@NAME@@', product.nameShort))
+					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
+					.pipe(rename('bin_compat/code.cmd')));
+
+				result = es.merge(result, gulp.src('resources/win32/versioned/bin/code.sh', { base: 'resources/win32/versioned' })
+					.pipe(replace('@@NAME@@', product.nameShort))
+					.pipe(replace('@@PRODNAME@@', product.nameLong))
+					.pipe(replace('@@VERSION@@', version))
+					.pipe(replace('@@COMMIT@@', String(commit)))
+					.pipe(replace('@@APPNAME@@', product.applicationName))
+					.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder))
+					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
+					.pipe(replace('@@QUALITY@@', quality!))
+					.pipe(rename('bin_compat/code')));
 			} else {
 				result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
 					.pipe(replace('@@NAME@@', product.nameShort))
@@ -652,6 +673,21 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
 					.pipe(replace('@@QUALITY@@', String(quality)))
 					.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
+
+				// VS Code CLI compatibility: provide 'code' command for extensions that expect it
+				result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
+					.pipe(replace('@@NAME@@', product.nameShort))
+					.pipe(rename('bin_compat/code.cmd')));
+
+				result = es.merge(result, gulp.src('resources/win32/bin/code.sh', { base: 'resources/win32' })
+					.pipe(replace('@@NAME@@', product.nameShort))
+					.pipe(replace('@@PRODNAME@@', product.nameLong))
+					.pipe(replace('@@VERSION@@', version))
+					.pipe(replace('@@COMMIT@@', String(commit)))
+					.pipe(replace('@@APPNAME@@', product.applicationName))
+					.pipe(replace('@@SERVERDATAFOLDER@@', product.serverDataFolderName || '.vscode-remote'))
+					.pipe(replace('@@QUALITY@@', String(quality)))
+					.pipe(rename('bin_compat/code')));
 			}
 
 			result = es.merge(result, gulp.src('resources/win32/VisualElementsManifest.xml', { base: 'resources/win32' })
@@ -682,6 +718,12 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@PRODNAME@@', product.nameLong))
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(rename('bin/' + product.applicationName)));
+
+			// VS Code CLI compatibility: provide 'code' command for extensions that expect it
+			result = es.merge(result, gulp.src('resources/linux/bin/code.sh', { base: '.' })
+				.pipe(replace('@@PRODNAME@@', product.nameLong))
+				.pipe(replace('@@APPNAME@@', product.applicationName))
+				.pipe(rename('bin_compat/code')));
 		}
 
 		result = inlineMeta(result, {

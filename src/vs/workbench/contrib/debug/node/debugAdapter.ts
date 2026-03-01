@@ -214,7 +214,8 @@ export class ExecutableDebugAdapter extends StreamDebugAdapter {
 					const forkOptions: cp.ForkOptions = {
 						env: env,
 						execArgv: isElectron ? ['-e', 'delete process.env.ELECTRON_RUN_AS_NODE;require(process.argv[1])'] : [],
-						silent: true
+						silent: true,
+						__priority: 'default',
 					};
 					if (options.cwd) {
 						forkOptions.cwd = options.cwd;
@@ -231,7 +232,8 @@ export class ExecutableDebugAdapter extends StreamDebugAdapter {
 				let spawnCommand = command;
 				let spawnArgs = args;
 				const spawnOptions: cp.SpawnOptions = {
-					env: env
+					env: env,
+					__priority: 'default',
 				};
 				if (options.cwd) {
 					spawnOptions.cwd = options.cwd;

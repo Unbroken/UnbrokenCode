@@ -226,8 +226,8 @@ export class ReplaceInput extends Widget {
 		}
 	}
 
-	public onSearchSubmit(): void {
-		this.inputBox.addToHistory();
+	public onSearchSubmit(always?: boolean): void {
+		this.inputBox.addToHistory(always);
 	}
 
 	protected applyStyles(): void {

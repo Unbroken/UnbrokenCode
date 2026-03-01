@@ -5,7 +5,7 @@
 
 import type { IBuffer, IBufferCell, IBufferLine, IMarker, Terminal } from '@xterm/headless';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ILogService, LogLevel } from '../../../../log/common/log.js';
 import { PosixShellType, TerminalShellType } from '../../terminal.js';
 import type { ITerminalCommand } from '../capabilities.js';
@@ -87,6 +87,9 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 
 	private _lastUserInput: string = '';
 
+	private _syncTimer: ReturnType<typeof setTimeout> | undefined;
+	private _lastSyncEventTime: number = 0;
+
 	private _value: string = '';
 	get value() { return this._value; }
 	get prefix() { return this._value.substring(0, this._cursorIndex); }
@@ -113,9 +116,12 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 		onCommandStartChanged: Event<void>,
 		onCommandExecuted: Event<ITerminalCommand>,
 		onCommandFinished: Event<ITerminalCommand>,
-		@ILogService private readonly _logService: ILogService
+		@ILogService private readonly _logService: ILogService,
+		private readonly _syncDebounce: number = 50
 	) {
 		super();
+
+		this._register(toDisposable(() => clearTimeout(this._syncTimer)));
 
 		this._register(Event.any(
 			this._xterm.onCursorMove,
@@ -157,6 +163,10 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	}
 
 	setConfidentCommandLine(value: string): void {
+		// The shell reported the value, so a debounced sync of the buffer must not replace it
+		clearTimeout(this._syncTimer);
+		this._syncTimer = undefined;
+
 		if (this._value !== value) {
 			this._value = value;
 			this._cursorIndex = -1;
@@ -243,6 +253,9 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 			return;
 		}
 
+		// The value is reported as final below, so it can't wait for a debounced sync
+		this._flushPendingSync();
+
 		this._cursorIndex = -1;
 
 		// Remove any ghost text from the input if it exists on execute
@@ -270,6 +283,32 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	}
 
 	private _sync() {
+		this._lastSyncEventTime = performance.now();
+		clearTimeout(this._syncTimer);
+		this._scheduleSync();
+	}
+
+	private _scheduleSync(): void {
+		this._syncTimer = setTimeout(() => {
+			const timeSinceLastEvent = performance.now() - this._lastSyncEventTime;
+			if (timeSinceLastEvent < this._syncDebounce) {
+				this._scheduleSync();
+				return;
+			}
+			this._syncTimer = undefined;
+			this._syncNow();
+		}, this._syncDebounce);
+	}
+
+	private _flushPendingSync(): void {
+		if (this._syncTimer !== undefined) {
+			clearTimeout(this._syncTimer);
+			this._syncTimer = undefined;
+			this._syncNow();
+		}
+	}
+
+	private _syncNow(): void {
 		try {
 			this._doSync();
 		} catch (e) {
@@ -445,7 +484,7 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 			value = valueLines.map(e => e.trimEnd()).join('\n') + ' '.repeat(trailingWhitespace);
 		}
 
-		ghostTextIndex = this._scanForGhostText(buffer, line, cursorIndex);
+		ghostTextIndex = this._scanForGhostText(buffer, line, cursorIndex, value);
 
 		if (this._value !== value || this._cursorIndex !== cursorIndex || this._ghostTextIndex !== ghostTextIndex) {
 			this._value = value;
@@ -463,8 +502,8 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	 * Detect ghost text by looking for italic or dim text in or after the cursor and
 	 * non-italic/dim text in the first non-whitespace cell following command start and before the cursor.
 	 */
-	private _scanForGhostText(buffer: IBuffer, line: IBufferLine, cursorIndex: number): number {
-		if (!this.value.trim().length) {
+	private _scanForGhostText(buffer: IBuffer, line: IBufferLine, cursorIndex: number, value: string): number {
+		if (!value.trim().length) {
 			return -1;
 		}
 		// Check last non-whitespace character has non-ghost text styles
@@ -508,11 +547,8 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 			ghostTextIndex = this._scanForGhostTextAdvanced(buffer, line, cursorIndex);
 		}
 
-		if (ghostTextIndex > -1 && this.value.substring(ghostTextIndex).endsWith(' ')) {
-			this._value = this.value.trim();
-			if (!this.value.substring(ghostTextIndex)) {
-				ghostTextIndex = -1;
-			}
+		if (ghostTextIndex > -1 && value.substring(ghostTextIndex).endsWith(' ') && !value.trim().substring(ghostTextIndex)) {
+			ghostTextIndex = -1;
 		}
 		return ghostTextIndex;
 	}

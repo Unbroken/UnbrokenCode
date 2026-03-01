@@ -764,6 +764,15 @@ export class HistoryInputBox extends InputBox implements IHistoryNavigationWidge
 		}
 	}
 
+	private getCurrentValue(): string | null {
+		let currentValue = this.history.current();
+		if (!currentValue) {
+			currentValue = this.history.last();
+			this.history.next();
+		}
+		return currentValue;
+	}
+
 	public addToHistory(always?: boolean): void {
 		if (this.value && (always || this.value !== this.getCurrentValue())) {
 			this.history.add(this.value);
@@ -846,15 +855,6 @@ export class HistoryInputBox extends InputBox implements IHistoryNavigationWidge
 	protected override onFocus(): void {
 		super.onFocus();
 		this._onDidFocus.fire();
-	}
-
-	private getCurrentValue(): string | null {
-		let currentValue = this.history.current();
-		if (!currentValue) {
-			currentValue = this.history.last();
-			this.history.next();
-		}
-		return currentValue;
 	}
 
 	private getPreviousValue(): string | null {

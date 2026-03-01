@@ -7,7 +7,7 @@ import type { Terminal } from '@xterm/headless';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { NullLogService } from '../../../../../log/common/log.js';
 import { PromptInputModel, type IPromptInputModelState } from '../../../../common/capabilities/commandDetection/promptInputModel.js';
-import { Emitter } from '../../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../../base/common/lifecycle.js';
 import type { ITerminalCommand } from '../../../../common/capabilities/capabilities.js';
 import { ok, notDeepStrictEqual, strictEqual } from 'assert';
@@ -76,7 +76,7 @@ suite('PromptInputModel', () => {
 		onCommandStartChanged = store.add(new Emitter());
 		onCommandExecuted = store.add(new Emitter());
 		onCommandFinished = store.add(new Emitter());
-		promptInputModel = store.add(new PromptInputModel(xterm, onCommandStart.event, onCommandStartChanged.event, onCommandExecuted.event, onCommandFinished.event, new NullLogService));
+		promptInputModel = store.add(new PromptInputModel(xterm, onCommandStart.event, onCommandStartChanged.event, onCommandExecuted.event, onCommandFinished.event, new NullLogService(), 0));
 	});
 
 	test('basic input and execute', async () => {
@@ -144,6 +144,30 @@ suite('PromptInputModel', () => {
 			xterm.input('\x03');
 			writePromise('^C').then(() => fireCommandExecuted());
 		});
+	});
+
+	test('executing a command reports input that is still waiting for the debounced sync', async () => {
+		const debouncedModel = store.add(new PromptInputModel(xterm, onCommandStart.event, onCommandStartChanged.event, onCommandExecuted.event, onCommandFinished.event, new NullLogService(), 60_000));
+		await writePromise('$ ');
+		fireCommandStart();
+		await writePromise('foo bar');
+
+		const finished = Event.toPromise(debouncedModel.onDidFinishInput);
+		fireCommandExecuted();
+
+		strictEqual((await finished).value, 'foo bar');
+	});
+
+	test('executing a command keeps a confident command line over the debounced sync', async () => {
+		const debouncedModel = store.add(new PromptInputModel(xterm, onCommandStart.event, onCommandStartChanged.event, onCommandExecuted.event, onCommandFinished.event, new NullLogService(), 60_000));
+		await writePromise('$ ');
+		fireCommandStart();
+		await writePromise('displayed command');
+
+		debouncedModel.setConfidentCommandLine('trusted command');
+		fireCommandExecuted();
+
+		strictEqual(debouncedModel.value, 'trusted command');
 	});
 
 	test('should clear value when command finishes', async () => {

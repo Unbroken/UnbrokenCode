@@ -1648,7 +1648,7 @@ export class InstallAnotherVersionAction extends ExtensionAction {
 			if (pick.isQuarantined) {
 				const result = await this.dialogService.confirm({
 					title: localize('quarantinedVersionWarning', "Install Quarantined Version?"),
-					message: localize('quarantinedVersionMessage', "The version you selected was released less than {0} days ago and is currently quarantined as a security measure against supply chain attacks.\n\nAre you sure you want to install this version?", this.configurationService.getValue<number>(QuarantineDaysConfigKey) ?? 7),
+					message: localize('quarantinedVersionMessage', "The version you selected was released less than {0} days ago and is currently quarantined as a security measure against supply chain attacks.\n\nAre you sure you want to install this version?", this.configurationService.getValue<number>(QuarantineDaysConfigKey)),
 					primaryButton: localize('installAnyway', "Install Anyway"),
 					type: 'warning'
 				});

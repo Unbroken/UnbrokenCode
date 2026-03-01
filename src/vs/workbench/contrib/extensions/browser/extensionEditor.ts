@@ -1075,7 +1075,7 @@ class AdditionalDetailsWidget extends Disposable {
 	}
 
 	private isQuarantined(publishedDate: number): boolean {
-		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey) ?? 7;
+		const quarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
 		if (quarantineDays === 0) {
 			return false;
 		}

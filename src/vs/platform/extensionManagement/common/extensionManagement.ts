@@ -809,7 +809,14 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration)
 						],
 					}
 				}
-			}
+			},
+			[QuarantineDaysConfigKey]: {
+				type: 'number',
+				description: localize('extensionsQuarantineDays', "Number of days to quarantine newly released extension versions as a security measure against supply chain attacks. During the quarantine period, these versions will not be automatically installed or shown as available updates. You can still manually install quarantined versions using the 'Install Another Version' action."),
+				default: 7,
+				minimum: 0,
+				scope: ConfigurationScope.APPLICATION
+			},
 		}
 	});
 

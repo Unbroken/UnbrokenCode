@@ -2501,7 +2501,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 				// (this happens when all versions are quarantined)
 				if (gallery && !installOptions.installGivenVersion) {
 					if (this.isQuarantined(gallery.lastUpdated)) {
-						const effectiveQuarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey) ?? 7;
+						const effectiveQuarantineDays = this.configurationService.getValue<number>(QuarantineDaysConfigKey);
 						const result = await this.dialogService.confirm({
 							title: nls.localize('quarantinedVersionWarning', "Install Quarantined Version?"),
 							message: nls.localize('allVersionsQuarantinedMessage', "All available versions of this extension were released less than {0} days ago and are quarantined as a security precaution. Do you want to install anyway?", effectiveQuarantineDays),

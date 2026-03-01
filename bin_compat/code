@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# VS Code CLI compatibility wrapper (dev mode).
+# Provides 'code' for extensions that expect it (e.g. Claude Code).
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	realpath() { [[ $1 = /* ]] && echo "$1" || echo "$PWD/${1#./}"; }
+	ROOT=$(dirname "$(dirname "$(realpath "$0")")")
+else
+	ROOT=$(dirname "$(dirname "$(readlink -f "$0")")")
+fi
+
+# When running in a remote terminal with IPC, delegate to the remote CLI.
+# This communicates directly with the running instance without spawning Electron.
+if [ -n "$VSCODE_IPC_HOOK_CLI" ]; then
+	APPNAME=$(node -p "require('$ROOT/product.json').applicationName" 2>/dev/null)
+	if [ -n "$APPNAME" ]; then
+		REMOTE_CLI="$(which -a "$APPNAME" 2>/dev/null | grep /remote-cli/)"
+		if [ -n "$REMOTE_CLI" ]; then
+			"$REMOTE_CLI" "$@"
+			exit $?
+		fi
+	fi
+fi
+
+# Launch via Electron. The running dev instance will be detected via singleton
+# IPC (both use the same user-data-dir and version).
+if [[ "$OSTYPE" == "darwin"* ]]; then
+	NAME=$(node -p "require('$ROOT/product.json').nameLong")
+	ELECTRON="$ROOT/.build/electron/$NAME.app/Contents/MacOS/Electron"
+else
+	NAME=$(node -p "require('$ROOT/product.json').applicationName")
+	ELECTRON="$ROOT/.build/electron/$NAME"
+fi
+
+# If the running instance's user-data-dir is known (set by localTerminalBackend),
+# pass it through so the CLI spawns an Electron instance with the matching IPC
+# handle. This is needed when the debug launcher uses a custom --user-data-dir.
+USER_DATA_ARGS=()
+if [ -n "$VSCODE_COMPAT_USER_DATA_DIR" ]; then
+	USER_DATA_ARGS=("--user-data-dir" "$VSCODE_COMPAT_USER_DATA_DIR")
+fi
+
+# Pass $ROOT as the app location argument — VSCODE_DEV causes parseCLIProcessArgv
+# to strip the first non-option argument, so $ROOT is consumed instead of real args.
+# We use $ROOT (not '.') because cli.ts re-spawns the Electron main process with
+# argv.slice(2) as arguments, and Electron needs the absolute app path — not a
+# relative '.' that would resolve to the user's CWD.
+VSCODE_DEV=1 ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$ROOT/out/cli.js" "$ROOT" "${USER_DATA_ARGS[@]}" "$@"
+exit $?

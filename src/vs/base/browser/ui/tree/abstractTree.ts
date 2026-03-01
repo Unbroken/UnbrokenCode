@@ -907,7 +907,7 @@ class FindWidget<T, TFilterData> extends Disposable {
 				// This is the only keyboard way to return to the tree from a history item that isn't the last one
 				e.preventDefault();
 				e.stopPropagation();
-				this.findInput.inputBox.addToHistory();
+				this.findInput.inputBox.addToHistory(true);
 				focusTree();
 				return;
 			}
@@ -916,7 +916,7 @@ class FindWidget<T, TFilterData> extends Disposable {
 				e.stopPropagation();
 				if (this.findInput.inputBox.isAtLastInHistory() || this.findInput.inputBox.isNowhereInHistory()) {
 					// Retain original pre-history DownArrow behavior
-					this.findInput.inputBox.addToHistory();
+					this.findInput.inputBox.addToHistory(true);
 					focusTree();
 				} else {
 					// Downward through history

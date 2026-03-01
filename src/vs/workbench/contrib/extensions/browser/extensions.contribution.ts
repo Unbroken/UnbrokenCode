@@ -365,6 +365,39 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				description: localize('extensionsSupportNodeGlobalNavigator', "When enabled, Node.js navigator object is exposed on the global scope."),
 				default: false,
 			},
+			'extensions.childProcessPriority': {
+				type: 'string',
+				enum: ['default', 'utility', 'background'],
+				enumDescriptions: [
+					localize('extensions.childProcessPriority.default', "Normal priority (no change)."),
+					localize('extensions.childProcessPriority.utility', "Lower priority. macOS: QOS_CLASS_UTILITY (deprioritized, all cores). Windows: BELOW_NORMAL_PRIORITY_CLASS. Linux: nice 10."),
+					localize('extensions.childProcessPriority.background', "Lowest priority. macOS: QOS_CLASS_BACKGROUND (efficiency cores only on Apple Silicon). Windows: IDLE_PRIORITY_CLASS. Linux: nice 19."),
+				],
+				default: 'utility',
+				markdownDescription: localize('extensions.childProcessPriority', "CPU scheduling priority for child processes spawned by extensions (language servers, etc.). When set to `utility`, builds and other normal-priority work will be preferred by the scheduler."),
+				scope: ConfigurationScope.APPLICATION,
+			},
+			'extensions.childProcessPriorityRules': {
+				type: 'array',
+				default: [],
+				items: {
+					type: 'object',
+					properties: {
+						'commandLine': {
+							type: 'string',
+							description: localize('extensions.childProcessPriorityRules.commandLine', "Regular expression matched against the full command line (command and arguments joined by spaces)."),
+						},
+						'priority': {
+							type: 'string',
+							enum: ['default', 'utility', 'background'],
+							description: localize('extensions.childProcessPriorityRules.priority', "Priority to apply when the command line matches."),
+						},
+					},
+					required: ['commandLine', 'priority'],
+				},
+				markdownDescription: localize('extensions.childProcessPriorityRules', "Override `#extensions.childProcessPriority#` for specific processes. Each rule matches a regex against the full command line."),
+				scope: ConfigurationScope.APPLICATION,
+			},
 			[ExtensionRequestsTimeoutConfigKey]: {
 				type: 'number',
 				description: localize('extensionsRequestTimeout', "Controls the timeout in milliseconds for HTTP requests made when fetching extensions from the Marketplace"),

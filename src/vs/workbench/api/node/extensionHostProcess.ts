@@ -91,6 +91,120 @@ const args = minimist(process.argv.slice(2), {
 	};
 })();
 
+// Patch child_process.spawn/fork to apply CPU scheduling priority to all child
+// processes spawned by extensions. This ensures background work (language server
+// indexing, etc.) is deprioritized when higher-priority work (builds) needs CPU.
+//
+// Platform mechanisms:
+//   macOS:   taskpolicy -c <class> wraps the command at spawn time (sets QoS class)
+//   Windows: os.setPriority(pid, level) post-spawn (sets priority class)
+//   Linux:   os.setPriority(pid, level) post-spawn (sets nice value)
+(function () {
+	const defaultPriority = process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY'] || 'utility';
+	if (defaultPriority === 'default' && !process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES']) {
+		return; // nothing to do
+	}
+
+	const priorityRules: { commandLine: string; priority: string }[] = (() => {
+		try { return JSON.parse(process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES'] || '[]'); }
+		catch { return []; }
+	})();
+
+	const validPriorities = new Set(['default', 'utility', 'background']);
+
+	function resolveProcessPriority(command: string, args: string[], options: any): string {
+		// Allow extensions to explicitly override priority via spawn options.
+		// Usage: cp.spawn(cmd, args, { __priority: 'default' })
+		const override = options?.__priority;
+		if (typeof override === 'string' && validPriorities.has(override)) {
+			return override;
+		}
+
+		const commandLine = [command, ...args].join(' ');
+		for (const rule of priorityRules) {
+			try {
+				if (new RegExp(rule.commandLine).test(commandLine)) {
+					return rule.priority;
+				}
+			} catch {
+				// invalid regex - skip rule
+			}
+		}
+
+		return defaultPriority;
+	}
+
+	function stripInternalOptions(options: any): any {
+		if (options?.__priority !== undefined) {
+			const { __priority: _, ...rest } = options;
+			return rest;
+		}
+		return options;
+	}
+
+	const cp = require('child_process');
+	const os = require('os');
+	const originalSpawn = cp.spawn;
+	const originalFork = cp.fork;
+
+	// Normalize the overloaded spawn(cmd), spawn(cmd, args), spawn(cmd, opts),
+	// spawn(cmd, args, opts) signatures into { command, args, options }.
+	function normalizeSpawnArgs(argsOrOptions: any, maybeOptions: any): { args: string[]; options: any } {
+		if (Array.isArray(argsOrOptions)) {
+			return { args: argsOrOptions, options: maybeOptions };
+		}
+		return { args: [], options: argsOrOptions };
+	}
+
+	function applyPriorityPostSpawn(child: any, priority: string): void {
+		if (!child?.pid || priority === 'default') {
+			return;
+		}
+		const level = priority === 'background'
+			? os.constants.priority.PRIORITY_LOW
+			: os.constants.priority.PRIORITY_BELOW_NORMAL;
+		try {
+			os.setPriority(child.pid, level);
+		} catch {
+			// may fail if insufficient permissions
+		}
+	}
+
+	cp.spawn = function (command: string, argsOrOptions?: any, maybeOptions?: any) {
+		const { args, options } = normalizeSpawnArgs(argsOrOptions, maybeOptions);
+		const priority = resolveProcessPriority(command, args, options);
+		const cleanOptions = stripInternalOptions(options);
+
+		if (priority !== 'default' && process.platform === 'darwin') {
+			// macOS: wrap with taskpolicy for QoS class (launch form only)
+			const qosClass = priority === 'background' ? 'background' : 'utility';
+			if (cleanOptions?.shell) {
+				return originalSpawn.call(this, `taskpolicy -c ${qosClass} ${command}`, args, cleanOptions);
+			} else {
+				return originalSpawn.call(this, 'taskpolicy', ['-c', qosClass, command, ...args], cleanOptions);
+			}
+		}
+
+		// Windows/Linux or default priority: spawn normally, then set priority
+		const child = originalSpawn.call(this, command, args, cleanOptions);
+		applyPriorityPostSpawn(child, priority);
+		return child;
+	};
+
+	cp.fork = function (modulePath: string, argsOrOptions?: any, maybeOptions?: any) {
+		const { args, options } = normalizeSpawnArgs(argsOrOptions, maybeOptions);
+		const priority = resolveProcessPriority(modulePath, args, options);
+		const cleanOptions = stripInternalOptions(options);
+
+		// fork() spawns a Node.js module - can't wrap with taskpolicy.
+		// Use os.setPriority post-spawn on all platforms (nice value on macOS
+		// is less effective than QoS but still provides some deprioritization).
+		const child = originalFork.call(this, modulePath, args, cleanOptions);
+		applyPriorityPostSpawn(child, priority);
+		return child;
+	};
+})();
+
 // custom process.exit logic...
 const nativeExit: IExitFn = process.exit.bind(process);
 const nativeOn = process.on.bind(process);

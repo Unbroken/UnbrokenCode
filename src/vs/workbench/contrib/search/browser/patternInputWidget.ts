@@ -124,8 +124,8 @@ export class PatternInputWidget extends Widget {
 		this.setValue('');
 	}
 
-	onSearchSubmit(): void {
-		this.inputBox.addToHistory();
+	onSearchSubmit(always?: boolean): void {
+		this.inputBox.addToHistory(always);
 	}
 
 	showNextTerm() {
@@ -172,7 +172,7 @@ export class PatternInputWidget extends Widget {
 	private onInputKeyUp(keyboardEvent: IKeyboardEvent) {
 		switch (keyboardEvent.keyCode) {
 			case KeyCode.Enter:
-				this.onSearchSubmit();
+				this.onSearchSubmit(true);
 				this._onSubmit.fire(false);
 				return;
 			case KeyCode.Escape:

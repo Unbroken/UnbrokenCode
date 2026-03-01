@@ -130,7 +130,7 @@ export async function findInFilesCommand(accessor: ServicesAccessor, _args: IFin
 					openedView.toggleQueryDetails(false, args.showIncludesExcludes);
 				}
 
-				openedView.searchAndReplaceWidget.focus(undefined, updatedText, updatedText);
+				openedView.searchAndReplaceWidget.focus(undefined, updatedText, true);
 			}
 		});
 	} else {

@@ -55,6 +55,7 @@ export const enum SearchCommandIds {
 	RestrictSearchToFolderId = 'search.action.restrictSearchToFolder',
 	FindInFolderId = 'filesExplorer.findInFolder',
 	FindInWorkspaceId = 'filesExplorer.findInWorkspace',
+	FindInFilesWithSelectionActionId = 'workbench.action.findInFilesWithSelection',
 }
 
 export const SearchContext = {

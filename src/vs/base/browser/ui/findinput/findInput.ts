@@ -345,8 +345,8 @@ export class FindInput extends Widget {
 		}
 	}
 
-	public onSearchSubmit(): void {
-		this.inputBox.addToHistory();
+	public onSearchSubmit(always?: boolean): void {
+		this.inputBox.addToHistory(always);
 	}
 
 	public select(): void {

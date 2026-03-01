@@ -951,8 +951,11 @@ export class FindWidget extends Widget implements IOverlayWidget, IVerticalSashL
 		this._findInput.setCaseSensitive(!!this._state.matchCase);
 		this._findInput.setWholeWords(!!this._state.wholeWord);
 		this._register(this._findInput.onKeyDown((e) => {
-			if (e.equals(KeyCode.Enter) && !this._codeEditor.getOption(EditorOption.find).findOnType) {
-				this._state.change({ searchString: this._findInput.getValue() }, true);
+			if (e.equals(KeyCode.Enter)) {
+				this._findInput.onSearchSubmit(true);
+				if (!this._codeEditor.getOption(EditorOption.find).findOnType) {
+					this._state.change({ searchString: this._findInput.getValue() }, true);
+				}
 			}
 			this._onFindInputKeyDown(e);
 		}));

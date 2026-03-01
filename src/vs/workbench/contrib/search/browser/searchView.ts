@@ -89,6 +89,7 @@ import { forcedExpandRecursively } from './searchActionsTopBar.js';
 import { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { MatchImpl } from './searchTreeModel/match.js';
+import { FileMatchImpl } from './searchTreeModel/fileMatch.js';
 import { IModelContentChange } from '../../../../editor/common/model/mirrorTextModel.js';
 
 const $ = dom.$;
@@ -1122,10 +1123,23 @@ export class SearchView extends ViewPane {
 		if (ariaLabel) { aria.status(ariaLabel); }
 	}
 
+	private async flushFileMatchModelUpdates(): Promise<void> {
+		for (const fileMatch of this.searchResult.matches()) {
+			if (fileMatch instanceof FileMatchImpl) {
+				fileMatch.flushModelUpdates();
+			}
+		}
+		// Flushing may have queued a tree refresh via the onChange event chain.
+		// Await it so the tree and _storedSearchResults are up to date.
+		await this.refreshTreeController.queue();
+	}
+
 	async selectNextMatch(): Promise<void> {
 		if (!this.hasSearchResults()) {
 			return;
 		}
+
+		await this.flushFileMatchModelUpdates();
 
 		const [selected] = this.tree.getSelection();
 
@@ -1172,6 +1186,8 @@ export class SearchView extends ViewPane {
 		if (!this.hasSearchResults()) {
 			return;
 		}
+
+		await this.flushFileMatchModelUpdates();
 
 		const [selected] = this.tree.getSelection();
 

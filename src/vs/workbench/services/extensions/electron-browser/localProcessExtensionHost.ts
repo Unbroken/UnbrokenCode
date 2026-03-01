@@ -39,6 +39,7 @@ import { IHostService } from '../../host/browser/host.js';
 import { ILifecycleService, WillShutdownEvent } from '../../lifecycle/common/lifecycle.js';
 import { parseExtensionDevOptions } from '../common/extensionDevOptions.js';
 import { IDefaultLogLevelsService } from '../../log/common/defaultLogLevels.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 export interface ILocalProcessExtensionHostInitData {
 	readonly extensions: ExtensionHostExtensions;
@@ -133,6 +134,7 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 		@IShellEnvironmentService private readonly _shellEnvironmentService: IShellEnvironmentService,
 		@IExtensionHostStarter private readonly _extensionHostStarter: IExtensionHostStarter,
 		@IDefaultLogLevelsService private readonly _defaultLogLevelsService: IDefaultLogLevelsService,
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 	) {
 		super();
 		const devOpts = parseExtensionDevOptions(this._environmentService);
@@ -193,7 +195,9 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 
 		const env = objects.mixin(processEnv, {
 			VSCODE_ESM_ENTRYPOINT: 'vs/workbench/api/node/extensionHostProcess',
-			VSCODE_HANDLES_UNCAUGHT_ERRORS: true
+			VSCODE_HANDLES_UNCAUGHT_ERRORS: true,
+			VSCODE_EXT_CHILD_PROCESS_PRIORITY: this._configurationService.getValue<string>('extensions.childProcessPriority') || 'utility',
+			VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES: JSON.stringify(this._configurationService.getValue('extensions.childProcessPriorityRules') || []),
 		});
 
 		if (this._environmentService.debugExtensionHost.env) {

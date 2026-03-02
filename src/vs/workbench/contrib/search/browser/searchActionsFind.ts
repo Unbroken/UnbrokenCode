@@ -339,7 +339,8 @@ registerAction2(class FindInFilesWithSelectionActionNoFocus extends Action2 {
 
 		const searchView = await openSearchView(viewsService, false);
 		if (searchView) {
-			searchView.setSearchParameters({ query: selectedText });
+			searchView.searchAndReplaceWidget.suppressGlobalFindBufferOnNextFocus();
+			searchView.setSearchParameters({ query: selectedText, triggerSearch: true });
 		}
 	}
 });
@@ -547,7 +548,7 @@ export async function findInFilesCommand(accessor: ServicesAccessor, _args: IFin
 					openedView.toggleQueryDetails(false, args.showIncludesExcludes);
 				}
 
-				openedView.searchAndReplaceWidget.focus(undefined, updatedText, updatedText);
+				openedView.searchAndReplaceWidget.focus(undefined, updatedText, true);
 			}
 		});
 	} else {

@@ -246,6 +246,10 @@ export class SearchWidget extends Widget {
 		return this._notebookFilters;
 	}
 
+	suppressGlobalFindBufferOnNextFocus(): void {
+		this.ignoreGlobalFindBufferOnNextFocus = true;
+	}
+
 	focus(select: boolean = true, focusReplace: boolean = false, suppressGlobalSearchBuffer = false): void {
 		this.ignoreGlobalFindBufferOnNextFocus = suppressGlobalSearchBuffer;
 

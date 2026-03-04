@@ -2852,7 +2852,7 @@ export class EditorLayoutInfoComputer extends ComputedEditorOption<EditorOption.
 	public static computeLayout(options: IComputedEditorOptions, env: EditorLayoutInfoComputerEnv): EditorLayoutInfo {
 		const outerWidth = env.outerWidth | 0;
 		const outerHeight = env.outerHeight | 0;
-		const lineHeight = env.lineHeight | 0;
+		const lineHeight = env.lineHeight;
 		const lineNumbersDigitCount = env.lineNumbersDigitCount | 0;
 		const typicalHalfwidthCharacterWidth = env.typicalHalfwidthCharacterWidth;
 		const maxDigitWidth = env.maxDigitWidth;

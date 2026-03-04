@@ -34,7 +34,7 @@ namespace NMib::NGit
 
 		if (Result.m_StatusCode != 200)
 		{
-		CStr Error = Result.m_Body;
+			CStr Error = Result.m_Body;
 
 			co_return DMibErrorInstance
 				(
@@ -403,11 +403,235 @@ impl GitHubGraphQLClient {
 	}
 }`;
 
-export const FONT_SIZE_OPTIONS = [
-	{ size: 10, desc: 'I\'m a code-reading machine' },
-	//	{ size: 12, desc: 'I\'m practical, not proud' },
-	{ size: 12, desc: 'I\'m allergic to my glasses' },
-	{ size: 15, desc: 'I\'m blind as a bat' }
-] as const;
-
 export type FontSize = number;
+
+/**
+ * Describes a canonical physical pixel size configuration for an Unbroken font variant.
+ */
+export interface IPixelPerfectConfig {
+	/** Physical pixel height of a character cell */
+	readonly physicalHeight: number;
+	/** Physical pixel width of a character cell */
+	readonly physicalWidth: number;
+	/** Which font variant to use */
+	readonly fontId: 'standard' | 'retina' | 'unbroken12';
+	/** Human-readable font name */
+	readonly fontName: string;
+	/** Supported style variants */
+	readonly variants: readonly string[];
+}
+
+/**
+ * A computed pixel-perfect font option for a specific DPR.
+ */
+export interface IPixelPerfectFontOption {
+	/** The CSS font size in pixels (may be fractional) */
+	readonly cssFontSize: number;
+	/** The physical pixel height this maps to */
+	readonly physicalHeight: number;
+	/** The physical pixel width of a character cell */
+	readonly physicalWidth: number;
+	/** The CSS character width (physicalWidth / DPR) */
+	readonly cssCharWidth: number;
+	/** The canonical config this was computed from */
+	readonly config: IPixelPerfectConfig;
+	/** A human-readable description for the UI */
+	readonly description: string;
+}
+
+/**
+ * The 4 canonical physical pixel sizes from the Unbroken font table.
+ */
+const CANONICAL_CONFIGS: readonly IPixelPerfectConfig[] = [
+	{ physicalHeight: 10, physicalWidth: 6, fontId: 'standard', fontName: 'Unbroken', variants: ['Normal'] },
+	{ physicalHeight: 20, physicalWidth: 12, fontId: 'retina', fontName: 'Unbroken Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 24, physicalWidth: 14, fontId: 'unbroken12', fontName: 'Unbroken12 Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 30, physicalWidth: 18, fontId: 'standard', fontName: 'Unbroken', variants: ['Normal'] },
+];
+
+/**
+ * Extended configs including 2x multiples of retina fonts, used as fallback
+ * when canonical configs produce fewer than 2 options for a given DPR.
+ */
+const EXTENDED_CONFIGS: readonly IPixelPerfectConfig[] = [
+	...CANONICAL_CONFIGS,
+	// 2x multiples
+	{ physicalHeight: 40, physicalWidth: 24, fontId: 'retina', fontName: 'Unbroken Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 48, physicalWidth: 28, fontId: 'unbroken12', fontName: 'Unbroken12 Retina', variants: ['Normal', 'Bold'] },
+	// 3x multiples
+	{ physicalHeight: 60, physicalWidth: 36, fontId: 'retina', fontName: 'Unbroken Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 72, physicalWidth: 42, fontId: 'unbroken12', fontName: 'Unbroken12 Retina', variants: ['Normal', 'Bold'] },
+	// 4x multiples
+	{ physicalHeight: 80, physicalWidth: 48, fontId: 'retina', fontName: 'Unbroken Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 96, physicalWidth: 56, fontId: 'unbroken12', fontName: 'Unbroken12 Retina', variants: ['Normal', 'Bold'] },
+	// 5x multiples
+	{ physicalHeight: 50, physicalWidth: 30, fontId: 'standard', fontName: 'Unbroken', variants: ['Normal'] },
+	{ physicalHeight: 100, physicalWidth: 60, fontId: 'retina', fontName: 'Unbroken Retina', variants: ['Normal', 'Bold'] },
+	{ physicalHeight: 120, physicalWidth: 70, fontId: 'unbroken12', fontName: 'Unbroken12 Retina', variants: ['Normal', 'Bold'] },
+];
+
+const PIXEL_PERFECT_EPSILON = 0.01;
+const MIN_CSS_SIZE = 6;
+const MAX_CSS_SIZE = 18;
+
+const HUMOROUS_DESCRIPTIONS: { threshold: number; text: string }[] = [
+	{ threshold: 12, text: 'I\'m a code-reading machine' },
+	{ threshold: 15, text: 'I\'m allergic to my glasses' },
+	{ threshold: 20, text: 'My optometrist is worried' },
+	{ threshold: 24, text: 'I code from across the room' },
+	{ threshold: Infinity, text: 'I\'m blind as a bat' },
+];
+
+function computeOptionsFromConfigs(configs: readonly IPixelPerfectConfig[], dpr: number): IPixelPerfectFontOption[] {
+	const inRange: IPixelPerfectFontOption[] = [];
+	const aboveRange: IPixelPerfectFontOption[] = [];
+
+	for (const config of configs) {
+		const cssSize = config.physicalHeight / dpr;
+
+		// Round-trip check: does cssSize * dpr give back the physical height?
+		if (Math.abs(cssSize * dpr - config.physicalHeight) > PIXEL_PERFECT_EPSILON) {
+			continue;
+		}
+
+		// Below minimum is always excluded
+		if (cssSize < MIN_CSS_SIZE) {
+			continue;
+		}
+
+		const option: IPixelPerfectFontOption = {
+			cssFontSize: cssSize,
+			physicalHeight: config.physicalHeight,
+			physicalWidth: config.physicalWidth,
+			cssCharWidth: config.physicalWidth / dpr,
+			config,
+			description: '', // assigned below
+		};
+
+		if (cssSize <= MAX_CSS_SIZE) {
+			inRange.push(option);
+		} else {
+			aboveRange.push(option);
+		}
+	}
+
+	// Start with in-range options, then add above-range (sorted by size) until we have at least 3
+	aboveRange.sort((a, b) => a.cssFontSize - b.cssFontSize);
+	const options = [...inRange];
+	if (options.length < 3) {
+		for (const opt of aboveRange) {
+			options.push(opt);
+			if (options.length >= 3) {
+				break;
+			}
+		}
+	}
+
+	// Sort by CSS size ascending
+	options.sort((a, b) => a.cssFontSize - b.cssFontSize);
+
+	// Assign descriptions based on CSS size thresholds
+	for (const option of options) {
+		for (const desc of HUMOROUS_DESCRIPTIONS) {
+			if (option.cssFontSize < desc.threshold) {
+				(option as { description: string }).description = desc.text;
+				break;
+			}
+		}
+	}
+
+	return options;
+}
+
+/**
+ * Returns pixel-perfect font size options for the given device pixel ratio.
+ * Uses the 4 canonical physical pixel sizes, falling back to extended configs
+ * if fewer than 2 options are available.
+ */
+export function getPixelPerfectOptions(dpr: number): IPixelPerfectFontOption[] {
+	return computeOptionsFromConfigs(EXTENDED_CONFIGS, dpr);
+}
+
+/**
+ * Checks if a DPR value is a dyadic rational (exactly representable in binary floating-point).
+ * Non-dyadic DPRs like 1.3 cause sub-pixel rendering artifacts.
+ * Dyadic rationals include: 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0, etc.
+ */
+export function isDyadicRational(dpr: number): boolean {
+	for (let n = 0; n <= 8; n++) {
+		const scaled = dpr * (1 << n);
+		if (Math.abs(scaled - Math.round(scaled)) < 0.001) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Checks if the screen resolution is an integer fraction of the native display resolution.
+ * That is, nativeWidth / screenWidth === nativeHeight / screenHeight === some positive integer k.
+ */
+export function isIntegerFractionOfNative(screenWidth: number, screenHeight: number, nativeWidth: number, nativeHeight: number): boolean {
+	const kw = nativeWidth / screenWidth;
+	const kh = nativeHeight / screenHeight;
+	if (kw < 1 || kh < 1) {
+		return false;
+	}
+	if (Math.abs(kw - Math.round(kw)) > 0.01) {
+		return false;
+	}
+	if (Math.abs(kh - Math.round(kh)) > 0.01) {
+		return false;
+	}
+	if (Math.abs(kw - kh) > 0.01) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Resolves the CSS font-family string for a given font option at a given DPR.
+ *
+ * Accounts for the UnbrokenEmbedded CSS @font-face auto-switch behavior:
+ * - At DPR >= 2: UnbrokenEmbedded resolves to Retina variant
+ * - At DPR < 2: UnbrokenEmbedded resolves to Standard variant
+ *
+ * Returns `undefined` when the default font family (UnbrokenEmbedded) already
+ * provides the correct variant, so no override is needed.
+ */
+export function resolveFontFamily(option: IPixelPerfectFontOption, dpr: number): string | undefined {
+	const isHighDpi = dpr >= 2;
+
+	switch (option.config.fontId) {
+		case 'unbroken12':
+			return 'Unbroken12Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace';
+		case 'retina':
+			if (isHighDpi) {
+				// Auto-switch already gives retina at DPR >= 2
+				return undefined;
+			}
+			// Force retina at DPR < 2
+			return 'Unbroken10RetinaEmbedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace';
+		case 'standard':
+			if (!isHighDpi) {
+				// Auto-switch already gives standard at DPR < 2
+				return undefined;
+			}
+			// Force standard at DPR >= 2 (prevent auto-retina)
+			return 'Unbroken10Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace';
+	}
+}
+
+/**
+ * Formats a CSS font size for display in the UI.
+ * Shows as integer when close to one, otherwise rounds to 2 decimal places.
+ */
+export function formatCssFontSize(cssSize: number): string {
+	const rounded = Math.round(cssSize);
+	if (Math.abs(cssSize - rounded) < PIXEL_PERFECT_EPSILON) {
+		return `${rounded}px`;
+	}
+	// Round to 2 decimal places, strip trailing zeros
+	const formatted = (Math.round(cssSize * 100) / 100).toString();
+	return `${formatted}px`;
+}

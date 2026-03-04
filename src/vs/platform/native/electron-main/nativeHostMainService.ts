@@ -27,7 +27,7 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILifecycleMainService, IRelaunchOptions } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
-import { FocusMode, ICommonNativeHostService, INativeHostOptions, IOSProperties, IOSStatistics } from '../common/native.js';
+import { FocusMode, ICommonNativeHostService, IDisplayNativeResolution, INativeHostOptions, IOSProperties, IOSStatistics } from '../common/native.js';
 import { IProductService } from '../../product/common/productService.js';
 import { IPartsSplash } from '../../theme/common/themeService.js';
 import { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
@@ -806,6 +806,75 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 	// WSL
 	async hasWSLFeatureInstalled(): Promise<boolean> {
 		return isWindows && hasWSLFeatureInstalled();
+	}
+
+	// Display
+	async getDisplayNativeResolutions(): Promise<IDisplayNativeResolution[]> {
+		if (!isMacintosh) {
+			return [];
+		}
+
+		try {
+			// Use ioreg to get native panel resolutions (~0.1s, vs system_profiler which can take 30s+)
+			const { stdout } = await promisify(exec)(
+				'ioreg -lw0 -r -c IOMobileFramebuffer',
+				{ timeout: 5000 }
+			);
+
+			// Parse native resolutions from DisplayAttributes.NativeFormatHorizontalPixels/VerticalPixels
+			const nativeResolutions: { nativeWidth: number; nativeHeight: number }[] = [];
+			const displayBlocks = stdout.split(/\+-o /);
+			for (const block of displayBlocks) {
+				const hMatch = block.match(/"NativeFormatHorizontalPixels"=(\d+)/);
+				const vMatch = block.match(/"NativeFormatVerticalPixels"=(\d+)/);
+				if (hMatch && vMatch) {
+					nativeResolutions.push({
+						nativeWidth: parseInt(hMatch[1]),
+						nativeHeight: parseInt(vMatch[1]),
+					});
+				}
+			}
+
+			if (nativeResolutions.length === 0) {
+				return [];
+			}
+
+			// Get current logical resolutions from Electron's screen API
+			const electronDisplays = screen.getAllDisplays();
+			const results: IDisplayNativeResolution[] = [];
+
+			// Match each Electron display to a native resolution by aspect ratio
+			for (const electronDisplay of electronDisplays) {
+				const logicalWidth = electronDisplay.size.width;
+				const logicalHeight = electronDisplay.size.height;
+				const electronAR = logicalWidth / logicalHeight;
+
+				// Find the native resolution with the closest aspect ratio
+				let bestMatch: { nativeWidth: number; nativeHeight: number } | undefined;
+				let bestDiff = Infinity;
+				for (const native of nativeResolutions) {
+					const nativeAR = native.nativeWidth / native.nativeHeight;
+					const diff = Math.abs(electronAR - nativeAR);
+					if (diff < bestDiff) {
+						bestDiff = diff;
+						bestMatch = native;
+					}
+				}
+
+				if (bestMatch && bestDiff < 0.01) {
+					results.push({
+						currentLogicalWidth: logicalWidth,
+						currentLogicalHeight: logicalHeight,
+						nativeWidth: bestMatch.nativeWidth,
+						nativeHeight: bestMatch.nativeHeight,
+					});
+				}
+			}
+
+			return results;
+		} catch {
+			return [];
+		}
 	}
 
 	//#endregion

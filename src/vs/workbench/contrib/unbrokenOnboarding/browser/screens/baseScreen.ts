@@ -52,6 +52,7 @@ export abstract class BaseOnboardingScreen extends Disposable {
 	protected languageSamples: ILanguageSample[] = [];
 	protected currentLanguageIndex: number = 0;
 	protected currentConfigOverrides?: Record<string, unknown>;
+	protected previewHeader: HTMLElement | undefined;
 
 	constructor(
 		@IInstantiationService protected readonly instantiationService: IInstantiationService,
@@ -212,7 +213,8 @@ export abstract class BaseOnboardingScreen extends Disposable {
 
 		const previewContainer = append(parent, $('.preview-editor-container'));
 
-		const previewHeader = append(previewContainer, $('.preview-header'));
+		this.previewHeader = append(previewContainer, $('.preview-header'));
+		const previewHeader = this.previewHeader;
 		const previewLabel = append(previewHeader, $('label.preview-label'));
 		previewLabel.textContent = 'Preview:';
 

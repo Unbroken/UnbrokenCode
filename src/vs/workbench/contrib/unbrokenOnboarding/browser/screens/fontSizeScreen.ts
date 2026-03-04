@@ -4,26 +4,58 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { BaseOnboardingScreen } from './baseScreen.js';
-import { append, $, getWindow } from '../../../../../base/browser/dom.js';
+import { append, $, getWindow, clearNode } from '../../../../../base/browser/dom.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
-import { SAMPLE_CPP_CODE, SAMPLE_TYPESCRIPT_CODE, SAMPLE_RUST_CODE, FONT_SIZE_OPTIONS, FontSize } from '../../common/unbrokenOnboardingConstants.js';
+import { SAMPLE_CPP_CODE, SAMPLE_TYPESCRIPT_CODE, SAMPLE_RUST_CODE, FontSize, getPixelPerfectOptions, isDyadicRational, isIntegerFractionOfNative, resolveFontFamily, formatCssFontSize, IPixelPerfectFontOption } from '../../common/unbrokenOnboardingConstants.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IFontSmoothingService } from '../../../../../platform/fontSmoothing/common/fontSmoothingService.js';
-import { INativeHostService } from '../../../../../platform/native/common/native.js';
+import { IDisplayNativeResolution, INativeHostService } from '../../../../../platform/native/common/native.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
+import { IModelDeltaDecoration } from '../../../../../editor/common/model.js';
+
+const FONT_STYLES_SAMPLE = [
+	'Regular:',
+	'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+	'abcdefghijklmnopqrstuvwxyz',
+	'0123456789 !@#$%^&*()_+-=',
+	'',
+	'Bold:',
+	'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+	'abcdefghijklmnopqrstuvwxyz',
+	'0123456789 !@#$%^&*()_+-=',
+	'',
+	'Italic:',
+	'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+	'abcdefghijklmnopqrstuvwxyz',
+	'0123456789 !@#$%^&*()_+-=',
+	'',
+	'Bold Italic:',
+	'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+	'abcdefghijklmnopqrstuvwxyz',
+	'0123456789 !@#$%^&*()_+-=',
+].join('\n');
 
 export class FontSizeScreen extends BaseOnboardingScreen {
 
 	private selectedFontSize: FontSize;
+	private selectedOption: IPixelPerfectFontOption | undefined;
+	private currentOptions: IPixelPerfectFontOption[] = [];
 	private fontSizeOptionsElements: Map<number, HTMLElement> = new Map();
 	private fontSizeBylineElements: Map<number, HTMLElement> = new Map();
 	private currentDevicePixelRatio: number;
 	private fontSmoothingWarningContainer: HTMLElement | undefined;
+	private scalingWarningContainer: HTMLElement | undefined;
+	private scalingWarningMessageElement: HTMLElement | undefined;
+	private optionsContainer: HTMLElement | undefined;
+	private descriptionElement: HTMLElement | undefined;
+	private nativeDisplayResolutions: IDisplayNativeResolution[] | undefined;
+	private readonly optionDisposables = this._register(new DisposableStore());
 
 	constructor(
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -47,10 +79,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		);
 
 		// Initialize selected font size from current user settings
-		const currentFontSize = this.configurationService.getValue<number>('editor.fontSize');
-		// Check if current font size is one of our valid options, otherwise default to 10
-		const matchingOption = FONT_SIZE_OPTIONS.find(option => option.size === currentFontSize);
-		this.selectedFontSize = matchingOption ? matchingOption.size : 10;
+		this.selectedFontSize = this.configurationService.getValue<number>('editor.fontSize') || 10;
 
 		// Initialize device pixel ratio (will be updated when container is available)
 		this.currentDevicePixelRatio = 1;
@@ -61,23 +90,32 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 	}
 
 	get description(): string {
-		return 'Unbroken Code ships with a pixel-perfect font optimized for coding. On high-DPI displays ' +
-			'(Retina/2x), all three sizes work well. On standard displays, 10px is recommended for best clarity. ' +
-			'You can change this anytime in Settings or reopen this wizard from Help → Open Unbroken Code Setup.';
+		const scalingPercent = Math.round(this.currentDevicePixelRatio * 100);
+		return 'Unbroken Code ships with a pixel-perfect font optimized for coding. ' +
+			`The available sizes below are calculated for your display scaling (${scalingPercent}%) to ensure pixel-perfect rendering. ` +
+			'Sizes marked with "Bold" include a pixel-perfect bold variant. ' +
+			'You can change this anytime in Settings or reopen this wizard from Help \u2192 Open Unbroken Code Setup.';
 	}
 
 	render(parent: HTMLElement): void {
 		this.container = append(parent, $('.font-size-screen'));
 
-		// Create header
-		this.createHeader(this.container);
+		// Set up resolution change detection first so DPR is known for the description
+		this.setupResolutionChangeDetection();
+
+		// Create header (with stored description element for dynamic updates)
+		const header = append(this.container, $('.onboarding-screen-header'));
+		const titleElement = append(header, $('h1.onboarding-screen-title'));
+		titleElement.textContent = this.title;
+		this.descriptionElement = append(header, $('p.onboarding-screen-description'));
+		this.descriptionElement.textContent = this.description;
 
 		// Create font smoothing warning (if needed)
 		this.createFontSmoothingWarning(this.container);
 
-		// Set up resolution change detection after container is created but before creating options
-		// This initializes currentDevicePixelRatio before it's needed
-		this.setupResolutionChangeDetection();
+		// Check for non-native display scaling on macOS (async, with live updates)
+		this.checkAndDisplayNativeScalingStatus();
+		this.setupDisplayChangeListener();
 
 		// Create content area
 		const content = append(this.container, $('.onboarding-screen-content'));
@@ -169,62 +207,220 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		}
 	}
 
+	private async checkAndDisplayNativeScalingStatus(): Promise<void> {
+		if (!isMacintosh) {
+			return;
+		}
+
+		try {
+			this.nativeDisplayResolutions = await this.nativeHostService.getDisplayNativeResolutions();
+			this.updateScalingWarning();
+		} catch {
+			// Silently ignore errors in detection
+		}
+	}
+
+	private setupDisplayChangeListener(): void {
+		if (!isMacintosh) {
+			return;
+		}
+
+		// Re-check when display settings change (e.g. resolution change in System Settings).
+		// On macOS DPR stays at 2, so setupResolutionChangeDetection won't fire for this.
+		this._register(this.nativeHostService.onDidChangeDisplay(() => {
+			this.checkAndDisplayNativeScalingStatus();
+		}));
+	}
+
 	private createFontSizeSelector(parent: HTMLElement): void {
 		const selectorContainer = append(parent, $('.font-size-selector'));
 
 		const label = append(selectorContainer, $('label.font-size-label'));
 		label.textContent = 'Font Size:';
 
-		const optionsContainer = append(selectorContainer, $('.font-size-options'));
+		// Create scaling warning (initially hidden)
+		this.createScalingWarning(selectorContainer);
 
-		FONT_SIZE_OPTIONS.forEach(sizeOption => {
-			const option = append(optionsContainer, $('.font-size-option'));
+		this.optionsContainer = append(selectorContainer, $('.font-size-options'));
 
-			// Radio input (hidden, controlled by clicking the entire option)
-			const radio = append(option, $('input.font-size-radio')) as HTMLInputElement;
-			radio.type = 'radio';
-			radio.name = 'fontSize';
-			radio.value = sizeOption.size.toString();
-			radio.id = `fontSize${sizeOption.size}`;
-			radio.checked = sizeOption.size === this.selectedFontSize;
+		// Build initial options based on detected DPR
+		this.rebuildFontSizeOptions();
+	}
 
-			// Left side: Font size display
-			const sizeDisplay = append(option, $('.font-size-option-size'));
-			sizeDisplay.textContent = `${sizeOption.size}px`;
+	private createScalingWarning(parent: HTMLElement): void {
+		this.scalingWarningContainer = append(parent, $('.scaling-warning'));
+		this.scalingWarningContainer.style.display = 'none';
 
-			// Right side: Description and byline wrapper
-			const textWrapper = append(option, $('.font-size-option-text'));
+		const warningContent = append(this.scalingWarningContainer, $('.scaling-warning-content'));
 
-			const descElement = append(textWrapper, $('.font-size-option-desc'));
-			descElement.textContent = sizeOption.desc;
+		// Warning icon
+		append(warningContent, $('.codicon.codicon-warning.scaling-warning-icon'));
 
-			// Create byline element for line count display
-			const bylineElement = append(textWrapper, $('.font-size-option-byline'));
-			bylineElement.textContent = '-'; // Placeholder until calculated
+		// Warning message
+		this.scalingWarningMessageElement = append(warningContent, $('.scaling-warning-message'));
+	}
 
-			// Store references to the elements
-			this.fontSizeOptionsElements.set(sizeOption.size, option);
-			this.fontSizeBylineElements.set(sizeOption.size, bylineElement);
+	private updateScalingWarning(): void {
+		if (!this.scalingWarningContainer || !this.scalingWarningMessageElement) {
+			return;
+		}
 
-			this._register(this.addDisposableListener(radio, 'change', () => {
-				if (radio.checked && !radio.disabled) {
-					this.selectedFontSize = sizeOption.size;
-					this.updatePreview();
-				}
-			}));
+		// Check for non-dyadic DPR (primarily affects Windows/Linux with fractional scaling)
+		if (!isDyadicRational(this.currentDevicePixelRatio)) {
+			const dprPercent = Math.round(this.currentDevicePixelRatio * 100);
+			this.scalingWarningContainer.style.display = 'flex';
+			this.scalingWarningMessageElement.textContent =
+				`Your display scaling (${dprPercent}%) may not render fonts pixel-perfectly due to sub-pixel alignment limitations. ` +
+				`For the best experience, consider using 100%, 125%, 150%, 175%, 200%, 225%, 250%, or 300%.`;
+			return;
+		}
 
-			// Make the entire option container clickable
-			this._register(this.addDisposableListener(option, 'click', () => {
-				if (!radio.disabled) {
-					radio.checked = true;
-					this.selectedFontSize = sizeOption.size;
-					this.updatePreview();
-				}
-			}));
+		// On macOS, check for non-native display scaling
+		if (isMacintosh && this.container && this.nativeDisplayResolutions) {
+			const targetWindow = getWindow(this.container);
+			const screenWidth = targetWindow.screen.width;
+			const screenHeight = targetWindow.screen.height;
+
+			// Find the display matching the current screen dimensions
+			const display = this.nativeDisplayResolutions.find(d =>
+				d.currentLogicalWidth === screenWidth && d.currentLogicalHeight === screenHeight
+			);
+
+			if (display && !isIntegerFractionOfNative(screenWidth, screenHeight, display.nativeWidth, display.nativeHeight)) {
+				const defaultWidth = display.nativeWidth / 2;
+				const defaultHeight = display.nativeHeight / 2;
+				this.scalingWarningContainer.style.display = 'flex';
+				this.scalingWarningMessageElement.textContent =
+					`Your display is using a non-native scaled resolution. ` +
+					`For pixel-perfect rendering, use the "Default" resolution (${defaultWidth}\u00D7${defaultHeight}) ` +
+					`in System Settings \u2192 Displays.`;
+				return;
+			}
+		}
+
+		this.scalingWarningContainer.style.display = 'none';
+	}
+
+	private rebuildFontSizeOptions(): void {
+		// Compute options for current DPR
+		this.currentOptions = getPixelPerfectOptions(this.currentDevicePixelRatio);
+
+		// Update description with current scaling
+		if (this.descriptionElement) {
+			this.descriptionElement.textContent = this.description;
+		}
+
+		// Update scaling warning
+		this.updateScalingWarning();
+
+		// Clear existing option elements and disposables
+		this.optionDisposables.clear();
+		if (this.optionsContainer) {
+			clearNode(this.optionsContainer);
+		}
+		this.fontSizeOptionsElements.clear();
+		this.fontSizeBylineElements.clear();
+
+		// Try to match previously selected font size to new options
+		this.selectedOption = this.currentOptions.find(
+			opt => Math.abs(opt.cssFontSize - this.selectedFontSize) < 0.01
+		);
+
+		// If no match, pick the closest option
+		if (!this.selectedOption && this.currentOptions.length > 0) {
+			this.selectedOption = this.findClosestOption(this.selectedFontSize);
+		}
+
+		if (this.selectedOption) {
+			this.selectedFontSize = this.selectedOption.cssFontSize;
+		}
+
+		// Build radio buttons for each option
+		this.currentOptions.forEach(option => {
+			this.createFontSizeOptionElement(option);
 		});
 
-		// Apply initial disabled state based on current resolution
-		this.updateOptionsAvailability();
+		// Update preview if editor exists
+		if (this.previewEditor) {
+			this.updatePreview();
+		}
+	}
+
+	private findClosestOption(targetSize: number): IPixelPerfectFontOption | undefined {
+		if (this.currentOptions.length === 0) {
+			return undefined;
+		}
+		let closest = this.currentOptions[0];
+		let closestDist = Math.abs(closest.cssFontSize - targetSize);
+		for (const opt of this.currentOptions) {
+			const dist = Math.abs(opt.cssFontSize - targetSize);
+			if (dist < closestDist) {
+				closest = opt;
+				closestDist = dist;
+			}
+		}
+		return closest;
+	}
+
+	private createFontSizeOptionElement(option: IPixelPerfectFontOption): void {
+		if (!this.optionsContainer) {
+			return;
+		}
+
+		const optionEl = append(this.optionsContainer, $('.font-size-option'));
+
+		// Radio input (hidden, controlled by clicking the entire option)
+		const radio = append(optionEl, $('input.font-size-radio')) as HTMLInputElement;
+		radio.type = 'radio';
+		radio.name = 'fontSize';
+		radio.value = option.cssFontSize.toString();
+		radio.id = `fontSize${option.physicalHeight}`;
+		radio.checked = (this.selectedOption === option);
+
+		// Left side: Font size display
+		const sizeDisplay = append(optionEl, $('.font-size-option-size'));
+		sizeDisplay.textContent = formatCssFontSize(option.cssFontSize);
+
+		// Right side: Description and byline wrapper
+		const textWrapper = append(optionEl, $('.font-size-option-text'));
+
+		const descElement = append(textWrapper, $('.font-size-option-desc'));
+		descElement.textContent = option.description;
+
+		// Physical pixel size info
+		const physicalElement = append(textWrapper, $('.font-size-option-byline'));
+		physicalElement.textContent = `${option.physicalWidth}\u00D7${option.physicalHeight} physical`;
+
+		// Bottom row: line count + bold indicator
+		const bottomRow = append(textWrapper, $('.font-size-option-bottom-row'));
+
+		const bylineElement = append(bottomRow, $('.font-size-option-byline'));
+		bylineElement.textContent = '-'; // Placeholder until calculated
+
+		if (option.config.variants.includes('Bold')) {
+			const boldBadge = append(bottomRow, $('.font-size-option-bold-badge'));
+			boldBadge.textContent = '\u2714 Bold';
+		}
+
+		// Store references keyed by physicalHeight (unique per option)
+		this.fontSizeOptionsElements.set(option.physicalHeight, optionEl);
+		this.fontSizeBylineElements.set(option.physicalHeight, bylineElement);
+
+		this.optionDisposables.add(this.addDisposableListener(radio, 'change', () => {
+			if (radio.checked) {
+				this.selectedOption = option;
+				this.selectedFontSize = option.cssFontSize;
+				this.updatePreview();
+			}
+		}));
+
+		// Make the entire option container clickable
+		this.optionDisposables.add(this.addDisposableListener(optionEl, 'click', () => {
+			radio.checked = true;
+			this.selectedOption = option;
+			this.selectedFontSize = option.cssFontSize;
+			this.updatePreview();
+		}));
 	}
 
 	private createPreviewEditorWithComparisonButton(parent: HTMLElement): void {
@@ -248,29 +444,91 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 					languageId: 'rust',
 					code: SAMPLE_RUST_CODE,
 					uri: 'inmemory://onboarding/preview.rs'
+				},
+				{
+					language: 'Font Styles',
+					languageId: 'plaintext',
+					code: FONT_STYLES_SAMPLE,
+					uri: 'inmemory://onboarding/fontstyles.txt'
 				}
 			],
 			defaultLanguage: 'cpp'
 		});
 
-		// Now add the comparison button to the preview header that was just created
-		// Find the preview header that was created by the base class
-		const previewContainer = parent.querySelector('.preview-editor-container');
-		if (previewContainer) {
-			const previewHeader = previewContainer.querySelector('.preview-header');
-			if (previewHeader) {
-				// Add comparison table button
-				const comparisonButton = append(previewHeader as HTMLElement, $('button.font-size-comparison-button')) as HTMLButtonElement;
-				comparisonButton.textContent = 'Compare for different screen sizes';
-				comparisonButton.type = 'button';
-				this._register(this.addDisposableListener(comparisonButton, 'click', () => {
-					this.showComparisonTable();
-				}));
-			}
+		// Apply font style decorations when Font Styles tab is shown
+		this.setupFontStyleDecorations();
+
+		// Add comparison button to the preview header
+		if (this.previewHeader) {
+			const comparisonButton = append(this.previewHeader, $('button.font-size-comparison-button')) as HTMLButtonElement;
+			comparisonButton.textContent = 'Compare for different screen sizes';
+			comparisonButton.type = 'button';
+			this._register(this.addDisposableListener(comparisonButton, 'click', () => {
+				this.showComparisonTable();
+			}));
 		}
 
 		// Update preview to apply current font settings
 		this.updatePreview();
+	}
+
+	private setupFontStyleDecorations(): void {
+		if (!this.previewEditor) {
+			return;
+		}
+
+		const applyDecorations = () => {
+			if (!this.previewEditor) {
+				return;
+			}
+			const model = this.previewEditor.getModel();
+			if (!model || !model.uri.path.endsWith('fontstyles.txt')) {
+				return;
+			}
+
+			// Lines 6-9: Bold, Lines 11-14: Italic, Lines 16-19: Bold Italic
+			const decorations: IModelDeltaDecoration[] = [];
+
+			// Bold (lines 6-9)
+			for (let line = 6; line <= 9; line++) {
+				const lineContent = model.getLineContent(line);
+				if (lineContent) {
+					decorations.push({
+						range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: lineContent.length + 1 },
+						options: { description: 'font-style-bold', inlineClassName: 'mtk-font-style-bold' }
+					});
+				}
+			}
+
+			// Italic (lines 11-14)
+			for (let line = 11; line <= 14; line++) {
+				const lineContent = model.getLineContent(line);
+				if (lineContent) {
+					decorations.push({
+						range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: lineContent.length + 1 },
+						options: { description: 'font-style-italic', inlineClassName: 'mtk-font-style-italic' }
+					});
+				}
+			}
+
+			// Bold Italic (lines 16-19)
+			for (let line = 16; line <= 19; line++) {
+				const lineContent = model.getLineContent(line);
+				if (lineContent) {
+					decorations.push({
+						range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: lineContent.length + 1 },
+						options: { description: 'font-style-bold-italic', inlineClassName: 'mtk-font-style-bold-italic' }
+					});
+				}
+			}
+
+			this.previewEditor.createDecorationsCollection(decorations);
+		};
+
+		// Apply when model changes (i.e., switching to Font Styles tab)
+		this._register(this.previewEditor.onDidChangeModel(() => {
+			applyDecorations();
+		}));
 	}
 
 	protected override layoutEditor(): void {
@@ -304,25 +562,26 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 	}
 
 	private updateLineCountBylines(): void {
-		if (!this.editorContainer || !this.previewEditor) {
+		if (!this.editorContainer || !this.previewEditor || this.currentOptions.length === 0) {
 			return;
 		}
 
-		// Calculate the baseline (10px option) for percentage calculation
-		const baselineLines = this.calculateVisibleLines(10);
+		// Use the smallest option as baseline for percentage calculation
+		const baselineOption = this.currentOptions[0]; // sorted ascending by CSS size
+		const baselineLines = this.calculateVisibleLines(baselineOption.cssFontSize);
 
 		if (baselineLines === 0) {
 			return; // Container not ready yet
 		}
 
 		// Update byline for each font size option
-		FONT_SIZE_OPTIONS.forEach(sizeOption => {
-			const bylineElement = this.fontSizeBylineElements.get(sizeOption.size);
+		this.currentOptions.forEach(option => {
+			const bylineElement = this.fontSizeBylineElements.get(option.physicalHeight);
 			if (!bylineElement) {
 				return;
 			}
 
-			const visibleLines = this.calculateVisibleLines(sizeOption.size);
+			const visibleLines = this.calculateVisibleLines(option.cssFontSize);
 			const percentage = Math.round((visibleLines / baselineLines) * 100);
 
 			bylineElement.textContent = `${visibleLines} lines (${percentage}%)`;
@@ -460,28 +719,21 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		// Table body
 		const tbody = append(table, $('tbody'));
 
-		const fontSizes = [
-			{ size: 10, charWidth: 6 },
-			{ size: 12, charWidth: 7 },
-			{ size: 15, charWidth: 9 }
-		];
-
-		fontSizes.forEach(font => {
-			const row = append(tbody, $(`tr.font-size-${font.size}`));
+		// Use dynamically computed options for the current DPR
+		this.currentOptions.forEach(option => {
+			const row = append(tbody, $('tr'));
 			const fontCell = append(row, $('td.font-size-label-cell'));
-			fontCell.textContent = `${font.size}px`;
+			fontCell.textContent = formatCssFontSize(option.cssFontSize);
 			fontCell.style.textAlign = 'center';
 
 			resolutions.forEach((res, index) => {
 				const cell = append(row, $('td'));
 
-				// Calculate columns (chars per line)
-				const usableWidth = res.width;
-				const columns = Math.floor(usableWidth / font.charWidth);
+				// Calculate columns using CSS char width
+				const columns = Math.floor(res.width / option.cssCharWidth);
 
-				// Calculate lines
-				const usableHeight = res.height;
-				const lines = Math.floor(usableHeight / font.size);
+				// Calculate lines using CSS font size
+				const lines = Math.floor(res.height / option.cssFontSize);
 
 				cell.textContent = `${columns} × ${lines}`;
 				cell.style.textAlign = 'center';
@@ -522,49 +774,6 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		this.updateLineCountBylines();
 	}
 
-	private updateOptionsAvailability(): void {
-		// On non-2x displays, only 10px is advisable
-		const isRetinaDisplay = this.currentDevicePixelRatio >= 2;
-
-		FONT_SIZE_OPTIONS.forEach(sizeOption => {
-			const optionElement = this.fontSizeOptionsElements.get(sizeOption.size);
-			if (!optionElement) {
-				return;
-			}
-
-			const radio = optionElement.querySelector('input.font-size-radio') as HTMLInputElement;
-			if (!radio) {
-				return;
-			}
-
-			// Only 10px is advisable on non-Retina displays
-			const isAdvisable = isRetinaDisplay || sizeOption.size === 10;
-
-			if (isAdvisable) {
-				optionElement.classList.remove('unadvisable');
-				radio.disabled = false;
-				optionElement.title = '';
-			} else {
-				optionElement.classList.add('unadvisable');
-				radio.disabled = true;
-				optionElement.title = `This font size is only recommended for 2x (Retina) displays. Your current display resolution is ${this.currentDevicePixelRatio}x.`;
-
-				// If the currently selected option becomes unadvisable, switch to 10px
-				if (this.selectedFontSize === sizeOption.size) {
-					const defaultOption = this.fontSizeOptionsElements.get(10);
-					if (defaultOption) {
-						const defaultRadio = defaultOption.querySelector('input.font-size-radio') as HTMLInputElement;
-						if (defaultRadio) {
-							defaultRadio.checked = true;
-							this.selectedFontSize = 10;
-							this.updatePreview();
-						}
-					}
-				}
-			}
-		});
-	}
-
 	private setupResolutionChangeDetection(): void {
 		if (!this.container) {
 			return;
@@ -581,7 +790,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 			const newDevicePixelRatio = targetWindow.devicePixelRatio || 1;
 			if (newDevicePixelRatio !== this.currentDevicePixelRatio) {
 				this.currentDevicePixelRatio = newDevicePixelRatio;
-				this.updateOptionsAvailability();
+				this.rebuildFontSizeOptions();
 			}
 		};
 
@@ -614,29 +823,20 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 	override async applySettings(): Promise<void> {
 		const promises: Promise<void>[] = [];
 
-		// Set the font family based on the selected size
-		if (this.selectedFontSize === 10) {
-			// For 10px, remove font setting to use the default
-			promises.push(this.configurationService.updateValue(
-				'editor.fontFamily',
-				undefined,
-				ConfigurationTarget.USER
-			));
-		} else if (this.selectedFontSize === 12) {
-			promises.push(this.configurationService.updateValue(
-				'editor.fontFamily',
-				'Unbroken12Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace',
-				ConfigurationTarget.USER
-			));
-		} else if (this.selectedFontSize === 15) {
-			promises.push(this.configurationService.updateValue(
-				'editor.fontFamily',
-				'Unbroken10Embedded, \'Unbroken Retina\', Unbroken, Menlo, Monaco, \'Courier New\', monospace',
-				ConfigurationTarget.USER
-			));
-		}
+		// Resolve the font family based on the selected option and current DPR
+		const fontFamily = this.selectedOption
+			? resolveFontFamily(this.selectedOption, this.currentDevicePixelRatio)
+			: undefined;
 
-		const fontSizeSetting = this.selectedFontSize === 10 ? undefined : this.selectedFontSize;
+		promises.push(this.configurationService.updateValue(
+			'editor.fontFamily',
+			fontFamily,
+			ConfigurationTarget.USER
+		));
+
+		// Use undefined (default) when font family is default and size is ~10px
+		const isDefault = fontFamily === undefined && Math.abs(this.selectedFontSize - 10) < 0.01;
+		const fontSizeSetting = isDefault ? undefined : this.selectedFontSize;
 
 		// Write the selected font size to user settings
 		promises.push(this.configurationService.updateValue(
@@ -665,9 +865,9 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 			ConfigurationTarget.USER
 		));
 
-		let rulers: any[] | undefined = undefined;
+		let rulers: { column: number; color: null }[] | undefined = undefined;
 
-		if (this.selectedFontSize !== 10) {
+		if (!isDefault) {
 			rulers = [{
 				'column': Math.round(190 / this.selectedFontSize * 10),
 				'color': null

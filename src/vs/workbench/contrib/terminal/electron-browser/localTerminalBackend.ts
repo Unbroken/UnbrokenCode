@@ -214,7 +214,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 		shouldPersist: boolean
 	): Promise<ITerminalChildProcess> {
 		await this._connectToDirectProxy();
-		this._addCompatBinToPath(env);
+		this._addCompatBinToPath(env, shellLaunchConfig.executable);
 		const executableEnv = await this._shellEnvironmentService.getShellEnv();
 		const id = await this._proxy.createProcess(shellLaunchConfig, cwd, cols, rows, unicodeVersion, env, executableEnv, options, shouldPersist, this._getWorkspaceId(), this._getWorkspaceName());
 		const pty = new LocalPty(id, shouldPersist, this._proxy);
@@ -372,7 +372,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
 			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
 		}
-		this._addCompatBinToPath(env);
+		this._addCompatBinToPath(env, shellLaunchConfig.executable);
 		return env;
 	}
 
@@ -382,7 +382,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 	 * compatibility with VS Code extensions (e.g. Claude Code) that invoke
 	 * the 'code' command to install extensions or open files.
 	 */
-	private _addCompatBinToPath(env: IProcessEnvironment): void {
+	private _addCompatBinToPath(env: IProcessEnvironment, shellExecutable?: string): void {
 		const appRoot = this._environmentService.appRoot;
 		let compatBinDir: string;
 		if (this._environmentService.isBuilt) {
@@ -397,10 +397,17 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 			compatBinDir = path.join(appRoot, 'bin_compat');
 		}
 		const pathSep = isWindows ? ';' : ':';
-		if (env['PATH']) {
-			env['PATH'] = compatBinDir + pathSep + env['PATH'];
+		// On Windows, the PATH variable name may be 'Path', 'PATH', or another
+		// casing since environment variable names are case-insensitive on Windows
+		// but JS object keys are case-sensitive. Find the actual key to avoid
+		// creating a duplicate entry that shadows the real PATH.
+		const pathKey = isWindows
+			? (Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH')
+			: 'PATH';
+		if (env[pathKey]) {
+			env[pathKey] = compatBinDir + pathSep + env[pathKey];
 		} else {
-			env['PATH'] = compatBinDir;
+			env[pathKey] = compatBinDir;
 		}
 
 		// Also add to VSCODE_ENV_PREPEND so the shell integration script
@@ -408,14 +415,24 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
 		// reorders PATH, pushing our prepend behind /usr/local/bin).
 		// Format matches environmentVariableCollection.ts: "VAR=encoded_value"
 		// entries separated by ':', with colons in values encoded as '\x3a'.
-		if (!isWindows) {
-			const encodedValue = (compatBinDir + pathSep).replaceAll(':', '\\x3a');
-			const entry = `PATH=${encodedValue}`;
-			if (env['VSCODE_ENV_PREPEND']) {
-				env['VSCODE_ENV_PREPEND'] = entry + ':' + env['VSCODE_ENV_PREPEND'];
-			} else {
-				env['VSCODE_ENV_PREPEND'] = entry;
-			}
+		// On Windows with POSIX shells (bash, zsh, etc.), convert to POSIX
+		// format (/c/... with ':' separator) since their integration scripts
+		// expect POSIX paths. MSYS2 auto-converts PATH but not custom env vars
+		// like VSCODE_ENV_PREPEND. PowerShell keeps native Windows format.
+		let prependDir = compatBinDir;
+		let prependSep = pathSep;
+		const shell = shellExecutable ? path.basename(shellExecutable).toLowerCase() : '';
+		const isPosixShellOnWindows = isWindows && shell !== 'pwsh.exe' && shell !== 'powershell.exe' && shell !== 'cmd.exe';
+		if (isPosixShellOnWindows) {
+			prependDir = prependDir.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => '/' + d.toLowerCase());
+			prependSep = ':';
+		}
+		const encodedValue = (prependDir + prependSep).replaceAll(':', '\\x3a');
+		const entry = `${isPosixShellOnWindows ? 'PATH' : pathKey}=${encodedValue}`;
+		if (env['VSCODE_ENV_PREPEND']) {
+			env['VSCODE_ENV_PREPEND'] = entry + ':' + env['VSCODE_ENV_PREPEND'];
+		} else {
+			env['VSCODE_ENV_PREPEND'] = entry;
 		}
 
 		// Pass the running instance's user-data-dir so that the compat 'code'

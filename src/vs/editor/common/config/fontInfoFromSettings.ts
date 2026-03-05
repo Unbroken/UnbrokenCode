@@ -15,7 +15,7 @@ export function resolveDisableFontHinting(disableFontHinting: 'auto' | 'on' | 'o
 		return false;
 	}
 	// 'auto': enable on Windows when using an Unbroken font
-	return platform.isWindows && /(?:^|,)\s*(?:"|')?Unbroken/i.test(fontFamily);
+	return !platform.isMacintosh && /(?:^|,)\s*(?:"|')?Unbroken/i.test(fontFamily);
 }
 
 export function createBareFontInfoFromValidatedSettings(options: IValidatedEditorOptions, pixelRatio: number, ignoreEditorZoom: boolean): BareFontInfo {

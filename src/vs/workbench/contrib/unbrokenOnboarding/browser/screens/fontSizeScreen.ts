@@ -16,8 +16,12 @@ import { IDisplayNativeResolution, INativeHostService } from '../../../../../pla
 import { IExtensionService } from '../../../../services/extensions/common/extensions.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
-import { isMacintosh } from '../../../../../base/common/platform.js';
+import { isMacintosh, isLinux } from '../../../../../base/common/platform.js';
 import { IModelDeltaDecoration } from '../../../../../editor/common/model.js';
+import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
+import { IJSONEditingService } from '../../../../services/configuration/common/jsonEditing.js';
+import { ITextFileService } from '../../../../services/textfile/common/textfiles.js';
+import { parse } from '../../../../../base/common/jsonc.js';
 
 const FONT_STYLES_SAMPLE = [
 	'Regular:',
@@ -56,6 +60,7 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 	private descriptionElement: HTMLElement | undefined;
 	private nativeDisplayResolutions: IDisplayNativeResolution[] | undefined;
 	private readonly optionDisposables = this._register(new DisposableStore());
+	private launchedDisableLcdText: boolean = true;
 
 	constructor(
 		@IInstantiationService instantiationService: IInstantiationService,
@@ -66,7 +71,10 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		@IStorageService storageService: IStorageService,
 		@ILifecycleService lifecycleService: ILifecycleService,
 		@IFontSmoothingService private readonly fontSmoothingService: IFontSmoothingService,
-		@INativeHostService private readonly nativeHostService: INativeHostService
+		@INativeHostService private readonly nativeHostService: INativeHostService,
+		@IEnvironmentService private readonly environmentService: IEnvironmentService,
+		@IJSONEditingService private readonly jsonEditingService: IJSONEditingService,
+		@ITextFileService private readonly textFileService: ITextFileService
 	) {
 		super(
 			instantiationService,
@@ -207,6 +215,119 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 		}
 	}
 
+	private createSubpixelAAButton(parent: HTMLElement): void {
+		// Only show on non-macOS platforms (macOS doesn't support subpixel rendering)
+		if (isMacintosh) {
+			return;
+		}
+
+		const button = append(parent, $('button.subpixel-aa-open-button')) as HTMLButtonElement;
+		button.type = 'button';
+		button.textContent = 'Subpixel Anti-aliasing\u2026';
+
+		this._register(this.addDisposableListener(button, 'click', () => {
+			this.showSubpixelAAModal();
+		}));
+	}
+
+	private showSubpixelAAModal(): void {
+		if (!this.container) {
+			return;
+		}
+
+		// Create modal overlay
+		const modal = append(this.container, $('.subpixel-aa-modal'));
+		const modalContent = append(modal, $('.subpixel-aa-modal-content'));
+
+		// Header
+		const header = append(modalContent, $('.subpixel-aa-modal-header'));
+		const title = append(header, $('h2.subpixel-aa-modal-title'));
+		title.textContent = 'Subpixel Anti-aliasing';
+		const closeButton = append(header, $('button.subpixel-aa-modal-close')) as HTMLButtonElement;
+		closeButton.textContent = '\u00D7';
+		closeButton.type = 'button';
+
+		// Explanation
+		const explanation = append(modalContent, $('.subpixel-aa-explanation'));
+		const para1 = append(explanation, $('p'));
+		para1.textContent = 'Subpixel anti-aliasing (LCD text rendering) is incompatible with pixel-perfect rendering. ' +
+			'It colors the red, green, and blue sub-components of each pixel independently, ' +
+			'which introduces color fringing. To reduce this fringing, blurring is applied to the edges of letter stems, ' +
+			'ruining the crisp grid-aligned appearance of a pixel-perfect font.';
+
+		const para2 = append(explanation, $('p'));
+		if (isLinux) {
+			para2.textContent = 'This is especially problematic on Linux where the blurring algorithm is worse than on Windows, producing more visible artifacts. ' +
+				'Note that the amount of blurring is hardcoded in Skia (the rendering library used by Chrome/Electron), so fontconfig settings have no effect.';
+		} else {
+			para2.textContent = 'On Windows the blurring algorithm produces reasonable results even for pixel-perfect fonts, but it is still recommended to disable it for the sharpest rendering. ' +
+				'Additionally, ClearType causes glyphs such as box-drawing characters and block elements to not mesh correctly in the terminal renderer, producing visible seams and gaps.';
+		}
+
+		// Toggle
+		const toggleContainer = append(modalContent, $('.subpixel-aa-toggle'));
+		const checkbox = append(toggleContainer, $('input.subpixel-aa-checkbox')) as HTMLInputElement;
+		checkbox.type = 'checkbox';
+		checkbox.id = 'subpixelAAToggleModal';
+
+		const label = append(toggleContainer, $('label.subpixel-aa-label')) as HTMLLabelElement;
+		label.htmlFor = 'subpixelAAToggleModal';
+		label.textContent = 'Disable subpixel anti-aliasing';
+
+		// Restart button (initially hidden)
+		const restartButton = append(modalContent, $('button.onboarding-button.primary.subpixel-aa-restart')) as HTMLButtonElement;
+		restartButton.textContent = 'Restart to Apply';
+		restartButton.style.display = 'none';
+
+		// Load current state
+		this.loadSubpixelAAState(checkbox);
+
+		// Handle toggle
+		const toggleListener = this.addDisposableListener(checkbox, 'change', async () => {
+			const disableLcdText = checkbox.checked;
+			await this.jsonEditingService.write(this.environmentService.argvResource, [
+				{ path: ['disable-lcd-text'], value: disableLcdText }
+			], true);
+			restartButton.style.display = disableLcdText !== this.launchedDisableLcdText ? '' : 'none';
+		});
+
+		// Handle restart
+		const restartListener = this.addDisposableListener(restartButton, 'click', async () => {
+			await this.nativeHostService.relaunch();
+		});
+
+		// Close handlers
+		const closeModal = () => {
+			toggleListener.dispose();
+			restartListener.dispose();
+			closeListener.dispose();
+			backdropListener.dispose();
+			modal.remove();
+		};
+
+		const closeListener = this.addDisposableListener(closeButton, 'click', closeModal);
+		const backdropListener = this.addDisposableListener(modal, 'click', (e) => {
+			if (e.target === modal) {
+				closeModal();
+			}
+		});
+	}
+
+	private async loadSubpixelAAState(checkbox: HTMLInputElement): Promise<void> {
+		try {
+			const content = await this.textFileService.read(this.environmentService.argvResource, { encoding: 'utf8' });
+			const config = parse(content.value) as { 'disable-lcd-text'?: boolean };
+			// If not specified in argv.json, the default in main.ts applies it as true
+			const disableLcdText = config['disable-lcd-text'] !== false;
+			this.launchedDisableLcdText = disableLcdText;
+			checkbox.checked = disableLcdText;
+		} catch {
+			// Default: LCD text disabled (subpixel AA off)
+			this.launchedDisableLcdText = true;
+			checkbox.checked = true;
+		}
+	}
+
 	private async checkAndDisplayNativeScalingStatus(): Promise<void> {
 		if (!isMacintosh) {
 			return;
@@ -235,8 +356,12 @@ export class FontSizeScreen extends BaseOnboardingScreen {
 	private createFontSizeSelector(parent: HTMLElement): void {
 		const selectorContainer = append(parent, $('.font-size-selector'));
 
-		const label = append(selectorContainer, $('label.font-size-label'));
+		const labelRow = append(selectorContainer, $('.font-size-label-row'));
+		const label = append(labelRow, $('label.font-size-label'));
 		label.textContent = 'Font Size:';
+
+		// Add subpixel AA button on the same row (non-macOS only)
+		this.createSubpixelAAButton(labelRow);
 
 		// Create scaling warning (initially hidden)
 		this.createScalingWarning(selectorContainer);

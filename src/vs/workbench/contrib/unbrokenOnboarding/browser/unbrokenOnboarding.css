@@ -790,6 +790,131 @@
 	color: var(--vscode-errorForeground);
 }
 
+.font-size-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* Subpixel anti-aliasing */
+.subpixel-aa-open-button {
+	padding: 4px 12px;
+	font-size: 12px;
+	border-radius: 2px;
+	cursor: pointer;
+	border: 1px solid var(--vscode-button-border);
+	background-color: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	font-family: inherit;
+	transition: background-color 0.2s ease;
+}
+
+.subpixel-aa-open-button:hover {
+	background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.subpixel-aa-open-button:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+.subpixel-aa-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.6);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.subpixel-aa-modal-content {
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	padding: 24px;
+	max-width: 520px;
+	width: 90%;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.subpixel-aa-modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+}
+
+.subpixel-aa-modal-title {
+	font-size: 18px;
+	font-weight: 600;
+	margin: 0;
+	color: var(--vscode-foreground);
+}
+
+.subpixel-aa-modal-close {
+	background: none;
+	border: none;
+	font-size: 24px;
+	color: var(--vscode-foreground);
+	cursor: pointer;
+	padding: 0;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 2px;
+	transition: background-color 0.2s ease;
+}
+
+.subpixel-aa-modal-close:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.subpixel-aa-explanation {
+	margin-bottom: 16px;
+}
+
+.subpixel-aa-explanation p {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--vscode-foreground);
+}
+
+.subpixel-aa-explanation p + p {
+	margin-top: 10px;
+}
+
+.subpixel-aa-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.subpixel-aa-checkbox {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	accent-color: var(--vscode-focusBorder);
+}
+
+.subpixel-aa-label {
+	font-size: 13px;
+	color: var(--vscode-foreground);
+	cursor: pointer;
+	user-select: none;
+}
+
+.subpixel-aa-restart {
+	width: 100%;
+}
+
 .mtk-font-style-bold {
 	font-weight: bold;
 }

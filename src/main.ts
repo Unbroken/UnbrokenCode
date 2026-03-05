@@ -336,6 +336,13 @@ function configureCommandlineSwitchesSync(cliArgs: NativeParsedArgs) {
 		app.commandLine.appendSwitch('disable-lcd-text');
 	}
 
+	// Workaround for Skia applying gamma correction twice on Windows:
+	// once via DirectWrite rendering and again from the registry-based Windows gamma.
+	// Setting text-gamma to 1 neutralizes the redundant second application.
+	if (process.platform === 'win32') {
+		app.commandLine.appendSwitch('text-gamma', '1');
+	}
+
 	// Following features are enabled from the runtime:
 	// `NetAdapterMaxBufSizeFeature` - Specify the max buffer size for NetToMojoPendingBuffer, refs https://github.com/microsoft/vscode/issues/268800
 	// `DocumentPolicyIncludeJSCallStacksInCrashReports` - https://www.electronjs.org/docs/latest/api/web-frame-main#framecollectjavascriptcallstack-experimental

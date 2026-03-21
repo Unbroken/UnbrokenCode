@@ -125,14 +125,18 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		const relatedInformation = isNonEmptyArray(marker.relatedInformation)
 			? marker.relatedInformation.map(related => `${basename(related.resource)}(${related.startLineNumber}, ${related.startColumn}): ${related.message}`).join('\n')
 			: undefined;
-		return [nls.localize('diagnosticMessage', "{0}: {1}", getSeverityLabel(marker.severity), marker.message), relatedInformation].filter(value => !!value).join('\n');
+		// The sub-problems by category, as the hover shows them
+		const subProblems = isNonEmptyArray(marker.subProblems)
+			? marker.subProblems.map(group => [`${group.category}:`, ...group.problems.map(({ resource, marker: problem }) => `${basename(resource)}(${problem.startLineNumber}, ${problem.startColumn}): ${problem.message}`)].join('\n')).join('\n')
+			: undefined;
+		return [nls.localize('diagnosticMessage', "{0}: {1}", getSeverityLabel(marker.severity), marker.message), relatedInformation, subProblems].filter(value => !!value).join('\n');
 	}
 
 	private _renderMarkerHover(markerHover: MarkerHover): IRenderedHoverPart<MarkerHover> {
 		const disposables: DisposableStore = new DisposableStore();
 		const hoverElement = $('div.hover-row');
 		const markerContainer = dom.append(hoverElement, $('div.marker.hover-contents'));
-		const { source, message, code, relatedInformation, severity } = markerHover.marker;
+		const { source, message, code, relatedInformation, severity, subProblems } = markerHover.marker;
 
 		this._editor.applyFontInfo(markerContainer);
 		const severityIcon = dom.append(markerContainer, $('span.marker-severity'));
@@ -199,6 +203,43 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 			}
 		}
 
+		// Display subProblems grouped by category
+		if (subProblems && subProblems.length > 0) {
+			for (const categoryGroup of subProblems) {
+				// Add category header
+				const categoryContainer = dom.append(markerElement, $('div'));
+				categoryContainer.style.marginTop = '8px';
+				categoryContainer.style.fontWeight = 'bold';
+				categoryContainer.innerText = `${categoryGroup.category}:`;
+				this._editor.applyFontInfo(categoryContainer);
+
+				// Add sub-problems under this category
+				for (const resourceMarker of categoryGroup.problems) {
+					const subProblemContainer = dom.append(markerElement, $('div'));
+					subProblemContainer.style.marginTop = '4px';
+					subProblemContainer.style.marginLeft = '16px'; // Indent sub-problems
+
+					const a = dom.append(subProblemContainer, $('a'));
+					a.innerText = `${basename(resourceMarker.resource)}(${resourceMarker.marker.startLineNumber}, ${resourceMarker.marker.startColumn}): `;
+					a.style.cursor = 'pointer';
+					disposables.add(dom.addDisposableListener(a, 'click', (e) => {
+						e.stopPropagation();
+						e.preventDefault();
+						if (this._openerService) {
+							const editorOptions: ITextEditorOptions = { selection: { startLineNumber: resourceMarker.marker.startLineNumber, startColumn: resourceMarker.marker.startColumn } };
+							this._openerService.open(resourceMarker.resource, {
+								fromUserGesture: true,
+								editorOptions
+							});
+						}
+					}));
+					const messageElement = dom.append<HTMLAnchorElement>(subProblemContainer, $('span'));
+					messageElement.innerText = resourceMarker.marker.message;
+					this._editor.applyFontInfo(messageElement);
+				}
+			}
+		}
+
 		const renderedHoverPart: IRenderedHoverPart<MarkerHover> = {
 			hoverPart: markerHover,
 			hoverElement,
@@ -251,7 +292,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		if (!this._editor.getOption(EditorOption.readOnly)) {
 			const quickfixPlaceholderElement = context.statusBar.append($('div'));
 			if (this.recentMarkerCodeActionsInfo) {
-				if (IMarkerData.makeKey(this.recentMarkerCodeActionsInfo.marker) === IMarkerData.makeKey(markerHover.marker)) {
+				if (IMarkerData.makeKey(this.recentMarkerCodeActionsInfo.marker as IMarkerData) === IMarkerData.makeKey(markerHover.marker as IMarkerData)) {
 					if (!this.recentMarkerCodeActionsInfo.hasCodeActions) {
 						if (menuActions.length === 0) {
 							quickfixPlaceholderElement.textContent = nls.localize('noQuickFixes', "No quick fixes available");

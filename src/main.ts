@@ -322,6 +322,12 @@ function configureCommandlineSwitchesSync(cliArgs: NativeParsedArgs) {
 		}
 	});
 
+	// Default to disabling LCD text (subpixel anti-aliasing) for pixel-perfect font rendering.
+	// Users can explicitly set "disable-lcd-text": false in argv.json to re-enable it.
+	if (argvConfig['disable-lcd-text'] === undefined) {
+		app.commandLine.appendSwitch('disable-lcd-text');
+	}
+
 	// Following features are enabled from the runtime:
 	// `NetAdapterMaxBufSizeFeature` - Specify the max buffer size for NetToMojoPendingBuffer, refs https://github.com/microsoft/vscode/issues/268800
 	// `DocumentPolicyIncludeJSCallStacksInCrashReports` - https://www.electronjs.org/docs/latest/api/web-frame-main#framecollectjavascriptcallstack-experimental

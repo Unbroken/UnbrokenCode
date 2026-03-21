@@ -1138,7 +1138,7 @@ export function getXtermScaledDimensions(w: Window, font: ITerminalFont, width: 
 
 	const scaledHeightAvailable = height * w.devicePixelRatio;
 	const scaledCharHeight = Math.ceil(font.charHeight * w.devicePixelRatio);
-	const scaledLineHeight = Math.floor(scaledCharHeight * font.lineHeight);
+	const scaledLineHeight = Math.round(scaledCharHeight * font.lineHeight);
 	const rows = Math.max(Math.floor(scaledHeightAvailable / scaledLineHeight), 1);
 
 	return { rows, cols };

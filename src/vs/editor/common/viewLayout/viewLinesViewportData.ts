@@ -60,7 +60,7 @@ export class ViewportData {
 		this.endLineNumber = partialData.endLineNumber | 0;
 		this.relativeVerticalOffset = partialData.relativeVerticalOffset;
 		this.bigNumbersDelta = partialData.bigNumbersDelta | 0;
-		this.lineHeight = partialData.lineHeight | 0;
+		this.lineHeight = partialData.lineHeight;
 		this.whitespaceViewportData = whitespaceViewportData;
 
 		this._model = model;

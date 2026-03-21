@@ -2755,7 +2755,7 @@ export class ExtensionsWorkbenchService extends Disposable implements IExtension
 
 			if (!servers || servers.length) {
 				if (!installable) {
-					if (!gallery) {
+					if (!gallery && !extension) {
 						const id = isString(arg) ? arg : (<IExtension>arg).identifier.id;
 						const manifest = await this.extensionGalleryManifestService.getExtensionGalleryManifest();
 						const reportIssueUri = manifest ? getExtensionGalleryManifestResourceUri(manifest, ExtensionGalleryResourceType.ContactSupportUri) : undefined;

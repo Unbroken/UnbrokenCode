@@ -16,7 +16,7 @@ export const GOLDEN_LINE_HEIGHT_RATIO = platform.isMacintosh ? 1.5 : 1.35;
 /**
  * @internal
  */
-export const MINIMUM_LINE_HEIGHT = 8;
+export const MINIMUM_LINE_HEIGHT = 6;
 
 /**
  * @internal
@@ -39,8 +39,7 @@ export class BareFontInfo {
 			lineHeight = lineHeight * fontSize;
 		}
 
-		// Enforce integer, minimum constraints
-		lineHeight = Math.round(lineHeight);
+		// Enforce minimum constraints
 		if (lineHeight < MINIMUM_LINE_HEIGHT) {
 			lineHeight = MINIMUM_LINE_HEIGHT;
 		}
@@ -102,7 +101,7 @@ export class BareFontInfo {
 		this.fontSize = opts.fontSize;
 		this.fontFeatureSettings = opts.fontFeatureSettings;
 		this.fontVariationSettings = opts.fontVariationSettings;
-		this.lineHeight = opts.lineHeight | 0;
+		this.lineHeight = opts.lineHeight;
 		this.letterSpacing = opts.letterSpacing;
 		this.disableFontHinting = opts.disableFontHinting;
 	}
@@ -140,7 +139,7 @@ export class BareFontInfo {
 }
 
 // change this whenever `FontInfo` members are changed
-export const SERIALIZED_FONT_INFO_VERSION = 3;
+export const SERIALIZED_FONT_INFO_VERSION = 4;
 
 export class FontInfo extends BareFontInfo {
 	readonly _editorStylingBrand: void = undefined;

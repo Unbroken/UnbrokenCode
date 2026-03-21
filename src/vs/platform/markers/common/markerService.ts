@@ -242,7 +242,7 @@ export class MarkerService implements IMarkerService {
 			relatedInformation,
 			modelVersionId,
 			tags, origin,
-			resourceSequenceNumber, sequenceNumber
+			resourceSequenceNumber, sequenceNumber, subProblems
 		} = data;
 
 		if (!message) {
@@ -271,7 +271,8 @@ export class MarkerService implements IMarkerService {
 			tags,
 			origin,
 			resourceSequenceNumber: resourceSequenceNumber ?? 0,
-			sequenceNumber: sequenceNumber ?? 0
+			sequenceNumber: sequenceNumber ?? 0,
+			subProblems
 		};
 	}
 

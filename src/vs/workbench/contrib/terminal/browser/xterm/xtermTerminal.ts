@@ -52,6 +52,9 @@ import { clamp } from '../../../../../base/common/numbers.js';
 import { LayoutSettings } from '../../../../services/layout/browser/layoutService.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { updateTerminalFontRendering } from './terminalFontRendering.js';
+import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { parse } from '../../../../../base/common/jsonc.js';
 
 const enum RenderConstants {
 	SmoothScrollDuration = 125
@@ -246,7 +249,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@IAccessibilitySignalService private readonly _accessibilitySignalService: IAccessibilitySignalService,
 		@ILifecycleService lifecycleService: ILifecycleService,
-		@ILayoutService layoutService: ILayoutService
+		@ILayoutService layoutService: ILayoutService,
+		@IEnvironmentService private readonly _environmentService: IEnvironmentService,
+		@IFileService private readonly _fileService: IFileService
 	) {
 		super();
 
@@ -314,6 +319,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			},
 		}));
 		this._updateSmoothScrolling();
+		this._updateDisableSubpixelAntialiasing();
 		interface ITerminalWithCore extends RawXtermTerminal {
 			_core: IXtermCore;
 		}
@@ -669,6 +675,19 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 
 	private _updateSmoothScrolling() {
 		this.raw.options.smoothScrollDuration = this._terminalConfigurationService.config.smoothScrolling && this._isPhysicalMouseWheel ? RenderConstants.SmoothScrollDuration : 0;
+	}
+
+	private async _updateDisableSubpixelAntialiasing(): Promise<void> {
+		try {
+			const content = await this._fileService.readFile(this._environmentService.argvResource);
+			const config = parse(content.value.toString()) as { 'disable-lcd-text'?: boolean };
+			// Default is true (LCD text is disabled when not specified in argv.json)
+			const disableLcdText = config['disable-lcd-text'] !== false;
+			this.raw.options.disableSubpixelAntialiasing = disableLcdText;
+		} catch {
+			// Default: LCD text disabled (subpixel AA off)
+			this.raw.options.disableSubpixelAntialiasing = true;
+		}
 	}
 
 	private _shouldLoadWebgl(): boolean {

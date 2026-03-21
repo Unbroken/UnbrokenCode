@@ -82,6 +82,13 @@ export class MainThreadDiagnostics implements MainThreadDiagnosticsShape {
 							relatedInformation.resource = URI.revive(relatedInformation.resource);
 						}
 					}
+					if (marker.subProblems) {
+						for (const categoryGroup of marker.subProblems) {
+							for (const resourceMarker of categoryGroup.problems) {
+								resourceMarker.resource = URI.revive(resourceMarker.resource);
+							}
+						}
+					}
 					if (marker.code && typeof marker.code !== 'string') {
 						marker.code.target = URI.revive(marker.code.target);
 					}

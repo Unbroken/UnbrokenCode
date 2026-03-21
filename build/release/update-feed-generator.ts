@@ -322,310 +322,188 @@ async function ensureFeedRelease(octokit: Octokit): Promise<GitHubRelease> {
 	}
 }
 
-async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed): Promise<void> {
+/**
+ * Returns the feed filename prefix for a given release stream.
+ * - 'stable' -> 'latest'
+ * - 'beta'   -> 'latest-beta'
+ * - 'rc'     -> 'latest-rc'
+ */
+function getFeedPrefix(stream: string): string {
+	if (stream === 'stable') {
+		return 'latest';
+	}
+	return `latest-${stream}`;
+}
+
+async function uploadOrSkipAsset(
+	octokit: Octokit,
+	feedReleaseId: number,
+	releaseAssets: GitHubReleaseAsset[],
+	fileName: string,
+	content: string,
+	label: string
+): Promise<GitHubReleaseAsset[]> {
+	const buffer = Buffer.from(content, 'utf8');
+	const existing = releaseAssets.find(a => a.name === fileName);
+	const needsUpdate = await shouldUpdateAsset(existing, content);
+
+	if (!needsUpdate) {
+		const existingSHA = existing?.digest?.substring('sha256:'.length) || 'unknown';
+		console.log(`✓ ${fileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
+		return releaseAssets;
+	}
+
+	if (existing) {
+		console.log(`~ ${fileName} changed, updating...`);
+		await octokit.repos.deleteReleaseAsset({
+			owner: REPO_OWNER,
+			repo: REPO_NAME,
+			asset_id: existing.id
+		});
+		releaseAssets = releaseAssets.filter(asset => asset.id !== existing.id);
+	}
+
+	console.log(`Uploading ${fileName}...`);
+	await octokit.repos.uploadReleaseAsset({
+		owner: REPO_OWNER,
+		repo: REPO_NAME,
+		release_id: feedReleaseId,
+		name: fileName,
+		data: buffer as unknown as string,
+		headers: {
+			'content-type': 'application/json',
+			'content-length': buffer.length
+		}
+	});
+
+	console.log(`✓ Uploaded ${label}: ${fileName}`);
+	return releaseAssets;
+}
+
+async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed, streams: string[] = ['stable']): Promise<void> {
 	const feedRelease = await ensureFeedRelease(octokit);
 
 	let releaseAssets: GitHubReleaseAsset[] = (feedRelease.assets ?? []) as GitHubReleaseAsset[];
 
-	// Create platform-specific feeds for auto-updater compatibility
+	for (const stream of streams) {
+		const prefix = getFeedPrefix(stream);
+		console.log(`\nGenerating feeds for stream: ${stream} (prefix: ${prefix})`);
 
-	// 1. Squirrel.Mac feeds (for macOS)
-	const darwinPlatforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal'];
-	for (const platform of darwinPlatforms) {
-		if (feed.latest[platform]) {
-			const latestVersion = feed.latest[platform].version;
+		// 1. Squirrel.Mac feeds (for macOS)
+		const darwinPlatforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal'];
+		for (const platform of darwinPlatforms) {
+			if (feed.latest[platform]) {
+				const latestVersion = feed.latest[platform].version;
 
-			// Build releases array with all versions for this platform
-			const releases = Object.keys(feed.releases)
-				.filter(version => feed.releases[version][platform])
-				.map(version => {
-					const release = feed.releases[version][platform];
-					return {
-						version: release.version,
-						updateTo: {
+				const releases = Object.keys(feed.releases)
+					.filter(version => feed.releases[version][platform])
+					.map(version => {
+						const release = feed.releases[version][platform];
+						return {
 							version: release.version,
-							name: release.version,
-							notes: `Update to Unbroken Code ${release.version}`,
-							pub_date: new Date(release.timestamp).toISOString(),
-							url: release.url
-						}
-					};
-				})
-				.sort((a, b) => b.version.localeCompare(a.version)); // Sort newest first
+							updateTo: {
+								version: release.version,
+								name: release.version,
+								notes: `Update to Unbroken Code ${release.version}`,
+								pub_date: new Date(release.timestamp).toISOString(),
+								url: release.url
+							}
+						};
+					})
+					.sort((a, b) => b.version.localeCompare(a.version));
 
-			// Squirrel.Mac format with currentRelease
-			const squirrelFeed = {
-				currentRelease: latestVersion,
-				releases: releases
-			};
+				const squirrelFeed = {
+					currentRelease: latestVersion,
+					releases: releases
+				};
 
-			// Use simplified naming: latest-{platform}.json for all platforms
-			const squirrelFileName = `latest-${platform}.json`;
-			const squirrelContent = JSON.stringify(squirrelFeed, null, 2);
-			const squirrelBuffer = Buffer.from(squirrelContent, 'utf8');
-
-			// Check if existing feed needs updating
-			const existingSquirrel = releaseAssets.find(a => a.name === squirrelFileName);
-			const needsUpdate = await shouldUpdateAsset(existingSquirrel, squirrelContent);
-
-			if (!needsUpdate) {
-				const existingSHA = existingSquirrel?.digest?.substring('sha256:'.length) || 'unknown';
-				console.log(`✓ ${squirrelFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-				continue;
-			}
-
-			// Delete existing if it exists
-			if (existingSquirrel) {
-				console.log(`~ ${squirrelFileName} changed, updating...`);
-				await octokit.repos.deleteReleaseAsset({
-					owner: REPO_OWNER,
-					repo: REPO_NAME,
-					asset_id: existingSquirrel.id
-				});
-				releaseAssets = releaseAssets.filter(asset => asset.id !== existingSquirrel.id);
-			}
-
-			// Upload new Squirrel feed
-			console.log(`Uploading ${squirrelFileName}...`);
-			await octokit.repos.uploadReleaseAsset({
-				owner: REPO_OWNER,
-				repo: REPO_NAME,
-				release_id: feedRelease.id,
-				name: squirrelFileName,
-				data: squirrelBuffer as unknown as string,
-				headers: {
-					'content-type': 'application/json',
-					'content-length': squirrelBuffer.length
-				}
-			});
-
-			console.log(`✓ Uploaded Squirrel.Mac feed: ${squirrelFileName}`);
-		}
-	}
-
-	// 2. Linux feeds (IUpdate format) - using tar.gz archives
-	const linuxPlatforms = ['linux-x64', 'linux-arm64'];
-	for (const platform of linuxPlatforms) {
-		if (feed.latest[platform]) {
-			// VS Code IUpdate format for Linux - uses tar.gz archives
-			const iUpdateFeed: UpdateFeedEntry = {
-				version: feed.latest[platform].commit || feed.latest[platform].version, // Commit hash for Linux
-				productVersion: feed.latest[platform].version,
-				timestamp: feed.latest[platform].timestamp,
-				url: feed.latest[platform].url, // Should point to tar.gz file
-				sha256hash: feed.latest[platform].sha256hash,
-				size: feed.latest[platform].size,
-				supportsFastUpdate: feed.latest[platform].supportsFastUpdate,
-				quality: feed.latest[platform].quality
-			};
-
-			const platformFileName = `latest-${platform}.json`;
-			const platformContent = JSON.stringify(iUpdateFeed, null, 2);
-			const platformBuffer = Buffer.from(platformContent, 'utf8');
-
-			// Check if existing feed needs updating
-			const existingPlatform = releaseAssets.find(a => a.name === platformFileName);
-			const needsUpdate = await shouldUpdateAsset(existingPlatform, platformContent);
-
-			if (!needsUpdate) {
-				const existingSHA = existingPlatform?.digest?.substring('sha256:'.length) || 'unknown';
-				console.log(`✓ ${platformFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-				continue;
-			}
-
-			// Delete existing if it exists
-			if (existingPlatform) {
-				console.log(`~ ${platformFileName} changed, updating...`);
-				await octokit.repos.deleteReleaseAsset({
-					owner: REPO_OWNER,
-					repo: REPO_NAME,
-					asset_id: existingPlatform.id
-				});
-				releaseAssets = releaseAssets.filter(asset => asset.id !== existingPlatform.id);
-			}
-
-			// Upload platform feed
-			console.log(`Uploading ${platformFileName}...`);
-			await octokit.repos.uploadReleaseAsset({
-				owner: REPO_OWNER,
-				repo: REPO_NAME,
-				release_id: feedRelease.id,
-				name: platformFileName,
-				data: platformBuffer as unknown as string,
-				headers: {
-					'content-type': 'application/json',
-					'content-length': platformBuffer.length
-				}
-			});
-
-			console.log(`✓ Uploaded ${platform} feed: ${platformFileName}`);
-		}
-	}
-
-	// 3. Windows feeds - need different feeds for different installation types
-	const windowsArchs = ['x64', 'arm64'];
-	for (const arch of windowsArchs) {
-		const winPlatform = `win32-${arch}`;
-
-		// Create feed for system installer (default)
-		const systemSetupKey = `${winPlatform}-system-setup`;
-		if (feed.latest[systemSetupKey]) {
-			const systemFeed: UpdateFeedEntry = {
-				version: feed.latest[systemSetupKey].commit || feed.latest[systemSetupKey].version,
-				productVersion: feed.latest[systemSetupKey].version,
-				timestamp: feed.latest[systemSetupKey].timestamp,
-				url: feed.latest[systemSetupKey].url,
-				sha256hash: feed.latest[systemSetupKey].sha256hash,
-				size: feed.latest[systemSetupKey].size,
-				supportsFastUpdate: false,
-				quality: feed.latest[systemSetupKey].quality
-			};
-
-			const systemFileName = `latest-${winPlatform}.json`;
-			const systemContent = JSON.stringify(systemFeed, null, 2);
-			const systemBuffer = Buffer.from(systemContent, 'utf8');
-
-			// Check if existing feed needs updating
-			const existingSystem = releaseAssets.find(a => a.name === systemFileName);
-			const needsSystemUpdate = await shouldUpdateAsset(existingSystem, systemContent);
-
-			if (!needsSystemUpdate) {
-				const existingSHA = existingSystem?.digest?.substring('sha256:'.length) || 'unknown';
-				console.log(`✓ ${systemFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-			} else {
-				// Delete existing if it exists
-				if (existingSystem) {
-					console.log(`~ ${systemFileName} changed, updating...`);
-					await octokit.repos.deleteReleaseAsset({
-						owner: REPO_OWNER,
-						repo: REPO_NAME,
-						asset_id: existingSystem.id
-					});
-					releaseAssets = releaseAssets.filter(asset => asset.id !== existingSystem.id);
-				}
-
-				// Upload new
-				await octokit.repos.uploadReleaseAsset({
-					owner: REPO_OWNER,
-					repo: REPO_NAME,
-					release_id: feedRelease.id,
-					name: systemFileName,
-					data: systemBuffer as unknown as string,
-					headers: {
-						'content-type': 'application/json',
-						'content-length': systemBuffer.length
-					}
-				});
-
-				console.log(`✓ Uploaded Windows system feed: ${systemFileName}`);
+				const fileName = `${prefix}-${platform}.json`;
+				const content = JSON.stringify(squirrelFeed, null, 2);
+				releaseAssets = await uploadOrSkipAsset(octokit, feedRelease.id, releaseAssets, fileName, content, `Squirrel.Mac ${stream} feed`);
 			}
 		}
 
-		// Create feed for user installer
-		const userSetupKey = `${winPlatform}-user-setup`;
-		if (feed.latest[userSetupKey]) {
-			const userFeed: UpdateFeedEntry = {
-				version: feed.latest[userSetupKey].commit || feed.latest[userSetupKey].version,
-				productVersion: feed.latest[userSetupKey].version,
-				timestamp: feed.latest[userSetupKey].timestamp,
-				url: feed.latest[userSetupKey].url,
-				sha256hash: feed.latest[userSetupKey].sha256hash,
-				size: feed.latest[userSetupKey].size,
-				supportsFastUpdate: false,
-				quality: feed.latest[userSetupKey].quality
-			};
+		// 2. Linux feeds (IUpdate format)
+		const linuxPlatforms = ['linux-x64', 'linux-arm64'];
+		for (const platform of linuxPlatforms) {
+			if (feed.latest[platform]) {
+				const iUpdateFeed: UpdateFeedEntry = {
+					version: feed.latest[platform].commit || feed.latest[platform].version,
+					productVersion: feed.latest[platform].version,
+					timestamp: feed.latest[platform].timestamp,
+					url: feed.latest[platform].url,
+					sha256hash: feed.latest[platform].sha256hash,
+					size: feed.latest[platform].size,
+					supportsFastUpdate: feed.latest[platform].supportsFastUpdate,
+					quality: feed.latest[platform].quality
+				};
 
-			const userFileName = `latest-${winPlatform}-user.json`;
-			const userContent = JSON.stringify(userFeed, null, 2);
-			const userBuffer = Buffer.from(userContent, 'utf8');
-
-			// Check if existing feed needs updating
-			const existingUser = releaseAssets.find(a => a.name === userFileName);
-			const needsUserUpdate = await shouldUpdateAsset(existingUser, userContent);
-
-			if (!needsUserUpdate) {
-				const existingSHA = existingUser?.digest?.substring('sha256:'.length) || 'unknown';
-				console.log(`✓ ${userFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-			} else {
-				// Delete existing if it exists
-				if (existingUser) {
-					console.log(`~ ${userFileName} changed, updating...`);
-					await octokit.repos.deleteReleaseAsset({
-						owner: REPO_OWNER,
-						repo: REPO_NAME,
-						asset_id: existingUser.id
-					});
-					releaseAssets = releaseAssets.filter(asset => asset.id !== existingUser.id);
-				}
-
-				// Upload new
-				await octokit.repos.uploadReleaseAsset({
-					owner: REPO_OWNER,
-					repo: REPO_NAME,
-					release_id: feedRelease.id,
-					name: userFileName,
-					data: userBuffer as unknown as string,
-					headers: {
-						'content-type': 'application/json',
-						'content-length': userBuffer.length
-					}
-				});
-
-				console.log(`✓ Uploaded Windows user feed: ${userFileName}`);
+				const fileName = `${prefix}-${platform}.json`;
+				const content = JSON.stringify(iUpdateFeed, null, 2);
+				releaseAssets = await uploadOrSkipAsset(octokit, feedRelease.id, releaseAssets, fileName, content, `${platform} ${stream} feed`);
 			}
 		}
 
-		// Create feed for archive/ZIP (portable installation)
-		const archiveKey = `${winPlatform}-archive`;
-		if (feed.latest[archiveKey]) {
-			const archiveFeed: UpdateFeedEntry = {
-				version: feed.latest[archiveKey].commit || feed.latest[archiveKey].version,
-				productVersion: feed.latest[archiveKey].version,
-				timestamp: feed.latest[archiveKey].timestamp,
-				url: feed.latest[archiveKey].url,
-				sha256hash: feed.latest[archiveKey].sha256hash,
-				size: feed.latest[archiveKey].size,
-				supportsFastUpdate: true,
-				quality: feed.latest[archiveKey].quality
-			};
+		// 3. Windows feeds
+		const windowsArchs = ['x64', 'arm64'];
+		for (const arch of windowsArchs) {
+			const winPlatform = `win32-${arch}`;
 
-			const archiveFileName = `latest-${winPlatform}-archive.json`;
-			const archiveContent = JSON.stringify(archiveFeed, null, 2);
-			const archiveBuffer = Buffer.from(archiveContent, 'utf8');
+			// System installer (default)
+			const systemSetupKey = `${winPlatform}-system-setup`;
+			if (feed.latest[systemSetupKey]) {
+				const systemFeed: UpdateFeedEntry = {
+					version: feed.latest[systemSetupKey].commit || feed.latest[systemSetupKey].version,
+					productVersion: feed.latest[systemSetupKey].version,
+					timestamp: feed.latest[systemSetupKey].timestamp,
+					url: feed.latest[systemSetupKey].url,
+					sha256hash: feed.latest[systemSetupKey].sha256hash,
+					size: feed.latest[systemSetupKey].size,
+					supportsFastUpdate: false,
+					quality: feed.latest[systemSetupKey].quality
+				};
 
-			// Check if existing feed needs updating
-			const existingArchive = releaseAssets.find(a => a.name === archiveFileName);
-			const needsArchiveUpdate = await shouldUpdateAsset(existingArchive, archiveContent);
+				const fileName = `${prefix}-${winPlatform}.json`;
+				const content = JSON.stringify(systemFeed, null, 2);
+				releaseAssets = await uploadOrSkipAsset(octokit, feedRelease.id, releaseAssets, fileName, content, `Windows ${arch} system ${stream} feed`);
+			}
 
-			if (!needsArchiveUpdate) {
-				const existingSHA = existingArchive?.digest?.substring('sha256:'.length) || 'unknown';
-				console.log(`✓ ${archiveFileName} unchanged (SHA256: ${existingSHA.substring(0, 8)}...), skipping`);
-			} else {
-				// Delete existing if it exists
-				if (existingArchive) {
-					console.log(`~ ${archiveFileName} changed, updating...`);
-					await octokit.repos.deleteReleaseAsset({
-						owner: REPO_OWNER,
-						repo: REPO_NAME,
-						asset_id: existingArchive.id
-					});
-					releaseAssets = releaseAssets.filter(asset => asset.id !== existingArchive.id);
-				}
+			// User installer
+			const userSetupKey = `${winPlatform}-user-setup`;
+			if (feed.latest[userSetupKey]) {
+				const userFeed: UpdateFeedEntry = {
+					version: feed.latest[userSetupKey].commit || feed.latest[userSetupKey].version,
+					productVersion: feed.latest[userSetupKey].version,
+					timestamp: feed.latest[userSetupKey].timestamp,
+					url: feed.latest[userSetupKey].url,
+					sha256hash: feed.latest[userSetupKey].sha256hash,
+					size: feed.latest[userSetupKey].size,
+					supportsFastUpdate: false,
+					quality: feed.latest[userSetupKey].quality
+				};
 
-				// Upload new
-				await octokit.repos.uploadReleaseAsset({
-					owner: REPO_OWNER,
-					repo: REPO_NAME,
-					release_id: feedRelease.id,
-					name: archiveFileName,
-					data: archiveBuffer as unknown as string,
-					headers: {
-						'content-type': 'application/json',
-						'content-length': archiveBuffer.length
-					}
-				});
+				const fileName = `${prefix}-${winPlatform}-user.json`;
+				const content = JSON.stringify(userFeed, null, 2);
+				releaseAssets = await uploadOrSkipAsset(octokit, feedRelease.id, releaseAssets, fileName, content, `Windows ${arch} user ${stream} feed`);
+			}
 
-				console.log(`✓ Uploaded Windows archive feed: ${archiveFileName}`);
+			// Archive/ZIP (portable)
+			const archiveKey = `${winPlatform}-archive`;
+			if (feed.latest[archiveKey]) {
+				const archiveFeed: UpdateFeedEntry = {
+					version: feed.latest[archiveKey].commit || feed.latest[archiveKey].version,
+					productVersion: feed.latest[archiveKey].version,
+					timestamp: feed.latest[archiveKey].timestamp,
+					url: feed.latest[archiveKey].url,
+					sha256hash: feed.latest[archiveKey].sha256hash,
+					size: feed.latest[archiveKey].size,
+					supportsFastUpdate: true,
+					quality: feed.latest[archiveKey].quality
+				};
+
+				const fileName = `${prefix}-${winPlatform}-archive.json`;
+				const content = JSON.stringify(archiveFeed, null, 2);
+				releaseAssets = await uploadOrSkipAsset(octokit, feedRelease.id, releaseAssets, fileName, content, `Windows ${arch} archive ${stream} feed`);
 			}
 		}
 	}
@@ -673,19 +551,25 @@ export async function generatePlatformFeed(octokit: Octokit, platform: string, q
 }
 
 // Export function for use by create-github-release.ts
-export async function updateReleaseFeed(octokit?: Octokit): Promise<void> {
+export async function updateReleaseFeed(octokit?: Octokit, streams?: string[]): Promise<void> {
 	if (!octokit) {
 		const token = getGitHubToken();
 		octokit = new Octokit({ auth: token });
 	}
 
 	const feed = await generateUpdateFeed(octokit);
-	await uploadFeedAsset(octokit, feed);
+	await uploadFeedAsset(octokit, feed, streams ?? ['stable']);
 }
 
 async function main() {
 	const args = process.argv.slice(2);
 	const command = args[0] || 'generate';
+
+	// Parse --streams flag (comma-separated: stable,beta,rc)
+	const streamsIdx = args.indexOf('--streams');
+	const streams: string[] = streamsIdx !== -1 && args[streamsIdx + 1]
+		? args[streamsIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+		: ['stable'];
 
 	// Initialize GitHub API client
 	const token = getGitHubToken();
@@ -694,7 +578,7 @@ async function main() {
 	switch (command) {
 		case 'generate':
 			{
-				console.log('Generating update feed from GitHub releases...');
+				console.log(`Generating update feed from GitHub releases for streams: ${streams.join(', ')}...`);
 				const feed = await generateUpdateFeed(octokit);
 
 				console.log('\nLatest versions:');
@@ -708,7 +592,7 @@ async function main() {
 					console.log(`  ${version}: ${platforms.join(', ')}`);
 				}
 
-				await uploadFeedAsset(octokit, feed);
+				await uploadFeedAsset(octokit, feed, streams);
 
 				console.log(`\nFeed assets refreshed successfully!`);
 				break;
@@ -732,8 +616,8 @@ async function main() {
 
 		default:
 			console.log('Usage:');
-			console.log('  ts-node update-feed-generator.ts generate     - Generate and upload feed');
-			console.log('  ts-node update-feed-generator.ts platform [platform] [quality] - Test platform query');
+			console.log('  ts-node update-feed-generator.ts generate [--streams stable,beta,rc] - Generate and upload feed');
+			console.log('  ts-node update-feed-generator.ts platform [platform] [quality]       - Test platform query');
 	}
 }
 

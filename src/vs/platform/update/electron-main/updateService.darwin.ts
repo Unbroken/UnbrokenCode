@@ -99,7 +99,7 @@ export class DarwinUpdateService extends AbstractUpdateService implements IRelau
 
 	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string | undefined {
 		const assetID = this.productService.darwinUniversalAssetId ?? (process.arch === 'x64' ? 'darwin' : 'darwin-arm64');
-		const url = createUpdateURL(this.productService.updateUrl!, assetID, quality, commit, options);
+		const url = createUpdateURL(this.productService.updateUrl!, assetID, quality, commit, { ...options, releaseStream: this.releaseStream });
 		const headers = getUpdateRequestHeaders(this.productService.version);
 		try {
 			this.logService.trace('update#buildUpdateFeedUrl - setting feed URL for Electron autoUpdater', { url, assetID, quality, commit, headers });

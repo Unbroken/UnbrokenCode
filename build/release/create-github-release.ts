@@ -1239,6 +1239,12 @@ async function main() {
 	const generateDescription = process.argv.includes('--generate-release-description');
 	const showReleaseNotes = process.argv.includes('--show-release-notes');
 
+	// Parse --release-streams flag (comma-separated list of streams: stable,beta,rc)
+	const streamsIdx = process.argv.indexOf('--release-streams');
+	const releaseStreams: string[] = streamsIdx !== -1 && process.argv[streamsIdx + 1]
+		? process.argv[streamsIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+		: ['stable'];
+
 	const distDir = path.join(__dirname, '../../.dist');
 	const product = getProductInfo();
 	const packageInfo = getPackageInfo();
@@ -1308,11 +1314,11 @@ async function main() {
 
 		await publishExistingRelease(octokit, existingRelease, manifestMap, false, releaseBody);
 
-		// After publishing the release, update the feed
-		console.log('\nUpdating release feed...');
+		// After publishing the release, update the feed for selected streams
+		console.log(`\nUpdating release feed for streams: ${releaseStreams.join(', ')}...`);
 		try {
 			const { updateReleaseFeed } = await import('./update-feed-generator.ts');
-			await updateReleaseFeed(octokit);
+			await updateReleaseFeed(octokit, releaseStreams);
 			console.log('Release feed updated');
 		} catch (error) {
 			console.warn('Could not update release feed:', error);

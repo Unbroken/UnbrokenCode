@@ -190,7 +190,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 			platform += '-user';
 		}
 
-		return createUpdateURL(this.productService.updateUrl!, platform, quality, commit, options);
+		return createUpdateURL(this.productService.updateUrl!, platform, quality, commit, { ...options, releaseStream: this.releaseStream });
 	}
 
 	protected doCheckForUpdates(explicit: boolean, pendingCommit?: string): void {

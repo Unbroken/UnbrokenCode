@@ -3,6 +3,21 @@ name: Publish Release
 on:
   workflow_dispatch:
     inputs:
+      release_stable:
+        description: 'Publish to stable release stream'
+        required: false
+        type: boolean
+        default: true
+      release_beta:
+        description: 'Publish to beta release stream'
+        required: false
+        type: boolean
+        default: false
+      release_rc:
+        description: 'Publish to rc release stream'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -63,6 +78,27 @@ jobs:
           git fetch --all
         shell: bash
 
+      - name: Determine release streams
+        id: streams
+        run: |
+          set -euo pipefail
+          STREAMS=""
+          if [ "${{ inputs.release_stable }}" = "true" ]; then
+            STREAMS="stable"
+          fi
+          if [ "${{ inputs.release_beta }}" = "true" ]; then
+            STREAMS="${STREAMS:+$STREAMS,}beta"
+          fi
+          if [ "${{ inputs.release_rc }}" = "true" ]; then
+            STREAMS="${STREAMS:+$STREAMS,}rc"
+          fi
+          if [ -z "$STREAMS" ]; then
+            STREAMS="stable"
+          fi
+          echo "streams=$STREAMS" >> "$GITHUB_OUTPUT"
+          echo "Publishing to release streams: $STREAMS"
+        shell: bash
+
       - name: Publish release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,5 +106,5 @@ jobs:
           set -euo pipefail
           ./setup.sh
           (cd build && npm ci)
-          ./build-unbroken-code.sh --publish
+          ./build-unbroken-code.sh --publish --release-streams "${{ steps.streams.outputs.streams }}"
         shell: bash

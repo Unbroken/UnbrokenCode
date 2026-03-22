@@ -1102,7 +1102,7 @@ async function watch(): Promise<void> {
 	// Watch src directory using existing gulp-watch based watcher
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 	const srcDir = path.join(REPO_ROOT, SRC_DIR);
-	const watchStream = gulpWatch('src/**', { base: srcDir, readDelay: 200 });
+	const watchStream = gulpWatch('src/**', { base: srcDir, readDelay: 200, ignored: /\.tmp(\.[0-9]+)*$/ });
 
 	watchStream.on('data', (file: { path: string }) => {
 		if (file.path.endsWith('.ts') && !file.path.endsWith('.d.ts')) {

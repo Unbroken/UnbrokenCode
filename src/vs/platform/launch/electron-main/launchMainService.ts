@@ -3,9 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { execFile } from 'child_process';
 import { app } from 'electron';
+import { promises as fs } from 'fs';
+import { tmpdir } from 'os';
 import { coalesce } from '../../../base/common/arrays.js';
-import { IProcessEnvironment, isMacintosh } from '../../../base/common/platform.js';
+import { IProcessEnvironment, isLinux, isMacintosh } from '../../../base/common/platform.js';
 import { URI } from '../../../base/common/uri.js';
 import { whenDeleted } from '../../../base/node/pfs.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
@@ -221,6 +224,12 @@ export class LaunchMainService implements ILaunchMainService {
 			});
 		}
 
+		// KDE Wayland: the compositor blocks focus activation from
+		// CLI-spawned processes because they lack a valid XDG activation
+		// token. Use KWin's D-Bus scripting API to force-activate the
+		// specific window that was opened/reused above.
+		this.focusWindowViaKWinScript(usedWindows[0]);
+
 		// If the other instance is waiting to be killed, we hook up a window listener if one window
 		// is being used and only then resolve the startup promise which will kill this second instance.
 		// In addition, we poll for the wait marker file to be deleted to return.
@@ -231,6 +240,95 @@ export class LaunchMainService implements ILaunchMainService {
 			]).then(() => undefined, () => undefined);
 		}
 	}
+
+	//#region KDE Wayland focus workaround
+
+	private focusWindowViaKWinScript(targetWindow: ICodeWindow | undefined): void {
+		if (!isLinux || !targetWindow?.win || process.env['XDG_SESSION_TYPE'] !== 'wayland' || !(process.env['XDG_CURRENT_DESKTOP'] ?? '').includes('KDE')) {
+			return;
+		}
+
+		// app.name is what Electron registers as the Wayland app_id,
+		// which KWin exposes as resourceClass. In dev builds this is
+		// "code-oss-dev" (from package.json); in production it is the
+		// product applicationName (e.g. "uc").
+		const resourceClass = app.name;
+		const caption = targetWindow.win.getTitle();
+		const scriptName = `focus_${resourceClass}`;
+		const scriptPath = `${tmpdir()}/${scriptName}_${process.pid}.js`;
+
+		// KWin script compatible with both Plasma 5 (clientList/activeClient)
+		// and Plasma 6 (windowList/activeWindow). Matches the specific window
+		// by resourceClass and caption (title) so the correct window is focused
+		// when multiple windows are open. Falls back to caption-only matching
+		// as a safety net.
+		const kwinScript = [
+			'(function() {',
+			`    var appClass = ${JSON.stringify(resourceClass)};`,
+			`    var targetCaption = ${JSON.stringify(caption)};`,
+			'    var isPlasma6 = typeof workspace.windowList === "function";',
+			'    var list = isPlasma6 ? workspace.windowList() : workspace.clientList();',
+			'    var fallback = null;',
+			'    for (var i = 0; i < list.length; i++) {',
+			'        var w = list[i];',
+			'        if (w.caption === targetCaption) {',
+			'            if (w.resourceClass === appClass) {',
+			'                if (isPlasma6) { workspace.activeWindow = w; } else { workspace.activeClient = w; }',
+			'                return;',
+			'            }',
+			'            fallback = w;',
+			'        }',
+			'    }',
+			'    if (fallback) {',
+			'        if (isPlasma6) { workspace.activeWindow = fallback; } else { workspace.activeClient = fallback; }',
+			'    }',
+			'})();',
+		].join('\n');
+
+		this.logService.trace(`[KWin focus] activating window: resourceClass=${resourceClass}, caption=${caption}`);
+		this.doFocusWindowViaKWinScript(scriptPath, scriptName, kwinScript).catch(error => {
+			this.logService.warn('[KWin focus] failed:', error);
+		});
+	}
+
+	private async doFocusWindowViaKWinScript(scriptPath: string, scriptName: string, kwinScript: string): Promise<void> {
+		try {
+			await fs.writeFile(scriptPath, kwinScript);
+
+			// Plasma 6 ships qdbus6, Plasma 5 ships qdbus
+			const qdbus = await this.resolveQdbus();
+			if (!qdbus) {
+				this.logService.trace('[KWin focus] qdbus not found, skipping');
+				return;
+			}
+
+			const run = (cmd: string, args: string[]) => new Promise<void>((resolve, reject) => {
+				execFile(cmd, args, error => error ? reject(error) : resolve());
+			});
+
+			await run(qdbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.loadScript', scriptPath, scriptName]);
+			await run(qdbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.start']);
+
+			// Best-effort unload
+			run(qdbus, ['org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting.unloadScript', scriptName]).catch(() => { /* ignore */ });
+		} finally {
+			fs.unlink(scriptPath).catch(() => { /* ignore */ });
+		}
+	}
+
+	private async resolveQdbus(): Promise<string | undefined> {
+		for (const candidate of ['qdbus6', 'qdbus']) {
+			try {
+				await new Promise<void>((resolve, reject) => {
+					execFile('which', [candidate], error => error ? reject(error) : resolve());
+				});
+				return candidate;
+			} catch { /* try next */ }
+		}
+		return undefined;
+	}
+
+	//#endregion
 
 	async getMainProcessId(): Promise<number> {
 		this.logService.trace('Received request for process ID from other instance.');

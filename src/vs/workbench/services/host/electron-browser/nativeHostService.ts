@@ -43,13 +43,36 @@ class WorkbenchHostService extends Disposable implements IHostService {
 	) {
 		super();
 
-		this.onDidChangeFocus = Event.latch(
+		// Debounce focus-loss events to handle transient deactivation/reactivation
+		// cycles from Wayland compositors (e.g. KDE KWin briefly deactivates the
+		// window when clicking the custom title bar near a screen edge). Focus-gain
+		// events pass through immediately so the UI reacts without delay.
+		const rawFocusChange = Event.latch(
 			Event.any(
 				Event.map(Event.filter(this.nativeHostService.onDidFocusMainOrAuxiliaryWindow, id => hasWindow(id), this._store), () => this.hasFocus, this._store),
 				Event.map(Event.filter(this.nativeHostService.onDidBlurMainOrAuxiliaryWindow, id => hasWindow(id), this._store), () => this.hasFocus, this._store),
 				Event.map(this.onDidChangeActiveWindow, () => this.hasFocus, this._store)
 			), undefined, this._store
 		);
+		const debouncedFocusChange = this._register(new Emitter<boolean>());
+		let blurTimeout: ReturnType<typeof setTimeout> | undefined;
+		this._register(rawFocusChange(hasFocus => {
+			if (hasFocus) {
+				if (blurTimeout !== undefined) {
+					clearTimeout(blurTimeout);
+					blurTimeout = undefined;
+				}
+				debouncedFocusChange.fire(true);
+			} else {
+				clearTimeout(blurTimeout);
+				blurTimeout = setTimeout(() => {
+					blurTimeout = undefined;
+					debouncedFocusChange.fire(false);
+				}, 50);
+			}
+		}));
+		this._register({ dispose: () => clearTimeout(blurTimeout) });
+		this.onDidChangeFocus = Event.latch(debouncedFocusChange.event, undefined, this._store);
 
 		this.onDidChangeFullScreen = Event.filter(this.nativeHostService.onDidChangeWindowFullScreen, e => hasWindow(e.windowId), this._store);
 

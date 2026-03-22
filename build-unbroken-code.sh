@@ -725,11 +725,6 @@ for arg in "$@"; do
 			BUILD_LINUX=true
 			shift
 			;;
-		--release-streams)
-			shift
-			RELEASE_STREAMS="${1:-}"
-			shift
-			;;
 		--release-streams=*)
 			RELEASE_STREAMS="${arg#--release-streams=}"
 			shift
@@ -758,7 +753,7 @@ for arg in "$@"; do
 			echo "  --macos-arch=<arch>    Build only the specified macOS architecture (x64 or arm64)"
 			echo "  --linux          Build Linux binaries (x64, arm64, deb, rpm, tar.gz, CLI)"
 			echo "  --all-platforms  Build for all platforms (macOS, Windows, and Linux)"
-			echo "  --release-streams <list>  Comma-separated release streams to publish to (stable,beta,rc)"
+			echo "  --release-streams=<list>  Comma-separated release streams to publish to (stable,beta,rc)"
 			echo "  --ignore-submodule-check  Skip checking if submodules have new commits"
 			echo "  --help           Show this help message"
 			echo ""
@@ -998,7 +993,7 @@ function Create_GitHub_Release()
 	fi
 
 	if [ -n "$RELEASE_STREAMS" ]; then
-		RELEASE_CMD="$RELEASE_CMD --release-streams $RELEASE_STREAMS"
+		RELEASE_CMD="$RELEASE_CMD --release-streams=$RELEASE_STREAMS"
 	fi
 
 	if $SHOW_RELEASE_NOTES; then

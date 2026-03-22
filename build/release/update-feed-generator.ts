@@ -150,30 +150,16 @@ async function downloadAssetContent(octokit: Octokit, assetId: number): Promise<
 }
 
 async function fetchLatestProductRelease(octokit: Octokit): Promise<GitHubRelease | null> {
-	try {
-		const { data } = await octokit.repos.getLatestRelease({
-			owner: REPO_OWNER,
-			repo: REPO_NAME
-		});
-		const latestRelease = data as GitHubRelease;
-		if (latestRelease.tag_name !== FEED_RELEASE_TAG) {
-			return latestRelease;
-		}
-		console.warn(`Latest release is ${FEED_RELEASE_TAG}, searching for previous published release...`);
-	} catch (error: unknown) {
-		const errorRecord = error as Record<string, unknown> | null;
-		if (errorRecord?.status !== 404) {
-			throw error;
-		}
-		console.warn('No published releases found via getLatestRelease.');
-	}
-
+	// Find the most recent published release (including prereleases) so that
+	// beta/rc feeds point to the correct build. The stream-specific file
+	// naming (latest-beta-*, latest-rc-*, latest-*) is what separates streams
+	// on the client side.
 	const { data: releases } = await octokit.repos.listReleases({
 		owner: REPO_OWNER,
 		repo: REPO_NAME,
 		per_page: 100
 	});
-	return releases.find((release): release is GitHubRelease => !release.draft && !release.prerelease && release.tag_name !== FEED_RELEASE_TAG) ?? null;
+	return releases.find((release): release is GitHubRelease => !release.draft && release.tag_name !== FEED_RELEASE_TAG) ?? null;
 }
 
 async function generateUpdateFeed(octokit: Octokit): Promise<UpdateFeed> {
@@ -565,10 +551,10 @@ async function main() {
 	const args = process.argv.slice(2);
 	const command = args[0] || 'generate';
 
-	// Parse --streams flag (comma-separated: stable,beta,rc)
-	const streamsIdx = args.indexOf('--streams');
-	const streams: string[] = streamsIdx !== -1 && args[streamsIdx + 1]
-		? args[streamsIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+	// Parse --streams=<list> flag (comma-separated: stable,beta,rc)
+	const streamsArg = args.find(a => a.startsWith('--streams='));
+	const streams: string[] = streamsArg
+		? streamsArg.substring('--streams='.length).split(',').map(s => s.trim()).filter(Boolean)
 		: ['stable'];
 
 	// Initialize GitHub API client
@@ -616,7 +602,7 @@ async function main() {
 
 		default:
 			console.log('Usage:');
-			console.log('  ts-node update-feed-generator.ts generate [--streams stable,beta,rc] - Generate and upload feed');
+			console.log('  ts-node update-feed-generator.ts generate [--streams=stable,beta,rc] - Generate and upload feed');
 			console.log('  ts-node update-feed-generator.ts platform [platform] [quality]       - Test platform query');
 	}
 }

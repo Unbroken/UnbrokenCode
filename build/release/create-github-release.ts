@@ -310,11 +310,68 @@ function getUpstreamSets(): { shaSet: Set<string>; subjectSet: Set<string> } {
 	return { shaSet, subjectSet };
 }
 
-async function generateReleaseNotes(buildCommit: string, currentTag: string): Promise<string[]> {
+/**
+ * Returns the tag of the last stable release using the GitHub "Latest" marker.
+ * Beta/rc releases use make_latest: false, so getLatestRelease always
+ * returns the most recent stable release.
+ */
+async function getLastStableReleaseTag(octokit: Octokit): Promise<string | null> {
+	try {
+		const { data } = await octokit.repos.getLatestRelease({
+			owner: REPO_OWNER,
+			repo: REPO_NAME
+		});
+		if (data.tag_name && data.tag_name !== 'update-feed') {
+			return data.tag_name;
+		}
+	} catch (error: unknown) {
+		const errorRecord = error as Record<string, unknown> | null;
+		if (errorRecord?.status !== 404) {
+			console.warn('Warning: Could not fetch latest GitHub release', error);
+		}
+	}
+	return null;
+}
+
+async function generateReleaseNotes(buildCommit: string, currentTag: string, octokit: Octokit): Promise<string[]> {
 	const releaseTags = getReleaseTagsFromGit();
 
 	// Filter out the current tag we're creating
-	const filteredTags = releaseTags.filter(tag => tag !== currentTag);
+	let filteredTags = releaseTags.filter(tag => tag !== currentTag);
+
+	// Use the GitHub "Latest" release as the comparison base so that release
+	// notes always cover everything since the last stable release, skipping
+	// any intermediate beta/rc tags.
+	const lastStableTag = await getLastStableReleaseTag(octokit);
+	if (lastStableTag && filteredTags.includes(lastStableTag)) {
+		const skipped = filteredTags.length - 1;
+		filteredTags = [lastStableTag];
+		if (skipped > 0) {
+			console.log(`Using last stable release ${lastStableTag}, skipped ${skipped} other tag(s)`);
+		}
+	} else if (lastStableTag && lastStableTag === currentTag) {
+		// The latest stable release is the one we're currently publishing —
+		// fall back to filtering out prerelease tags via the GitHub API.
+		try {
+			const { data: releases } = await octokit.repos.listReleases({
+				owner: REPO_OWNER,
+				repo: REPO_NAME,
+				per_page: 100
+			});
+			const prereleaseTags = new Set(
+				releases.filter(r => r.prerelease).map(r => r.tag_name)
+			);
+			if (prereleaseTags.size > 0) {
+				const before = filteredTags.length;
+				filteredTags = filteredTags.filter(tag => !prereleaseTags.has(tag));
+				if (filteredTags.length < before) {
+					console.log(`Skipped ${before - filteredTags.length} prerelease tag(s)`);
+				}
+			}
+		} catch (error) {
+			console.warn('Warning: Could not fetch releases to filter prereleases');
+		}
+	}
 
 	if (filteredTags.length === 0) {
 		console.log('No previous release tags found, no release notes to generate');
@@ -648,13 +705,16 @@ async function fetchManifestsFromRelease(octokit: Octokit, release: any): Promis
 	return map;
 }
 
-async function publishExistingRelease(octokit: Octokit, release: any, manifestMap: ManifestMap, draft: boolean, releaseBody?: string): Promise<void> {
+async function publishExistingRelease(octokit: Octokit, release: any, manifestMap: ManifestMap, draft: boolean, releaseBody?: string, options?: { makeLatest?: boolean; prerelease?: boolean }): Promise<void> {
 	const combinedManifest = combineManifests(manifestMap);
 	const tagName = release.tag_name;
 	const commit = combinedManifest?.commit || release.target_commitish;
 	if (!commit) {
 		throw new Error('Unable to determine commit for release notes');
 	}
+
+	const makeLatest = options?.makeLatest;
+	const prerelease = options?.prerelease ?? false;
 
 	const maxAttempts = 4;
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -666,6 +726,8 @@ async function publishExistingRelease(octokit: Octokit, release: any, manifestMa
 				tag_name: tagName,
 				name: release.name || tagName,
 				draft: draft,
+				prerelease: prerelease,
+				make_latest: makeLatest === true ? 'true' : makeLatest === false ? 'false' : 'legacy',
 				target_commitish: release.target_commitish || commit,
 				...(releaseBody === undefined ? {} : { body: releaseBody }),
 			});
@@ -1239,10 +1301,10 @@ async function main() {
 	const generateDescription = process.argv.includes('--generate-release-description');
 	const showReleaseNotes = process.argv.includes('--show-release-notes');
 
-	// Parse --release-streams flag (comma-separated list of streams: stable,beta,rc)
-	const streamsIdx = process.argv.indexOf('--release-streams');
-	const releaseStreams: string[] = streamsIdx !== -1 && process.argv[streamsIdx + 1]
-		? process.argv[streamsIdx + 1].split(',').map(s => s.trim()).filter(Boolean)
+	// Parse --release-streams=<list> flag (comma-separated list of streams: stable,beta,rc)
+	const streamsArg = process.argv.find(a => a.startsWith('--release-streams='));
+	const releaseStreams: string[] = streamsArg
+		? streamsArg.substring('--release-streams='.length).split(',').map(s => s.trim()).filter(Boolean)
 		: ['stable'];
 
 	const distDir = path.join(__dirname, '../../.dist');
@@ -1253,6 +1315,9 @@ async function main() {
 	const versionFromPackage = packageInfo.version;
 	const tagNameFromVersion = `release/${versionFromPackage}`;
 
+	const token = getGitHubToken();
+	const octokit = new Octokit({ auth: token });
+
 	// Show release notes only - just print the "What's New" list and exit
 	if (showReleaseNotes) {
 		console.log(`Generating release notes for version ${versionFromPackage}...\n`);
@@ -1261,7 +1326,7 @@ async function main() {
 		const buildCommit: string = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
 		console.log(`Using HEAD commit: ${buildCommit.substring(0, 7)}\n`);
 
-		const releaseNotes = await generateReleaseNotes(buildCommit, tagNameFromVersion);
+		const releaseNotes = await generateReleaseNotes(buildCommit, tagNameFromVersion, octokit);
 
 		if (releaseNotes.length === 0) {
 			console.log('No release notes to display.');
@@ -1273,9 +1338,6 @@ async function main() {
 		}
 		return;
 	}
-
-	const token = getGitHubToken();
-	const octokit = new Octokit({ auth: token });
 
 	// Publish-only path: download manifests and publish release without local builds
 	if (shouldPublish || generateDescription) {
@@ -1303,7 +1365,7 @@ async function main() {
 		}
 		let releaseBody;
 		if (generateDescription) {
-			const releaseNotes = await generateReleaseNotes(commitForNotes, tagNameFromVersion);
+			const releaseNotes = await generateReleaseNotes(commitForNotes, tagNameFromVersion, octokit);
 			releaseBody = buildReleaseBody(manifestMap, tagNameFromVersion, commitForNotes, releaseNotes);
 		}
 
@@ -1312,7 +1374,11 @@ async function main() {
 			return;
 		}
 
-		await publishExistingRelease(octokit, existingRelease, manifestMap, false, releaseBody);
+		const isStable = releaseStreams.includes('stable');
+		await publishExistingRelease(octokit, existingRelease, manifestMap, false, releaseBody, {
+			makeLatest: isStable,
+			prerelease: !isStable,
+		});
 
 		// After publishing the release, update the feed for selected streams
 		console.log(`\nUpdating release feed for streams: ${releaseStreams.join(', ')}...`);

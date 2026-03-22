@@ -3,18 +3,18 @@ name: Publish Release
 on:
   workflow_dispatch:
     inputs:
-      release_stable:
-        description: 'Publish to stable release stream'
-        required: false
-        type: boolean
-        default: true
       release_beta:
         description: 'Publish to beta release stream'
         required: false
         type: boolean
-        default: false
+        default: true
       release_rc:
         description: 'Publish to rc release stream'
+        required: false
+        type: boolean
+        default: false
+      release_stable:
+        description: 'Publish to stable release stream'
         required: false
         type: boolean
         default: false
@@ -106,5 +106,5 @@ jobs:
           set -euo pipefail
           ./setup.sh
           (cd build && npm ci)
-          ./build-unbroken-code.sh --publish --release-streams "${{ steps.streams.outputs.streams }}"
+          ./build-unbroken-code.sh --publish --release-streams="${{ steps.streams.outputs.streams }}"
         shell: bash

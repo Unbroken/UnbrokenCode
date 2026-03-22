@@ -14,6 +14,7 @@ import { KeyCode } from '../common/keyCodes.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposable } from '../common/lifecycle.js';
 import { RemoteAuthorities } from '../common/network.js';
 import * as platform from '../common/platform.js';
+import { env } from '../common/process.js';
 import { URI } from '../common/uri.js';
 import { hash } from '../common/hash.js';
 import { CodeWindow, ensureCodeWindow, mainWindow } from './window.js';
@@ -44,6 +45,7 @@ export const {
 
 	ensureCodeWindow(mainWindow, 1);
 	const mainWindowRegistration = { window: mainWindow, disposables: new DisposableStore() };
+	mainWindowRegistration.disposables.add(installTransientBlurGuard(mainWindow));
 	windows.set(mainWindow.vscodeWindowId, mainWindowRegistration);
 
 	const onDidRegisterWindow = new event.Emitter<IRegisteredCodeWindow>();
@@ -83,6 +85,8 @@ export const {
 			disposables.add(addDisposableListener(window, EventType.BEFORE_UNLOAD, () => {
 				onWillUnregisterWindow.fire(window);
 			}));
+
+			disposables.add(installTransientBlurGuard(window));
 
 			onDidRegisterWindow.fire(registeredWindow);
 
@@ -1396,6 +1400,120 @@ class FocusTracker extends Disposable implements IFocusTracker {
  */
 export function trackFocus(element: HTMLElement | Window): IFocusTracker {
 	return new FocusTracker(element);
+}
+
+/**
+ * Installs a guard that prevents transient window deactivation (common on
+ * Wayland compositors like KDE KWin) from dismissing UI elements.
+ *
+ * When a window briefly loses and regains activation (within 150ms),
+ * `focusout` events with `relatedTarget === null` are intercepted in the
+ * capture phase and only re-dispatched if the window genuinely lost focus.
+ */
+export function installTransientBlurGuard(targetWindow: Window): IDisposable {
+	// Only needed on KDE Wayland where the compositor causes transient
+	// window deactivation/reactivation cycles (e.g. clicking near screen edges).
+	if (!platform.isLinux
+		|| env['XDG_SESSION_TYPE'] !== 'wayland'
+		|| !(env['XDG_CURRENT_DESKTOP'] ?? '').includes('KDE')) {
+		return Disposable.None;
+	}
+
+	let isRedispatching = false;
+	let pendingTimeouts: ReturnType<typeof setTimeout>[] = [];
+	let inTransientBlur = false;
+
+	const clearAllPending = (): void => {
+		for (const t of pendingTimeouts) {
+			clearTimeout(t);
+		}
+		pendingTimeouts = [];
+	};
+
+	// Intercept focusout (bubbles) and blur (doesn't bubble, but has capture phase)
+	// Only intercept when the window itself lost focus (compositor deactivation).
+	// If the window still has focus, it's an in-window focus change (e.g. outside
+	// click) and should pass through so menus can be dismissed normally.
+	const onFocusLoss = (e: FocusEvent): void => {
+		if (isRedispatching) {
+			return;
+		}
+		if (!e.relatedTarget && !originalHasFocus()) {
+			e.stopImmediatePropagation();
+			inTransientBlur = true;
+			const savedTarget = e.target;
+			const eventType = e.type;
+			const timeout = setTimeout(() => {
+				pendingTimeouts = pendingTimeouts.filter(t => t !== timeout);
+				if (!originalHasFocus()) {
+					inTransientBlur = false;
+					isRedispatching = true;
+					savedTarget?.dispatchEvent(new FocusEvent(eventType, { bubbles: eventType === 'focusout', relatedTarget: null }));
+					isRedispatching = false;
+				} else {
+					inTransientBlur = false;
+				}
+			}, 50);
+			pendingTimeouts.push(timeout);
+		}
+	};
+
+	const onFocusGain = (): void => {
+		if (pendingTimeouts.length > 0) {
+			clearAllPending();
+			inTransientBlur = false;
+		}
+	};
+
+	// Intercept window-level blur: defer it and only re-dispatch if genuine.
+	// This prevents components like contextMenuHandler that listen for
+	// window blur to dismiss their UI during transient compositor blurs.
+	let isRedispatchingWindowBlur = false;
+	const onWindowBlur = (e: Event): void => {
+		if (isRedispatchingWindowBlur) {
+			return;
+		}
+		e.stopImmediatePropagation();
+		inTransientBlur = true;
+		const timeout = setTimeout(() => {
+			pendingTimeouts = pendingTimeouts.filter(t => t !== timeout);
+			if (!originalHasFocus()) {
+				inTransientBlur = false;
+				isRedispatchingWindowBlur = true;
+				targetWindow.dispatchEvent(new Event('blur'));
+				isRedispatchingWindowBlur = false;
+			} else {
+				inTransientBlur = false;
+			}
+		}, 50);
+		pendingTimeouts.push(timeout);
+	};
+
+	const onWindowFocus = (): void => {
+		if (inTransientBlur) {
+			clearAllPending();
+			inTransientBlur = false;
+		}
+	};
+
+	const originalHasFocus = targetWindow.document.hasFocus.bind(targetWindow.document);
+
+	targetWindow.document.addEventListener('focusout', onFocusLoss, true);
+	targetWindow.document.addEventListener('blur', onFocusLoss, true);
+	targetWindow.document.addEventListener('focusin', onFocusGain, true);
+	targetWindow.document.addEventListener('focus', onFocusGain, true);
+	targetWindow.addEventListener('blur', onWindowBlur, true);
+	targetWindow.addEventListener('focus', onWindowFocus, true);
+
+	return toDisposable(() => {
+		clearAllPending();
+		targetWindow.document.removeEventListener('focusout', onFocusLoss, true);
+		targetWindow.document.removeEventListener('blur', onFocusLoss, true);
+		targetWindow.document.removeEventListener('focusin', onFocusGain, true);
+		targetWindow.document.removeEventListener('focus', onFocusGain, true);
+		targetWindow.removeEventListener('blur', onWindowBlur, true);
+		targetWindow.removeEventListener('focus', onWindowFocus, true);
+	});
 }
 
 export function after<T extends Node>(sibling: HTMLElement, child: T): T {

@@ -166,12 +166,13 @@ suite('Comments View', function () {
 		view.setVisible(true);
 		view.render();
 		commentService.setWorkspaceComments('test', [
-			new TestCommentThread(1, 1, '1', 'test1', new Range(1, 1, 1, 1), [{ body: 'This comment is a cat.', uniqueIdInThread: 1, userName: 'alex' }]),
+			new TestCommentThread(1, 1, '1', 'test1', new Range(1, 1, 1, 1), [{ body: 'zzz', uniqueIdInThread: 1, userName: 'alex' }]),
 			new TestCommentThread(2, 1, '1', 'test2', new Range(1, 1, 1, 1), [{ body: 'This comment is a dog.', uniqueIdInThread: 1, userName: 'alex' }]),
 		]);
 		assert.strictEqual(view.getFilterStats().total, 2);
 		assert.strictEqual(view.getFilterStats().filtered, 2);
-		view.getFilterWidget().setFilterText('cat');
+		// The filter also matches partially, so this shares no letters with the other comment
+		view.getFilterWidget().setFilterText('zzz');
 		// Setting showResolved causes the filter to trigger for the purposes of this test.
 		view.filters.showResolved = false;
 

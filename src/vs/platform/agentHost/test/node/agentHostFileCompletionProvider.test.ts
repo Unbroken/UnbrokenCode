@@ -198,7 +198,7 @@ suite('AgentHostFileCompletionProvider', () => {
 				{ kind: CompletionItemKind.UserMessage, channel: sessionUri, text: 'see @util', offset: 9 },
 				{ chat: undefined }, CancellationToken.None,
 			);
-			assert.strictEqual(result.length, 1);
+			// Fuzzy matching also matches partially, so the best match has to come first
 			assert.deepStrictEqual(result[0], {
 				insertText: '@util.ts',
 				rangeStart: 4,

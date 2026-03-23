@@ -47,20 +47,20 @@ suite('Icon Labels', () => {
 
 		filterOk(matchesFuzzyIconAware, 'ccr', parseLabelWithIcons('$(codicon)CamelCaseRocks$(codicon)'), [
 			{ start: 10, end: 11 },
-			{ start: 15, end: 16 },
-			{ start: 19, end: 20 }
+			{ start: 19, end: 20 },
+			{ start: 21, end: 22 }
 		]);
 
 		filterOk(matchesFuzzyIconAware, 'ccr', parseLabelWithIcons('$(codicon) CamelCaseRocks $(codicon)'), [
 			{ start: 11, end: 12 },
-			{ start: 16, end: 17 },
-			{ start: 20, end: 21 }
+			{ start: 20, end: 21 },
+			{ start: 22, end: 23 }
 		]);
 
 		filterOk(matchesFuzzyIconAware, 'iut', parseLabelWithIcons('$(codicon) Indent $(octico) Using $(octic) Tpaces'), [
-			{ start: 11, end: 12 },
+			{ start: 16, end: 17 },
 			{ start: 28, end: 29 },
-			{ start: 43, end: 44 },
+			{ start: 30, end: 31 },
 		]);
 
 		// Prefix

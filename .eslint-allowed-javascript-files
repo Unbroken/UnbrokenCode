@@ -108,6 +108,7 @@ scripts/xterm-update.js
 src/vs/base/browser/dompurify/dompurify.js
 src/vs/base/common/marked/marked.js
 src/vs/base/common/semver/semver.js
+src/vs/base/test/common/filters.perf.bench.mjs
 src/vs/base/test/common/filters.perf.data.js
 src/vs/editor/test/node/diffing/fixtures/difficult-move/1.js
 src/vs/editor/test/node/diffing/fixtures/difficult-move/2.js

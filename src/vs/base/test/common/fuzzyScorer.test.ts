@@ -80,7 +80,7 @@ class NullAccessorClass implements IItemAccessor<URI> {
 function _doScore(target: string, query: string, allowNonContiguousMatches?: boolean): FuzzyScore {
 	const preparedQuery = prepareQuery(query);
 
-	return scoreFuzzy(target, preparedQuery.normalized, preparedQuery.normalizedLowercase, allowNonContiguousMatches ?? !preparedQuery.expectContiguousMatch);
+	return scoreFuzzy(target, preparedQuery.normalized, preparedQuery.normalizedLowercase, allowNonContiguousMatches ?? !preparedQuery.expectContiguousMatch, 'classic');
 }
 
 function _doScore2(target: string, query: string, matchOffset: number = 0): FuzzyScore2 {
@@ -90,11 +90,11 @@ function _doScore2(target: string, query: string, matchOffset: number = 0): Fuzz
 }
 
 function scoreItem<T>(item: T, query: string, allowNonContiguousMatches: boolean, accessor: IItemAccessor<T>, cache: FuzzyScorerCache = Object.create(null)): IItemScore {
-	return scoreItemFuzzy(item, prepareQuery(query), allowNonContiguousMatches, accessor, cache);
+	return scoreItemFuzzy(item, prepareQuery(query), allowNonContiguousMatches, accessor, cache, 'classic');
 }
 
 function compareItemsByScore<T>(itemA: T, itemB: T, query: string, allowNonContiguousMatches: boolean, accessor: IItemAccessor<T>): number {
-	return compareItemsByFuzzyScore(itemA, itemB, prepareQuery(query), allowNonContiguousMatches, accessor, Object.create(null));
+	return compareItemsByFuzzyScore(itemA, itemB, prepareQuery(query), allowNonContiguousMatches, accessor, Object.create(null), 'classic');
 }
 
 const NullAccessor = new NullAccessorClass();
@@ -290,6 +290,20 @@ suite('Fuzzy Scorer', () => {
 		// from the cache's perspective this should be a totally different query
 		const res2 = scoreItem(resource, 'xyz "sm"', true, ResourceAccessor, cache);
 		assert.ok(!res2.score);
+	});
+
+	test('scoreItem - cache isolates fuzzy algorithms', function () {
+		const item = { label: 'x' };
+		const accessor: IItemAccessor<typeof item> = {
+			getItemLabel: item => item.label,
+			getItemDescription: () => undefined,
+			getItemPath: () => undefined
+		};
+		const cache: FuzzyScorerCache = Object.create(null);
+		const query = prepareQuery('xyz');
+
+		assert.strictEqual(scoreItemFuzzy(item, query, true, accessor, cache, 'classic').score, 0);
+		assert.ok(scoreItemFuzzy(item, query, true, accessor, cache, 'fuzzyPartial').score > 0);
 	});
 
 	test('scoreItem - invalid input', function () {

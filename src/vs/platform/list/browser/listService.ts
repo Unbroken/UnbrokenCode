@@ -1475,6 +1475,16 @@ configurationRegistry.registerConfiguration({
 			default: 'fuzzy',
 			description: localize('defaultFindMatchTypeSettingKey', "Controls the type of matching used when searching lists and trees in the workbench.")
 		},
+		'workbench.list.defaultFuzzyMatchType': {
+			type: 'string',
+			enum: ['fuzzyPartial', 'classic'],
+			default: 'fuzzyPartial',
+			enumDescriptions: [
+				localize('defaultFuzzyMatchType.fuzzyPartial', "Use partial substring matching that is more tolerant of non-contiguous matches and provides scoring."),
+				localize('defaultFuzzyMatchType.classic', "Use classic fuzzy matching based on contiguous character sequences and camelCase scoring.")
+			],
+			description: localize('defaultFuzzyMatchType', "Controls which fuzzy matching algorithm is used when filtering lists and quick open results in the workbench.")
+		},
 		[treeExpandMode]: {
 			type: 'string',
 			enum: ['singleClick', 'doubleClick'],

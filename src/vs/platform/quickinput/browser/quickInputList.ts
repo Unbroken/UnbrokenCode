@@ -26,7 +26,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import { Emitter, Event, EventBufferer, IValueWithChangeEvent } from '../../../base/common/event.js';
 import { IMatch } from '../../../base/common/filters.js';
 import { IMarkdownString } from '../../../base/common/htmlContent.js';
-import { IParsedLabelWithIcons, getCodiconAriaLabel, matchesFuzzyIconAware, parseLabelWithIcons } from '../../../base/common/iconLabels.js';
+import { IParsedLabelWithIcons, getCodiconAriaLabel, matchesFuzzyIconAware, matchesFuzzyIconAwareWithScore, parseLabelWithIcons } from '../../../base/common/iconLabels.js';
 import { Lazy } from '../../../base/common/lazy.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { observableValue, observableValueOpts, transaction } from '../../../base/common/observable.js';
@@ -35,6 +35,7 @@ import { escape, ltrim } from '../../../base/common/strings.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { IAccessibilityService } from '../../accessibility/common/accessibility.js';
+import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { IContextMenuService } from '../../contextview/browser/contextView.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { WorkbenchObjectTree } from '../../list/browser/listService.js';
@@ -66,6 +67,7 @@ interface IQuickPickElement extends IQuickInputItemLazyParts {
 	labelHighlights?: IMatch[];
 	descriptionHighlights?: IMatch[];
 	detailHighlights?: IMatch[];
+	fuzzyScore?: number;
 	separator?: IQuickPickSeparator;
 }
 
@@ -189,6 +191,14 @@ class BaseQuickPickItemElement implements IQuickPickElement {
 	}
 	set detailHighlights(value: IMatch[] | undefined) {
 		this._detailHighlights = value;
+	}
+
+	private _fuzzyScore?: number;
+	get fuzzyScore() {
+		return this._fuzzyScore;
+	}
+	set fuzzyScore(value: number | undefined) {
+		this._fuzzyScore = value;
 	}
 }
 
@@ -759,7 +769,8 @@ export class QuickInputList extends Disposable {
 		id: string,
 		private styles: IQuickInputStyles,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IAccessibilityService private readonly accessibilityService: IAccessibilityService
+		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
+		@IConfigurationService private readonly configurationService: IConfigurationService
 	) {
 		super();
 		this._container = dom.append(this.parent, $('.quick-input-list'));
@@ -889,6 +900,10 @@ export class QuickInputList extends Disposable {
 	}
 	set matchOnLabelMode(value: 'fuzzy' | 'contiguous') {
 		this._matchOnLabelMode = value;
+	}
+
+	private get _fuzzyMatchPartial(): boolean {
+		return this.configurationService.getValue<string>('workbench.list.defaultFuzzyMatchType') !== 'classic';
 	}
 
 	private _matchOnMeta = true;
@@ -1431,6 +1446,7 @@ export class QuickInputList extends Disposable {
 				element.labelHighlights = undefined;
 				element.descriptionHighlights = undefined;
 				element.detailHighlights = undefined;
+				element.fuzzyScore = undefined;
 				element.hidden = false;
 				const previous = element.index && this._inputElements[element.index - 1];
 				if (element.item) {
@@ -1444,23 +1460,55 @@ export class QuickInputList extends Disposable {
 			let currentSeparator: IQuickPickSeparator | undefined;
 			this._itemElements.forEach(element => {
 				let labelHighlights: IMatch[] | undefined;
-				if (this.matchOnLabelMode === 'fuzzy') {
-					labelHighlights = this.matchOnLabel ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneLabel)) ?? undefined : undefined;
-				} else {
+				let labelScore: number | undefined;
+				if (this.matchOnLabelMode === 'contiguous') {
 					labelHighlights = this.matchOnLabel ? matchesContiguousIconAware(queryWithWhitespace, parseLabelWithIcons(element.saneLabel)) ?? undefined : undefined;
+					labelScore = undefined;
+				} else if (this.matchOnLabelMode === 'fuzzy' && this._fuzzyMatchPartial) {
+					const labelResult = this.matchOnLabel ? matchesFuzzyIconAwareWithScore(query, parseLabelWithIcons(element.saneLabel)) : null;
+					labelHighlights = labelResult?.matches;
+					labelScore = labelResult?.score;
+				} else {
+					labelHighlights = this.matchOnLabel ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneLabel)) ?? undefined : undefined;
+					labelScore = undefined;
 				}
-				const descriptionHighlights = this.matchOnDescription ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneDescription || '')) ?? undefined : undefined;
-				const detailHighlights = this.matchOnDetail ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneDetail || '')) ?? undefined : undefined;
+				let descriptionHighlights: IMatch[] | undefined;
+				let descScore: number | undefined;
+				let detailHighlights: IMatch[] | undefined;
+				let detailScore: number | undefined;
+				if (this._fuzzyMatchPartial) {
+					const descResult = this.matchOnDescription ? matchesFuzzyIconAwareWithScore(query, parseLabelWithIcons(element.saneDescription || '')) : null;
+					descriptionHighlights = descResult?.matches;
+					descScore = descResult?.score;
+					const detailResult = this.matchOnDetail ? matchesFuzzyIconAwareWithScore(query, parseLabelWithIcons(element.saneDetail || '')) : null;
+					detailHighlights = detailResult?.matches;
+					detailScore = detailResult?.score;
+				} else {
+					descriptionHighlights = this.matchOnDescription ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneDescription || '')) ?? undefined : undefined;
+					descScore = undefined;
+					detailHighlights = this.matchOnDetail ? matchesFuzzyIconAware(query, parseLabelWithIcons(element.saneDetail || '')) ?? undefined : undefined;
+					detailScore = undefined;
+				}
 
 				if (labelHighlights || descriptionHighlights || detailHighlights) {
 					element.labelHighlights = labelHighlights;
 					element.descriptionHighlights = descriptionHighlights;
 					element.detailHighlights = detailHighlights;
+					if (labelScore !== undefined || descScore !== undefined || detailScore !== undefined) {
+						element.fuzzyScore = Math.min(
+							labelScore ?? Infinity,
+							descScore ?? Infinity,
+							detailScore ?? Infinity
+						);
+					} else {
+						element.fuzzyScore = undefined;
+					}
 					element.hidden = false;
 				} else {
 					element.labelHighlights = undefined;
 					element.descriptionHighlights = undefined;
 					element.detailHighlights = undefined;
+					element.fuzzyScore = undefined;
 					element.hidden = element.item ? !element.item.alwaysShow : true;
 				}
 
@@ -1658,6 +1706,13 @@ function matchesContiguous(word: string, wordToMatchAgainst: string): IMatch[] |
 }
 
 function compareEntries(elementA: IQuickPickElement, elementB: IQuickPickElement, lookFor: string): number {
+
+	// Both have highlights: compare by fuzzy score (lower = better match)
+	const scoreA = elementA.fuzzyScore ?? 1;
+	const scoreB = elementB.fuzzyScore ?? 1;
+	if (scoreA !== scoreB) {
+		return scoreA - scoreB;
+	}
 
 	const labelHighlightsA = elementA.labelHighlights || [];
 	const labelHighlightsB = elementB.labelHighlights || [];

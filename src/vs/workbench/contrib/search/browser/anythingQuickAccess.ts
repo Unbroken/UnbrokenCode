@@ -6,7 +6,7 @@
 import './media/anythingQuickAccess.css';
 import { IQuickInputButton, IKeyMods, quickPickItemScorerAccessor, QuickPickItemScorerAccessor, IQuickPick, IQuickPickItemWithResource, QuickInputHideReason, IQuickInputService, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IPickerQuickAccessItem, PickerQuickAccessProvider, TriggerAction, FastAndSlowPicks, Picks, PicksWithActive } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
-import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache } from '../../../../base/common/fuzzyScorer.js';
+import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache, PATH_IDENTITY_SCORE, type FuzzyMatchAlgorithm } from '../../../../base/common/fuzzyScorer.js';
 import { IFileQueryBuilderOptions, QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getOutOfWorkspaceEditorResources, extractRangeFromFilter, IWorkbenchSearchConfiguration } from '../common/search.js';
@@ -61,6 +61,7 @@ import { ICustomEditorLabelService } from '../../../services/editor/common/custo
 
 export interface IAnythingQuickPickItem extends IPickerQuickAccessItem, IQuickPickItemWithResource {
 	readonly editor?: EditorInput | IResourceEditorInput;
+	fuzzyScore?: number;
 }
 
 interface IEditorSymbolAnythingQuickPickItem extends IAnythingQuickPickItem {
@@ -105,6 +106,8 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 	};
 
 	private static readonly MAX_RESULTS = 512;
+
+	private static readonly MIN_RESULTS = 5;
 
 	private static readonly TYPING_SEARCH_DELAY = 200; // this delay accommodates for the user typing a word and then stops typing to start searching
 
@@ -218,6 +221,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			includeSymbols: searchConfig?.quickOpen?.includeSymbols,
 			includeHistory: searchConfig?.quickOpen?.includeHistory ?? true,
 			historyFilterSortOrder: searchConfig?.quickOpen?.history?.filterSortOrder,
+			fuzzyMatchAlgorithm: (this.configurationService.getValue<string>('workbench.list.defaultFuzzyMatchType') === 'classic' ? 'classic' : 'fuzzyPartial') as FuzzyMatchAlgorithm,
 			preserveInput: quickAccessConfig?.preserveInput
 		};
 	}
@@ -388,7 +392,8 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					picks.push(pick);
 					continue;
 				}
-				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(pick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache);
+				const algorithm = this.configuration.fuzzyMatchAlgorithm;
+				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(pick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm);
 				if (!score) {
 					continue;
 				}
@@ -396,6 +401,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					label: labelMatch,
 					description: descriptionMatch
 				};
+				(pick as IAnythingQuickPickItem).fuzzyScore = score;
 				picks.push(pick);
 			}
 		}
@@ -414,10 +420,38 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			}
 		}
 
+		// Filter picks: only show items within 15% of the best score (partial algorithm only),
+		// but always keep at least MIN_RESULTS scored picks if that many are available.
+		if (this.configuration.fuzzyMatchAlgorithm === 'fuzzyPartial' && query.normalized) {
+			const scoresDescending: number[] = [];
+			for (const p of picks) {
+				const s = (p as IAnythingQuickPickItem).fuzzyScore;
+				if (s !== undefined) {
+					scoresDescending.push(s);
+				}
+			}
+			scoresDescending.sort((a, b) => b - a);
+			const bestScore = scoresDescending[0] ?? 0;
+			if (bestScore > 0) {
+				let threshold = bestScore * 0.85;
+				if (scoresDescending.length > AnythingQuickAccessProvider.MIN_RESULTS) {
+					threshold = Math.min(threshold, scoresDescending[AnythingQuickAccessProvider.MIN_RESULTS - 1]);
+				} else {
+					threshold = -Infinity; // not enough scored picks; keep them all
+				}
+				picks = picks.filter(p => {
+					const s = (p as IAnythingQuickPickItem).fuzzyScore;
+					return s === undefined || s >= threshold;
+				});
+			}
+		}
+
+		const fastPicks = options.filter ? picks.filter((p) => options.filter?.(p)) : picks;
+
 		return {
 
 			// Fast picks: help (if included) & editor history
-			picks: options.filter ? picks.filter((p) => options.filter?.(p)) : picks,
+			picks: fastPicks,
 
 			// Slow picks: files and symbols
 			additionalPicks: (async (): Promise<Picks<IAnythingQuickPickItem>> => {
@@ -436,6 +470,70 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 				}
 				if (token.isCancellationRequested) {
 					return [];
+				}
+
+				// Apply global score threshold: only show items within 15% of the best score (partial algorithm only).
+				// Always keep at least MIN_RESULTS scored picks combined across fast and additional picks.
+				// Demote any fast pick that scores worse than the best additional pick into additionalPicks.
+				if (this.configuration.fuzzyMatchAlgorithm === 'fuzzyPartial' && query.normalized) {
+					let bestFastScore = 0;
+					for (const p of fastPicks) {
+						const s = (p as IAnythingQuickPickItem).fuzzyScore;
+						if (s !== undefined && s > bestFastScore) {
+							bestFastScore = s;
+						}
+					}
+					let bestAdditionalScore = 0;
+					for (const p of additionalPicks) {
+						if (p.fuzzyScore !== undefined && p.fuzzyScore > bestAdditionalScore) {
+							bestAdditionalScore = p.fuzzyScore;
+						}
+					}
+					const bestScore = Math.max(bestFastScore, bestAdditionalScore);
+					if (bestScore > 0) {
+						// Combined sorted scores to enforce the MIN_RESULTS floor across both lists
+						const combinedScoresDescending: number[] = [];
+						for (const p of fastPicks) {
+							const s = (p as IAnythingQuickPickItem).fuzzyScore;
+							if (s !== undefined) {
+								combinedScoresDescending.push(s);
+							}
+						}
+						for (const p of additionalPicks) {
+							if (p.fuzzyScore !== undefined) {
+								combinedScoresDescending.push(p.fuzzyScore);
+							}
+						}
+						combinedScoresDescending.sort((a, b) => b - a);
+
+						let globalThreshold = bestScore * 0.85;
+						if (combinedScoresDescending.length > AnythingQuickAccessProvider.MIN_RESULTS) {
+							globalThreshold = Math.min(globalThreshold, combinedScoresDescending[AnythingQuickAccessProvider.MIN_RESULTS - 1]);
+						} else {
+							globalThreshold = -Infinity; // not enough scored picks; keep them all
+						}
+						additionalPicks = additionalPicks.filter(p => p.fuzzyScore === undefined || p.fuzzyScore >= globalThreshold);
+
+						// Demote any fast pick that scores worse than the best additional pick
+						const demoted: IAnythingQuickPickItem[] = [];
+						let j = 0;
+						for (let i = 0; i < fastPicks.length; i++) {
+							const p = fastPicks[i] as IAnythingQuickPickItem;
+							const s = p.fuzzyScore;
+							if (s === undefined || s >= bestAdditionalScore) {
+								// Separators and picks at least as good as the best additional pick stay in fast
+								fastPicks[j++] = fastPicks[i];
+							} else if (s >= globalThreshold) {
+								demoted.push(p);
+							}
+							// else: below globalThreshold, drop entirely
+						}
+						fastPicks.length = j;
+						if (demoted.length > 0) {
+							additionalPicks.push(...demoted);
+							additionalPicks.sort((a, b) => (b.fuzzyScore ?? 0) - (a.fuzzyScore ?? 0));
+						}
+					}
 				}
 
 				return additionalPicks.length > 0 ? [
@@ -461,10 +559,12 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			return [];
 		}
 
+		const algorithm = this.configuration.fuzzyMatchAlgorithm;
+
 		// Perform sorting (top results by score)
 		const sortedAnythingPicks = top(
 			[...filePicks, ...symbolPicks],
-			(anyPickA, anyPickB) => compareItemsByFuzzyScore(anyPickA, anyPickB, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache),
+			(anyPickA, anyPickB) => compareItemsByFuzzyScore(anyPickA, anyPickB, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm),
 			AnythingQuickAccessProvider.MAX_RESULTS
 		);
 
@@ -479,7 +579,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 
 			// Otherwise, do the scoring and matching here
 			else {
-				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(anythingPick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache);
+				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(anythingPick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm);
 				if (!score) {
 					continue;
 				}
@@ -488,6 +588,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					label: labelMatch,
 					description: descriptionMatch
 				};
+				anythingPick.fuzzyScore = score;
 
 				filteredAnythingPicks.push(anythingPick);
 			}
@@ -514,6 +615,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 		}
 
 		// Perform filtering
+		const algorithm = this.configuration.fuzzyMatchAlgorithm;
 		const editorHistoryScorerAccessor = query.containsPathSeparator ? quickPickItemScorerAccessor : this.labelOnlyEditorHistoryPickAccessor; // Only match on label of the editor unless the search includes path separators
 		const editorHistoryPicks: Array<IAnythingQuickPickItem> = [];
 		for (const editor of this.historyService.getHistory()) {
@@ -524,7 +626,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 
 			const editorHistoryPick = this.createAnythingPick(editor, configuration);
 
-			const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(editorHistoryPick, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache);
+			const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(editorHistoryPick, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache, algorithm);
 			if (!score) {
 				continue; // exclude editors not matching query
 			}
@@ -533,6 +635,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 				label: labelMatch,
 				description: descriptionMatch
 			};
+			editorHistoryPick.fuzzyScore = score;
 
 			editorHistoryPicks.push(editorHistoryPick);
 		}
@@ -543,7 +646,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 		}
 
 		// Perform sorting
-		return editorHistoryPicks.sort((editorA, editorB) => compareItemsByFuzzyScore(editorA, editorB, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache));
+		return editorHistoryPicks.sort((editorA, editorB) => compareItemsByFuzzyScore(editorA, editorB, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache, algorithm));
 	}
 
 	//#endregion
@@ -585,12 +688,19 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			// Create a single result pick and make sure to apply full
 			// highlights to ensure the pick is displayed. Since a
 			// ~ might have been used for searching, our fuzzy scorer
-			// may otherwise not properly respect the pick as a result
+			// may otherwise not properly respect the pick as a result.
+			// We also assign it a path identity score so that the score
+			// based filtering and active item selection treat this exact
+			// on-disk match as the best result. Otherwise, with the partial
+			// fuzzy algorithm, weak fuzzy matches on editor history (e.g. a
+			// pasted absolute path loosely matching a recently opened editor)
+			// could outrank and steal focus from this pick.
 			const absolutePathPick = this.createAnythingPick(absolutePathResult, this.configuration);
 			absolutePathPick.highlights = {
 				label: [{ start: 0, end: absolutePathPick.label.length }],
 				description: absolutePathPick.description ? [{ start: 0, end: absolutePathPick.description.length }] : undefined
 			};
+			absolutePathPick.fuzzyScore = PATH_IDENTITY_SCORE;
 
 			return [absolutePathPick];
 		}

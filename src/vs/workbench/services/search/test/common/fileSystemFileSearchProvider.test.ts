@@ -39,10 +39,11 @@ suite('FileSystemFileSearchProvider', () => {
 
 	test('finds unopened Windows files and preserves the remote authority and URI metadata', async () => {
 		const { search, query } = await setup({ 'package.json': '{}', 'src/agentHostUpdateRecovery.ts': '', 'README.md': '' });
-		const result = await search.fileSearch({ ...query, filePattern: 'ahur.ts' });
+		// Fuzzy matching also matches partially, so the best match has to come first
+		const result = await search.fileSearch({ ...query, filePattern: 'ahur.ts', sortByScore: true });
 
 		assert.deepStrictEqual({
-			files: result.results.map(match => ({ authority: match.resource.authority, original: fromAgentHostUri(match.resource).toString() })),
+			files: result.results.slice(0, 1).map(match => ({ authority: match.resource.authority, original: fromAgentHostUri(match.resource).toString() })),
 			limitHit: result.limitHit,
 			messages: result.messages,
 		}, {
@@ -146,12 +147,12 @@ suite('FileSystemFileSearchProvider', () => {
 		const { search, query } = await setup({ 'package.json': '{}', 'src/app.ts': '' }, provider);
 		await search.fileSearch({ ...query, cacheKey: 'quick-open', filePattern: 'package' });
 		const firstListings = listings;
-		const cached = await search.fileSearch({ ...query, cacheKey: 'quick-open', filePattern: 'app' });
+		const cached = await search.fileSearch({ ...query, cacheKey: 'quick-open', filePattern: 'app', sortByScore: true });
 		const reused = listings === firstListings;
 		await search.clearCache('quick-open');
 		await search.fileSearch({ ...query, cacheKey: 'quick-open', filePattern: 'app' });
 
-		assert.deepStrictEqual({ reused, refreshed: listings > firstListings, files: cached.results.map(match => match.resource.path.slice(root.path.length + 1)) }, {
+		assert.deepStrictEqual({ reused, refreshed: listings > firstListings, files: cached.results.slice(0, 1).map(match => match.resource.path.slice(root.path.length + 1)) }, {
 			reused: true, refreshed: true, files: ['src/app.ts'],
 		});
 	});

@@ -236,7 +236,8 @@ export class PromptToolsCodeLensProvider extends Disposable implements CodeLensP
 					picker.setItemTree([allTools, ...groups.values()]);
 					return;
 				}
-				const matches = (text: string | undefined) => !!text && !!matchesFuzzy(query, text);
+				// Classic matching: the picker only filters, without ranking the best matches first, which partial matching needs
+				const matches = (text: string | undefined) => !!text && !!matchesFuzzy(query, text, false, 'classic');
 				const filteredGroups = [...groups.values()].flatMap(group => {
 					const children = matches(group.label) ? group.children : group.children.filter(item => matches(item.id) || matches(item.description));
 					return children.length ? [{ ...group, children }] : [];

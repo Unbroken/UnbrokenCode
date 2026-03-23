@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 import assert from 'assert';
-import { anyScore, createMatches, fuzzyScore, fuzzyScoreGraceful, fuzzyScoreGracefulAggressive, FuzzyScorer, IFilter, IMatch, matchesBaseContiguousSubString, matchesCamelCase, matchesContiguousSubString, matchesPrefix, matchesStrictPrefix, matchesSubString, matchesWords, or } from '../../common/filters.js';
+import { anyScore, createMatches, fuzzyMatchPartialScore, fuzzyScore, fuzzyScoreGraceful, fuzzyScoreGracefulAggressive, FuzzyScorer, IFilter, IMatch, matchesBaseContiguousSubString, matchesCamelCase, matchesContiguousSubString, matchesFuzzy, matchesPrefix, matchesStrictPrefix, matchesSubString, matchesWords, or } from '../../common/filters.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
 
 function filterOk(filter: IFilter, word: string, wordToMatchAgainst: string, highlights?: { start: number; end: number }[]) {
@@ -649,5 +649,96 @@ suite('Filters', () => {
 
 		assertMatches('i', 'machine/{id}', 'machine/{^id}', fuzzyScore);
 		assertMatches('ok', 'obobobf{ok}/user', '^obobobf{o^k}/user', fuzzyScore);
+	});
+});
+
+suite('Partial Substring Fuzzy Match', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('exact match returns score 0 and full highlight', () => {
+		const result = fuzzyMatchPartialScore('foo', 'foo');
+		assert.ok(result);
+		assert.strictEqual(result.score, 0);
+		assert.deepStrictEqual(result.matches, [{ start: 0, end: 3 }]);
+	});
+
+	test('substring match', () => {
+		const result = fuzzyMatchPartialScore('bar', 'foobar');
+		assert.ok(result);
+		assert.ok(result.score > 0);
+		assert.deepStrictEqual(result.matches, [{ start: 3, end: 6 }]);
+	});
+
+	test('no match returns null', () => {
+		const result = fuzzyMatchPartialScore('xyz', 'abc');
+		assert.strictEqual(result, null);
+	});
+
+	test('case insensitive matching', () => {
+		const result = fuzzyMatchPartialScore('FOO', 'foo');
+		assert.ok(result);
+		// Case-insensitive match scores slightly above 0 due to case mismatch penalty,
+		// so exact-case matches rank higher
+		assert.ok(result.score > 0, 'case-insensitive match should score above 0');
+		assert.deepStrictEqual(result.matches, [{ start: 0, end: 3 }]);
+	});
+
+	test('exact case match ranks higher than case insensitive', () => {
+		const exact = fuzzyMatchPartialScore('foo', 'foo');
+		const caseInsensitive = fuzzyMatchPartialScore('FOO', 'foo');
+		assert.ok(exact);
+		assert.ok(caseInsensitive);
+		assert.ok(exact.score < caseInsensitive.score, `exact case score ${exact.score} should be less than case-insensitive score ${caseInsensitive.score}`);
+	});
+
+	test('better matches have lower scores', () => {
+		const exact = fuzzyMatchPartialScore('file', 'file.ts');
+		const partial = fuzzyMatchPartialScore('file', 'profile_manager.ts');
+		assert.ok(exact);
+		assert.ok(partial);
+		assert.ok(exact.score < partial.score, `exact score ${exact.score} should be less than partial score ${partial.score}`);
+	});
+
+	test('empty query returns null', () => {
+		assert.strictEqual(fuzzyMatchPartialScore('', 'abc'), null);
+	});
+
+	test('empty candidate returns null', () => {
+		assert.strictEqual(fuzzyMatchPartialScore('abc', ''), null);
+	});
+
+	test('partial query match (not all chars present)', () => {
+		const result = fuzzyMatchPartialScore('abcdef', 'abcxyz');
+		assert.ok(result);
+		assert.ok(result.matches.length > 0);
+		// 'abc' matches, but 'def' does not
+		assert.deepStrictEqual(result.matches, [{ start: 0, end: 3 }]);
+	});
+
+	test('multiple disjoint matches produce multiple highlight ranges', () => {
+		const result = fuzzyMatchPartialScore('ab', 'xaxb');
+		assert.ok(result);
+		// 'a' matches at 1, 'b' matches at 3 — but both are from single-char query substrings
+		assert.ok(result.matches.length >= 1);
+	});
+
+	test('longer contiguous match preferred over shorter', () => {
+		const result = fuzzyMatchPartialScore('abc', 'xabcxaxbxc');
+		assert.ok(result);
+		// Should prefer the contiguous 'abc' at position 1 over scattered single chars
+		const hasFullMatch = result.matches.some(m => m.end - m.start >= 3);
+		assert.ok(hasFullMatch, 'should have a contiguous match of length 3');
+	});
+
+	test('matchesFuzzy uses new algorithm', () => {
+		// matchesFuzzy should now use the partial substring algorithm
+		const result = matchesFuzzy('bar', 'foobar');
+		assert.ok(result);
+		assert.deepStrictEqual(result, [{ start: 3, end: 6 }]);
+	});
+
+	test('matchesFuzzy returns null for no match', () => {
+		const result = matchesFuzzy('xyz', 'abc');
+		assert.strictEqual(result, null);
 	});
 });

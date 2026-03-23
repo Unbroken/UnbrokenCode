@@ -317,8 +317,10 @@ suite('AnythingQuickAccess - links', () => {
 		const delegated = provider.getPicks('https://example.com', {
 			fileSearchDelegate: { search: async () => ({ results: [], messages: [] }) }
 		});
-		assert.deepStrictEqual({ filesOnly, delegatedIsFileSearch: !Array.isArray(delegated) }, {
-			filesOnly: [],
+		// File picks may partially match the link's text, what matters is that there's no link action
+		const filesOnlyLinkPicks = Array.isArray(filesOnly) ? filesOnly.filter(pick => pick.label?.includes('$(link-external)')) : filesOnly;
+		assert.deepStrictEqual({ filesOnlyLinkPicks, delegatedIsFileSearch: !Array.isArray(delegated) }, {
+			filesOnlyLinkPicks: [],
 			delegatedIsFileSearch: true
 		});
 	});

@@ -986,11 +986,11 @@ suite('Sessions - Editor Contribution', () => {
 		).map(row => row.textContent);
 		const queryCountBeforeMultiTerm = queries.length;
 		(activePicker as IQuickPick<IQuickPickItem, { useSeparators: true }>).value = 'app test';
+		// Fuzzy matching also matches partially, so the best match has to come first
+		const firstRow = () => picker.querySelector<HTMLElement>('.quick-input-list .monaco-list-row[data-index="0"]');
 		await waitForCondition(onDidShowResults, () => queries.length > queryCountBeforeMultiTerm
-			&& picker.querySelectorAll('.quick-input-list .monaco-list-row').length === 1);
-		const multiTermRows = Array.from(
-			picker.querySelectorAll<HTMLElement>('.quick-input-list .monaco-list-row')
-		).map(row => row.textContent);
+			&& !!firstRow()?.textContent?.startsWith('app.test.ts'));
+		const multiTermRows = [firstRow()?.textContent];
 		(activePicker as IQuickPick<IQuickPickItem, { useSeparators: true }>).accept();
 		await waitForCondition(onDidOpen.event, () => opened.length === 2);
 		const onDidHidePicker = (activePicker as IQuickPick<IQuickPickItem, { useSeparators: true }>).onDidHide;

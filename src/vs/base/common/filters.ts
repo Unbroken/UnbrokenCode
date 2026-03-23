@@ -19,6 +19,17 @@ export interface IMatch {
 	end: number;
 }
 
+export interface IFuzzyMatchResult {
+	matches: IMatch[];
+	score: number; // 0.0 = perfect match, ~1.0 = worst match
+}
+
+/**
+ * Selects between the classic (regex + filter chain) and the fuzzyPartial
+ * (substring overlap) fuzzy matching algorithm.
+ */
+export type FuzzyMatchAlgorithm = 'classic' | 'fuzzyPartial';
+
 // Combined filters
 
 /**
@@ -452,15 +463,360 @@ function nextWord(word: string, start: number): number {
 
 // Fuzzy
 
+//#region --- fuzzyMatchPartial ---
+
+/**
+ * Fast Latin-aware lowercase for a single char code. Handles ASCII A-Z and
+ * Latin-1 Supplement (U+00C0-U+00DE, excluding U+00D7 multiplication sign).
+ */
+function charLowerCase(ch: number): number {
+	if (ch >= 0x41 && ch <= 0x5A) { // A-Z
+		return ch + 0x20;
+	}
+	if (ch >= 0xC0 && ch <= 0xDE && ch !== 0xD7) {
+		return ch + 0x20;
+	}
+	return ch;
+}
+
+const FUZZY_UNSET = -1;
+
+const WEIGHT_UNMATCHED_QUERY = 0.5;
+const WEIGHT_UNMATCHED = 0.1;
+const WEIGHT_MATCH_PERCENT = 1.0 - (WEIGHT_UNMATCHED_QUERY + WEIGHT_UNMATCHED);
+
+// Reusable per-character head index for query positions. Maps each lowercase
+// char code to the first query position with that char. Reused across calls
+// to avoid allocation. Only valid char codes (0-65535) are used; tracked
+// entries are reset per call.
+const _queryHead = new Int32Array(65536).fill(FUZZY_UNSET);
+const _queryHeadUsed = new Uint16Array(65536);
+let _queryHeadUsedLen = 0;
+
+/**
+ * Build a result for a contiguous match (entire query matches at one candidate position).
+ * Avoids the full matching pipeline for this common fast path.
+ */
+function buildContiguousMatchResult(candidateLen: number, queryLen: number, iStart: number, nCaseMismatches: number): IFuzzyMatchResult {
+	const matchedPercentQuery = nCaseMismatches * 0.5 / (queryLen * queryLen);
+	const unmatchedPercent = (candidateLen - queryLen) / candidateLen;
+
+	const score =
+		matchedPercentQuery * WEIGHT_MATCH_PERCENT
+		+ unmatchedPercent * WEIGHT_UNMATCHED;
+
+	return {
+		score,
+		matches: [{ start: iStart, end: iStart + queryLen }]
+	};
+}
+
+/**
+ * Fuzzy match using partial substring matching. Generates contiguous match runs
+ * for every candidate position whose character appears in the query, then resolves
+ * the runs into a non-overlapping selection by processing them from longest to
+ * shortest (and from fewest to most case mismatches within a length bucket).
+ * Produces both match positions (for highlighting) and a composite score (for sorting).
+ *
+ * @returns null if no query characters match at all, otherwise { score, matches }
+ *          where score is 0.0 (perfect) to ~1.0 (worst).
+ */
+export function fuzzyMatchPartialScore(query: string, candidate: string): IFuzzyMatchResult | null {
+	if (!query || !candidate) {
+		return null;
+	}
+
+	const candidateLen = candidate.length;
+	const queryLen = query.length;
+
+	// Pre-compute lowercase for both strings to avoid repeated charLowerCase calls
+	const lowerCandidate = new Uint16Array(candidateLen);
+	const lowerQuery = new Uint16Array(queryLen);
+
+	for (let i = 0; i < queryLen; i++) {
+		lowerQuery[i] = charLowerCase(query.charCodeAt(i));
+	}
+
+	let caseInsensitiveExact = candidateLen === queryLen;
+	let nExactCaseMismatches = 0;
+
+	for (let i = 0; i < candidateLen; i++) {
+		lowerCandidate[i] = charLowerCase(candidate.charCodeAt(i));
+		if (i < queryLen) {
+			if (candidate.charCodeAt(i) !== query.charCodeAt(i)) {
+				nExactCaseMismatches++;
+			}
+			if (lowerCandidate[i] !== lowerQuery[i]) {
+				caseInsensitiveExact = false;
+			}
+		}
+	}
+
+	if (caseInsensitiveExact) {
+		return buildContiguousMatchResult(candidateLen, queryLen, 0, nExactCaseMismatches);
+	}
+
+	// Best contiguous full-query match: scan all positions, return immediately on
+	// an exact-case match, otherwise keep the position with the fewest mismatches.
+	if (candidateLen > queryLen) {
+		let bestContiguous = FUZZY_UNSET;
+		let bestContiguousMismatches = queryLen + 1;
+		for (let iStart = 0; iStart <= candidateLen - queryLen; iStart++) {
+			if (lowerCandidate[iStart] !== lowerQuery[0]) {
+				continue;
+			}
+
+			let found = 1;
+			while (found < queryLen && lowerCandidate[iStart + found] === lowerQuery[found]) {
+				found++;
+			}
+
+			if (found !== queryLen) {
+				continue;
+			}
+
+			let nMismatches = 0;
+			for (let i = 0; i < queryLen; i++) {
+				if (candidate.charCodeAt(iStart + i) !== query.charCodeAt(i)) {
+					nMismatches++;
+				}
+			}
+
+			if (nMismatches === 0) {
+				return buildContiguousMatchResult(candidateLen, queryLen, iStart, 0);
+			}
+
+			if (nMismatches < bestContiguousMismatches) {
+				bestContiguous = iStart;
+				bestContiguousMismatches = nMismatches;
+			}
+		}
+
+		if (bestContiguous !== FUZZY_UNSET) {
+			return buildContiguousMatchResult(candidateLen, queryLen, bestContiguous, bestContiguousMismatches);
+		}
+	}
+
+	// Build query character position index: linked list per lowercase character.
+	// _queryHead[ch] = first query position with that lowercase char;
+	// queryNext[i] = next query position with the same char.
+	for (let u = 0; u < _queryHeadUsedLen; u++) {
+		_queryHead[_queryHeadUsed[u]] = FUZZY_UNSET;
+	}
+	_queryHeadUsedLen = 0;
+
+	const queryNext = new Int32Array(queryLen);
+	for (let iQuery = queryLen - 1; iQuery >= 0; iQuery--) {
+		const ch = lowerQuery[iQuery];
+		queryNext[iQuery] = _queryHead[ch];
+		if (_queryHead[ch] === FUZZY_UNSET) { _queryHeadUsed[_queryHeadUsedLen++] = ch; }
+		_queryHead[ch] = iQuery;
+	}
+
+	// Early exit: if no candidate character exists in the query, no match is possible
+	let anyCandidateCharExists = false;
+	for (let iCandidate = 0; iCandidate < candidateLen; iCandidate++) {
+		if (_queryHead[lowerCandidate[iCandidate]] !== FUZZY_UNSET) {
+			anyCandidateCharExists = true;
+			break;
+		}
+	}
+	if (!anyCandidateCharExists) {
+		return null;
+	}
+
+	// Match runs storage (parallel arrays). Buckets index runs by
+	// [nMatched][nCaseMismatches] as a linked list.
+	const runMatched: number[] = [];
+	const runIQuery: number[] = [];
+	const runICandidate: number[] = [];
+	const runNextRun: number[] = [];
+
+	const bucketStride = queryLen + 1;
+	const bucketLen = bucketStride * bucketStride;
+	const bucketHeads = new Int32Array(bucketLen).fill(FUZZY_UNSET);
+	const bucketTails = new Int32Array(bucketLen).fill(FUZZY_UNSET);
+
+	const addMatchRun = (iCandidate: number, iQuery: number, nMatched: number, nCaseMismatches: number) => {
+		const iBucket = nMatched * bucketStride + nCaseMismatches;
+		const iRun = runMatched.length;
+		runMatched.push(nMatched);
+		runIQuery.push(iQuery);
+		runICandidate.push(iCandidate);
+		runNextRun.push(FUZZY_UNSET);
+
+		if (bucketHeads[iBucket] === FUZZY_UNSET) {
+			bucketHeads[iBucket] = iRun;
+		} else {
+			runNextRun[bucketTails[iBucket]] = iRun;
+		}
+		bucketTails[iBucket] = iRun;
+	};
+
+	// Generate initial match runs: for each candidate position, find every query
+	// position with the same lowercase char and extend the match as far as it goes.
+	for (let iStart = 0; iStart < candidateLen; iStart++) {
+		let iQueryPos = _queryHead[lowerCandidate[iStart]];
+		while (iQueryPos !== FUZZY_UNSET) {
+			const maxExtent = Math.min(candidateLen - iStart, queryLen - iQueryPos);
+			let found = 1;
+			while (found < maxExtent && lowerCandidate[iStart + found] === lowerQuery[iQueryPos + found]) {
+				found++;
+			}
+
+			let nCaseMismatches = 0;
+			for (let iOffset = 0; iOffset < found; iOffset++) {
+				if (candidate.charCodeAt(iStart + iOffset) !== query.charCodeAt(iQueryPos + iOffset)) {
+					nCaseMismatches++;
+				}
+			}
+
+			addMatchRun(iStart, iQueryPos, found, nCaseMismatches);
+
+			// Also add the leading single-char match as a fallback in case the
+			// longer run is preempted by an overlapping higher-priority run.
+			if (found > 1) {
+				addMatchRun(iStart, iQueryPos, 1, candidate.charCodeAt(iStart) !== query.charCodeAt(iQueryPos) ? 1 : 0);
+			}
+
+			iQueryPos = queryNext[iQueryPos];
+		}
+	}
+
+	// Phase 3: Resolve unordered, non-overlapping runs into per-query-position
+	// matchings by processing buckets from largest nMatched down to 1, and within
+	// each length from fewest to most case mismatches.
+	const qNMatched = new Int32Array(queryLen);
+	const qIQuery = new Int32Array(queryLen);
+	const qICandidate = new Int32Array(queryLen);
+
+	const candidateUsed = new Uint8Array(candidateLen);
+	const queryUsed = new Uint8Array(queryLen);
+
+	const selectedRunIndices: number[] = [];
+
+	for (let nMatched = queryLen; nMatched > 0; nMatched--) {
+		for (let nCaseMismatches = 0; nCaseMismatches <= nMatched; nCaseMismatches++) {
+			let iRun = bucketHeads[nMatched * bucketStride + nCaseMismatches];
+			while (iRun !== FUZZY_UNSET) {
+				const iNextRun = runNextRun[iRun];
+				const myMatched = runMatched[iRun];
+				const myICandidate = runICandidate[iRun];
+				const myIQuery = runIQuery[iRun];
+				let iOffset = 0;
+				while (iOffset < myMatched) {
+					// Skip already-used positions
+					while (iOffset < myMatched && (candidateUsed[myICandidate + iOffset] || queryUsed[myIQuery + iOffset])) {
+						iOffset++;
+					}
+
+					const iStartOffset = iOffset;
+					let nSegmentCaseMismatches = 0;
+					while (iOffset < myMatched && !candidateUsed[myICandidate + iOffset] && !queryUsed[myIQuery + iOffset]) {
+						if (candidate.charCodeAt(myICandidate + iOffset) !== query.charCodeAt(myIQuery + iOffset)) {
+							nSegmentCaseMismatches++;
+						}
+						iOffset++;
+					}
+
+					const nSegmentMatched = iOffset - iStartOffset;
+					if (nSegmentMatched === 0) {
+						continue;
+					}
+
+					if (nSegmentMatched === myMatched) {
+						// Accept the whole run
+						selectedRunIndices.push(iRun);
+						for (let i = 0; i < myMatched; i++) {
+							candidateUsed[myICandidate + i] = 1;
+							queryUsed[myIQuery + i] = 1;
+							qNMatched[myIQuery + i] = myMatched;
+							qIQuery[myIQuery + i] = myIQuery;
+							qICandidate[myIQuery + i] = myICandidate;
+						}
+					} else {
+						// Re-queue the surviving segment into a smaller bucket
+						addMatchRun(myICandidate + iStartOffset, myIQuery + iStartOffset, nSegmentMatched, nSegmentCaseMismatches);
+					}
+				}
+				iRun = iNextRun;
+			}
+		}
+	}
+
+	// Phase 4: Count unmatched and compute penalty
+	let nUnmatchedQuery = 0;
+	let matchPenalty = 0;
+	for (let iQuery = 0; iQuery < queryLen; iQuery++) {
+		if (qNMatched[iQuery] === 0) {
+			nUnmatchedQuery++;
+			matchPenalty += queryLen;
+		} else {
+			const candidatePos = qICandidate[iQuery] + (iQuery - qIQuery[iQuery]);
+			matchPenalty += queryLen - qNMatched[iQuery];
+			if (candidate.charCodeAt(candidatePos) !== query.charCodeAt(iQuery)) {
+				matchPenalty += 0.5;
+			}
+		}
+	}
+
+	if (nUnmatchedQuery === queryLen) {
+		return null;
+	}
+
+	// Build match ranges from selected runs, sorted by candidate position.
+	selectedRunIndices.sort((a, b) => {
+		const ca = runICandidate[a];
+		const cb = runICandidate[b];
+		if (ca !== cb) {
+			return ca - cb;
+		}
+		return runIQuery[a] - runIQuery[b];
+	});
+
+	let nMatched = 0;
+	const matches: IMatch[] = [];
+	for (let i = 0; i < selectedRunIndices.length; i++) {
+		const iRun = selectedRunIndices[i];
+		const start = runICandidate[iRun];
+		const end = start + runMatched[iRun];
+		matches.push({ start, end });
+		nMatched += runMatched[iRun];
+	}
+
+	// Compute composite score
+	const matchedPercentQuery = matchPenalty / (queryLen * queryLen);
+	const unmatchedPercent = (candidateLen - nMatched) / candidateLen;
+	const unmatchedPercentQuery = nUnmatchedQuery / queryLen;
+
+	const score =
+		matchedPercentQuery * WEIGHT_MATCH_PERCENT
+		+ unmatchedPercent * WEIGHT_UNMATCHED
+		+ unmatchedPercentQuery * WEIGHT_UNMATCHED_QUERY;
+
+	return { score, matches };
+}
+
+/**
+ * Fuzzy match with score using the partial substring matching algorithm.
+ * Returns both match positions (for highlighting) and a score (for sorting).
+ */
+export function matchesFuzzyWithScore(word: string, wordToMatchAgainst: string): IFuzzyMatchResult | null {
+	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
+		return null;
+	}
+	return fuzzyMatchPartialScore(word, wordToMatchAgainst);
+}
+
+//#endregion
+
+//#region --- matchesFuzzyClassic ---
+
 const fuzzyContiguousFilter = or(matchesPrefix, matchesCamelCase, matchesContiguousSubString);
 const fuzzySeparateFilter = or(matchesPrefix, matchesCamelCase, matchesSubString);
 const fuzzyRegExpCache = new LRUCache<string, RegExp>(10000); // bounded to 10000 elements
 
-export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching = false): IMatch[] | null {
-	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
-		return null; // return early for invalid input
-	}
-
+function matchesFuzzyClassic(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching: boolean): IMatch[] | null {
 	// Form RegExp for wildcard matches
 	let regexp = fuzzyRegExpCache.get(word);
 	if (!regexp) {
@@ -476,6 +832,21 @@ export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSep
 
 	// Default Filter
 	return enableSeparateSubstringMatching ? fuzzySeparateFilter(word, wordToMatchAgainst) : fuzzyContiguousFilter(word, wordToMatchAgainst);
+}
+
+//#endregion
+
+export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching = false, algorithm: FuzzyMatchAlgorithm = 'fuzzyPartial'): IMatch[] | null {
+	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
+		return null; // return early for invalid input
+	}
+
+	if (algorithm === 'classic') {
+		return matchesFuzzyClassic(word, wordToMatchAgainst, enableSeparateSubstringMatching);
+	}
+
+	const result = fuzzyMatchPartialScore(word, wordToMatchAgainst);
+	return result ? result.matches : null;
 }
 
 /**

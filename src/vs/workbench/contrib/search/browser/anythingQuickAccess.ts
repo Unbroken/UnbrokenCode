@@ -6,7 +6,7 @@
 import './media/anythingQuickAccess.css';
 import { IQuickInputButton, IKeyMods, quickPickItemScorerAccessor, QuickPickItemScorerAccessor, IQuickPick, IQuickPickItemWithResource, QuickInputHideReason, IQuickInputService, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IPickerQuickAccessItem, PickerQuickAccessProvider, TriggerAction, FastAndSlowPicks, Picks, PicksWithActive } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
-import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache } from '../../../../base/common/fuzzyScorer.js';
+import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache, type FuzzyMatchAlgorithm } from '../../../../base/common/fuzzyScorer.js';
 import { IFileQueryBuilderOptions, QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getOutOfWorkspaceEditorResources, extractRangeFromFilter, IWorkbenchSearchConfiguration } from '../common/search.js';
@@ -59,7 +59,9 @@ import { IQuickChatService } from '../../chat/browser/chat.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ICustomEditorLabelService } from '../../../services/editor/common/customEditorLabelService.js';
 
-interface IAnythingQuickPickItem extends IPickerQuickAccessItem, IQuickPickItemWithResource { }
+interface IAnythingQuickPickItem extends IPickerQuickAccessItem, IQuickPickItemWithResource {
+	fuzzyScore?: number;
+}
 
 interface IEditorSymbolAnythingQuickPickItem extends IAnythingQuickPickItem {
 	resource: URI;
@@ -215,6 +217,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			includeSymbols: searchConfig?.quickOpen.includeSymbols,
 			includeHistory: searchConfig?.quickOpen.includeHistory,
 			historyFilterSortOrder: searchConfig?.quickOpen.history.filterSortOrder,
+			fuzzyMatchAlgorithm: (this.configurationService.getValue<string>('workbench.list.defaultFuzzyMatchType') === 'classic' ? 'classic' : 'fuzzyPartial') as FuzzyMatchAlgorithm,
 			preserveInput: quickAccessConfig.preserveInput
 		};
 	}
@@ -385,7 +388,8 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					picks.push(pick);
 					continue;
 				}
-				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(pick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache);
+				const algorithm = this.configuration.fuzzyMatchAlgorithm;
+				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(pick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm);
 				if (!score) {
 					continue;
 				}
@@ -393,6 +397,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					label: labelMatch,
 					description: descriptionMatch
 				};
+				(pick as IAnythingQuickPickItem).fuzzyScore = score;
 				picks.push(pick);
 			}
 		}
@@ -408,6 +413,24 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			if (historyEditorPicks.length !== 0) {
 				picks.push({ type: 'separator', label: localize('recentlyOpenedSeparator', "recently opened") } satisfies IQuickPickSeparator);
 				picks.push(...historyEditorPicks);
+			}
+		}
+
+		// Filter picks: only show items within 0.2 of the best score (partial algorithm only)
+		if (this.configuration.fuzzyMatchAlgorithm === 'fuzzyPartial' && query.normalized) {
+			let bestScore = 0;
+			for (const p of picks) {
+				const s = (p as IAnythingQuickPickItem).fuzzyScore;
+				if (s !== undefined && s > bestScore) {
+					bestScore = s;
+				}
+			}
+			if (bestScore > 0) {
+				const threshold = bestScore - 0.2;
+				picks = picks.filter(p => {
+					const s = (p as IAnythingQuickPickItem).fuzzyScore;
+					return s === undefined || s >= threshold;
+				});
 			}
 		}
 
@@ -435,6 +458,23 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					return [];
 				}
 
+				// Apply score threshold: only show items within 0.2 of the best score (partial algorithm only)
+				if (this.configuration.fuzzyMatchAlgorithm === 'fuzzyPartial' && query.normalized) {
+					let bestScore = 0;
+					for (const p of historyEditorPicks) {
+						if (p.fuzzyScore !== undefined && p.fuzzyScore > bestScore) {
+							bestScore = p.fuzzyScore;
+						}
+					}
+					for (const p of additionalPicks) {
+						if (p.fuzzyScore !== undefined && p.fuzzyScore > bestScore) {
+							bestScore = p.fuzzyScore;
+						}
+					}
+					const threshold = bestScore - 0.2;
+					additionalPicks = additionalPicks.filter(p => p.fuzzyScore === undefined || p.fuzzyScore >= threshold);
+				}
+
 				return additionalPicks.length > 0 ? [
 					{ type: 'separator', label: this.configuration.includeSymbols ? localize('fileAndSymbolResultsSeparator', "file and symbol results") : localize('fileResultsSeparator', "file results") },
 					...additionalPicks
@@ -458,10 +498,12 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			return [];
 		}
 
+		const algorithm = this.configuration.fuzzyMatchAlgorithm;
+
 		// Perform sorting (top results by score)
 		const sortedAnythingPicks = top(
 			[...filePicks, ...symbolPicks],
-			(anyPickA, anyPickB) => compareItemsByFuzzyScore(anyPickA, anyPickB, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache),
+			(anyPickA, anyPickB) => compareItemsByFuzzyScore(anyPickA, anyPickB, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm),
 			AnythingQuickAccessProvider.MAX_RESULTS
 		);
 
@@ -476,7 +518,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 
 			// Otherwise, do the scoring and matching here
 			else {
-				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(anythingPick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache);
+				const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(anythingPick, query, true, quickPickItemScorerAccessor, this.pickState.scorerCache, algorithm);
 				if (!score) {
 					continue;
 				}
@@ -485,6 +527,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 					label: labelMatch,
 					description: descriptionMatch
 				};
+				anythingPick.fuzzyScore = score;
 
 				filteredAnythingPicks.push(anythingPick);
 			}
@@ -511,6 +554,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 		}
 
 		// Perform filtering
+		const algorithm = this.configuration.fuzzyMatchAlgorithm;
 		const editorHistoryScorerAccessor = query.containsPathSeparator ? quickPickItemScorerAccessor : this.labelOnlyEditorHistoryPickAccessor; // Only match on label of the editor unless the search includes path separators
 		const editorHistoryPicks: Array<IAnythingQuickPickItem> = [];
 		for (const editor of this.historyService.getHistory()) {
@@ -521,7 +565,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 
 			const editorHistoryPick = this.createAnythingPick(editor, configuration);
 
-			const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(editorHistoryPick, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache);
+			const { score, labelMatch, descriptionMatch } = scoreItemFuzzy(editorHistoryPick, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache, algorithm);
 			if (!score) {
 				continue; // exclude editors not matching query
 			}
@@ -530,6 +574,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 				label: labelMatch,
 				description: descriptionMatch
 			};
+			editorHistoryPick.fuzzyScore = score;
 
 			editorHistoryPicks.push(editorHistoryPick);
 		}
@@ -540,7 +585,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 		}
 
 		// Perform sorting
-		return editorHistoryPicks.sort((editorA, editorB) => compareItemsByFuzzyScore(editorA, editorB, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache));
+		return editorHistoryPicks.sort((editorA, editorB) => compareItemsByFuzzyScore(editorA, editorB, query, false, editorHistoryScorerAccessor, this.pickState.scorerCache, algorithm));
 	}
 
 	//#endregion

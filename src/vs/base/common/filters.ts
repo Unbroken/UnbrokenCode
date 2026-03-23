@@ -19,6 +19,17 @@ export interface IMatch {
 	end: number;
 }
 
+export interface IFuzzyMatchResult {
+	matches: IMatch[];
+	score: number; // 0.0 = perfect match, ~1.0 = worst match
+}
+
+/**
+ * Selects between the classic (regex + filter chain) and the fuzzyPartial
+ * (substring overlap) fuzzy matching algorithm.
+ */
+export type FuzzyMatchAlgorithm = 'classic' | 'fuzzyPartial';
+
 // Combined filters
 
 /**
@@ -421,15 +432,263 @@ function nextWord(word: string, start: number): number {
 
 // Fuzzy
 
+//#region --- fuzzyMatchPartial ---
+
+interface IFuzzyMatching {
+	matchId: number;
+	nMatched: number;
+	iSource: number;
+	iMatch: number;
+}
+
+/**
+ * Fast Latin-aware lowercase for a single char code. Handles ASCII A-Z and
+ * Latin-1 Supplement (U+00C0-U+00DE, excluding U+00D7 multiplication sign).
+ */
+function charLowerCase(ch: number): number {
+	if (ch >= 0x41 && ch <= 0x5A) { // A-Z
+		return ch + 0x20;
+	}
+	if (ch >= 0xC0 && ch <= 0xDE && ch !== 0xD7) {
+		return ch + 0x20;
+	}
+	return ch;
+}
+
+/**
+ * Find the first position in str1 where a contiguous prefix of str2 matches (case-insensitive).
+ * Returns the index in str1 where the match starts and how many characters matched.
+ * Returns { index: -1, found: 0 } if no match is found.
+ */
+function strFindPartial(str1: string, str1Start: number, str2: string, str2Start: number): { index: number; found: number } {
+	const str1Len = str1.length;
+	const str2Len = str2.length;
+
+	for (let i = str1Start; i < str1Len; i++) {
+		let j = str2Start;
+		let k = i;
+		while (k < str1Len && j < str2Len) {
+			if (charLowerCase(str1.charCodeAt(k)) !== charLowerCase(str2.charCodeAt(j))) {
+				if (j !== str2Start) {
+					return { index: i - str1Start, found: j - str2Start };
+				}
+				break;
+			}
+			k++;
+			j++;
+			if (j >= str2Len) {
+				return { index: i - str1Start, found: j - str2Start };
+			}
+		}
+		if (k >= str1Len && j !== str2Start) {
+			return { index: i - str1Start, found: j - str2Start };
+		}
+	}
+	return { index: -1, found: 0 };
+}
+
+function createEmptyMatching(): IFuzzyMatching {
+	return { matchId: -1, nMatched: 0, iSource: -1, iMatch: -1 };
+}
+
+/**
+ * Fuzzy match using partial substring matching. For each starting position in the query,
+ * finds all positions in the candidate where a contiguous prefix of the remaining query
+ * matches. Resolves overlapping matches by preferring longer ones. Produces both match
+ * positions (for highlighting) and a composite score (for sorting).
+ *
+ * @returns null if no query characters match at all, otherwise { score, matches }
+ *          where score is 0.0 (perfect) to ~1.0 (worst).
+ */
+export function fuzzyMatchPartialScore(query: string, candidate: string): IFuzzyMatchResult | null {
+	if (!query || !candidate) {
+		return null;
+	}
+
+	const maxLen = candidate.length;
+	const nSource = query.length;
+
+	// Phase 1 & 2: Find partial matches and resolve conflicts in candidate space
+	const matchings: IFuzzyMatching[] = new Array(maxLen);
+	for (let i = 0; i < maxLen; i++) {
+		matchings[i] = createEmptyMatching();
+	}
+
+	let matchingId = -1;
+
+	for (let queryPos = 0; queryPos < nSource; queryPos++) {
+		let candidateOffset = 0;
+
+		let result = strFindPartial(candidate, candidateOffset, query, queryPos);
+		while (result.index >= 0 && result.found > 0) {
+			matchingId++;
+			const iStart = candidateOffset + result.index;
+			const found = result.found;
+
+			// Check if the new match is at least as large as all existing matches at those positions
+			let isLarger = true;
+			for (let i = 0; i < found; i++) {
+				if (found < matchings[iStart + i].nMatched) {
+					isLarger = false;
+					break;
+				}
+			}
+
+			if (isLarger) {
+				// Clear old matching that extends before the new match's start
+				const oldMatchIdBefore = matchings[iStart].matchId;
+				if (oldMatchIdBefore >= 0) {
+					for (let i = iStart - 1; i >= 0; i--) {
+						if (matchings[i].matchId !== oldMatchIdBefore) {
+							break;
+						}
+						matchings[i] = createEmptyMatching();
+					}
+				}
+
+				// Clear old matching that extends after the new match's end
+				const oldMatchIdAfter = matchings[iStart + found - 1].matchId;
+				if (oldMatchIdAfter >= 0) {
+					for (let i = iStart + found; i < maxLen; i++) {
+						if (matchings[i].matchId !== oldMatchIdAfter) {
+							break;
+						}
+						matchings[i] = createEmptyMatching();
+					}
+				}
+
+				// Record the new matching
+				for (let i = iStart; i < iStart + found; i++) {
+					matchings[i].matchId = matchingId;
+					matchings[i].nMatched = found;
+					matchings[i].iSource = queryPos;
+					matchings[i].iMatch = iStart;
+				}
+			}
+
+			candidateOffset = candidateOffset + result.index + 1;
+			result = strFindPartial(candidate, candidateOffset, query, queryPos);
+		}
+	}
+
+	// Phase 3: Build SourceMatchings (reverse mapping for query coverage)
+	const sourceMatchings: IFuzzyMatching[] = new Array(nSource);
+	for (let i = 0; i < nSource; i++) {
+		sourceMatchings[i] = createEmptyMatching();
+	}
+
+	let nUnmatched = 0;
+	let lastMatchId = -1;
+
+	for (let i = 0; i < maxLen; i++) {
+		const m = matchings[i];
+		if (m.nMatched === 0) {
+			nUnmatched++;
+		}
+		if (m.matchId !== lastMatchId && m.nMatched !== 0) {
+			const iStart = m.iSource;
+
+			for (let j = iStart; j < iStart + m.nMatched; j++) {
+				if (m.nMatched > sourceMatchings[j].nMatched) {
+					sourceMatchings[j] = { matchId: m.matchId, nMatched: m.nMatched, iSource: m.iSource, iMatch: m.iMatch };
+				}
+			}
+		}
+		lastMatchId = m.matchId;
+	}
+
+	let nUnmatchedSource = 0;
+	for (let i = 0; i < nSource; i++) {
+		if (sourceMatchings[i].nMatched === 0) {
+			nUnmatchedSource++;
+		}
+	}
+
+	// If no characters from the query matched at all, return null
+	if (nUnmatchedSource === nSource) {
+		return null;
+	}
+
+
+	// Phase 4: Convert source matchings to IMatch[] ranges in candidate space.
+	// Each matched source position maps to a candidate position via iMatch + offset.
+	// Collect all matched candidate positions, sort, and merge into ranges.
+	const matchedPositions: number[] = [];
+	for (let si = 0; si < nSource; si++) {
+		const sm = sourceMatchings[si];
+		if (sm.nMatched > 0) {
+			// This source position maps to candidate position iMatch + (si - iSource)
+			matchedPositions.push(sm.iMatch + (si - sm.iSource));
+		}
+	}
+	matchedPositions.sort((a, b) => a - b);
+
+	let nMatched = 0;
+	// Merge consecutive positions into ranges
+	const matches: IMatch[] = [];
+	for (let pi = 0; pi < matchedPositions.length; pi++) {
+		const start = matchedPositions[pi];
+		let end = start + 1;
+		while (pi + 1 < matchedPositions.length && matchedPositions[pi + 1] <= end) {
+			end = matchedPositions[pi + 1] + 1;
+			pi++;
+		}
+		matches.push({ start, end });
+		nMatched += end - start;
+	}
+
+	// Phase 5: Compute composite score
+	let ret1 = 0;
+	for (let i = 0; i < nSource; i++) {
+		ret1 += nSource - sourceMatchings[i].nMatched;
+		// Penalize case mismatches: subtract half a match point when the
+		// character matched but in a different case, so exact-case matches
+		// rank higher.
+		if (sourceMatchings[i].nMatched > 0) {
+			const candidatePos = sourceMatchings[i].iMatch + (i - sourceMatchings[i].iSource);
+			if (candidate.charCodeAt(candidatePos) !== query.charCodeAt(i)) {
+				ret1 += 0.5;
+			}
+		}
+	}
+
+	//const matchedPercent = ret0 / (maxLen * maxLen);
+	const matchedPercentSource = ret1 / (nSource * nSource);
+	const unmatchedPercent = (maxLen - nMatched) / maxLen;
+	const unmatchedPercentSource = nUnmatchedSource / nSource;
+
+	const weightUnmatchedSource = 0.5;
+	const weightUnmatched = 0.1;
+	const weightMatchPercent = 1.0 - (weightUnmatchedSource + weightUnmatched);
+
+	const score =
+		matchedPercentSource * weightMatchPercent
+		+ unmatchedPercent * weightUnmatched
+		+ unmatchedPercentSource * weightUnmatchedSource;
+
+	return { score, matches };
+}
+
+/**
+ * Fuzzy match with score using the partial substring matching algorithm.
+ * Returns both match positions (for highlighting) and a score (for sorting).
+ */
+export function matchesFuzzyWithScore(word: string, wordToMatchAgainst: string): IFuzzyMatchResult | null {
+	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
+		return null;
+	}
+	return fuzzyMatchPartialScore(word, wordToMatchAgainst);
+}
+
+//#endregion
+
+//#region --- matchesFuzzyClassic ---
+
 const fuzzyContiguousFilter = or(matchesPrefix, matchesCamelCase, matchesContiguousSubString);
 const fuzzySeparateFilter = or(matchesPrefix, matchesCamelCase, matchesSubString);
 const fuzzyRegExpCache = new LRUCache<string, RegExp>(10000); // bounded to 10000 elements
 
-export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching = false): IMatch[] | null {
-	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
-		return null; // return early for invalid input
-	}
-
+function matchesFuzzyClassic(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching: boolean): IMatch[] | null {
 	// Form RegExp for wildcard matches
 	let regexp = fuzzyRegExpCache.get(word);
 	if (!regexp) {
@@ -445,6 +704,21 @@ export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSep
 
 	// Default Filter
 	return enableSeparateSubstringMatching ? fuzzySeparateFilter(word, wordToMatchAgainst) : fuzzyContiguousFilter(word, wordToMatchAgainst);
+}
+
+//#endregion
+
+export function matchesFuzzy(word: string, wordToMatchAgainst: string, enableSeparateSubstringMatching = false, algorithm: FuzzyMatchAlgorithm = 'fuzzyPartial'): IMatch[] | null {
+	if (typeof word !== 'string' || typeof wordToMatchAgainst !== 'string') {
+		return null; // return early for invalid input
+	}
+
+	if (algorithm === 'classic') {
+		return matchesFuzzyClassic(word, wordToMatchAgainst, enableSeparateSubstringMatching);
+	}
+
+	const result = fuzzyMatchPartialScore(word, wordToMatchAgainst);
+	return result ? result.matches : null;
 }
 
 /**

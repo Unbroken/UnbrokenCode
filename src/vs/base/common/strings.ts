@@ -934,6 +934,28 @@ export function fuzzyContains(target: string, query: string): boolean {
 	return true;
 }
 
+/**
+ * Returns true if any character from the query appears in the target (case-insensitive).
+ * This is a fast pre-filter compatible with the partial substring matching algorithm
+ * used by {@link fuzzyMatchPartialScore}.
+ */
+export function fuzzyContainsPartial(target: string, query: string): boolean {
+	if (!target || !query) {
+		return false;
+	}
+
+	const targetLower = target.toLowerCase();
+	const queryLower = query.toLowerCase();
+
+	for (let i = 0; i < queryLower.length; i++) {
+		if (targetLower.indexOf(queryLower[i]) >= 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 export function containsUppercaseCharacter(target: string, ignoreEscapedChars = false): boolean {
 	if (!target) {
 		return false;

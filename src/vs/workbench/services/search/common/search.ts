@@ -9,7 +9,7 @@ import * as glob from '../../../../base/common/glob.js';
 import { IDisposable } from '../../../../base/common/lifecycle.js';
 import * as objects from '../../../../base/common/objects.js';
 import * as extpath from '../../../../base/common/extpath.js';
-import { fuzzyContains, getNLines } from '../../../../base/common/strings.js';
+import { fuzzyContainsPartial, getNLines } from '../../../../base/common/strings.js';
 import { URI, UriComponents } from '../../../../base/common/uri.js';
 import { IFilesConfiguration } from '../../../../platform/files/common/files.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
@@ -650,7 +650,7 @@ export function isSerializedFileMatch(arg: ISerializedSearchProgressItem): arg i
 export function isFilePatternMatch(candidate: IRawFileMatch, filePatternToUse: string, fuzzy = true): boolean {
 	const pathToMatch = candidate.searchPath ? candidate.searchPath : candidate.relativePath;
 	return fuzzy ?
-		fuzzyContains(pathToMatch, filePatternToUse) :
+		fuzzyContainsPartial(pathToMatch, filePatternToUse) :
 		glob.match(filePatternToUse, pathToMatch);
 }
 

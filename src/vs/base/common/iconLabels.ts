@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IMatch, matchesFuzzy } from './filters.js';
+import { IFuzzyMatchResult, IMatch, matchesFuzzy, matchesFuzzyWithScore } from './filters.js';
 import { ltrim } from './strings.js';
 import { ThemeIcon } from './themables.js';
 
@@ -113,4 +113,32 @@ export function matchesFuzzyIconAware(query: string, target: IParsedLabelWithIco
 	}
 
 	return matches;
+}
+
+export function matchesFuzzyIconAwareWithScore(query: string, target: IParsedLabelWithIcons): IFuzzyMatchResult | null {
+	const { text, iconOffsets } = target;
+
+	// Return early if there are no icon markers in the word to match against
+	if (!iconOffsets || iconOffsets.length === 0) {
+		return matchesFuzzyWithScore(query, text);
+	}
+
+	// Trim the word to match against because it could have leading
+	// whitespace now if the word started with an icon
+	const wordToMatchAgainstWithoutIconsTrimmed = ltrim(text, ' ');
+	const leadingWhitespaceOffset = text.length - wordToMatchAgainstWithoutIconsTrimmed.length;
+
+	// match on value without icon
+	const result = matchesFuzzyWithScore(query, wordToMatchAgainstWithoutIconsTrimmed);
+
+	// Map matches back to offsets with icon and trimming
+	if (result) {
+		for (const match of result.matches) {
+			const iconOffset = iconOffsets[match.start + leadingWhitespaceOffset] /* icon offsets at index */ + leadingWhitespaceOffset /* overall leading whitespace offset */;
+			match.start += iconOffset;
+			match.end += iconOffset;
+		}
+	}
+
+	return result;
 }

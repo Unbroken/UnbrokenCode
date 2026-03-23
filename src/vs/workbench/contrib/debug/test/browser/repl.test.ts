@@ -289,43 +289,44 @@ suite('Debug - REPL', () => {
 			});
 		};
 
-		repl.appendToRepl(session, { output: 'first line\n', sev: severity.Info });
-		repl.appendToRepl(session, { output: 'second line\n', sev: severity.Info });
-		repl.appendToRepl(session, { output: 'third line\n', sev: severity.Info });
-		repl.appendToRepl(session, { output: 'fourth line\n', sev: severity.Info });
+		// The filter also matches partially, so these words share no letters
+		repl.appendToRepl(session, { output: 'aaa zzz\n', sev: severity.Info });
+		repl.appendToRepl(session, { output: 'bbb zzz\n', sev: severity.Info });
+		repl.appendToRepl(session, { output: 'ccc zzz\n', sev: severity.Info });
+		repl.appendToRepl(session, { output: 'ddd zzz\n', sev: severity.Info });
 
-		replFilter.filterQuery = 'first';
+		replFilter.filterQuery = 'aaa';
 		const r1 = getFilteredElements();
 		assert.strictEqual(r1.length, 1);
-		assert.strictEqual(r1[0].value, 'first line\n');
+		assert.strictEqual(r1[0].value, 'aaa zzz\n');
 
-		replFilter.filterQuery = '!first';
+		replFilter.filterQuery = '!aaa';
 		const r2 = getFilteredElements();
 		assert.strictEqual(r1.length, 1);
-		assert.strictEqual(r2[0].value, 'second line\n');
-		assert.strictEqual(r2[1].value, 'third line\n');
-		assert.strictEqual(r2[2].value, 'fourth line\n');
+		assert.strictEqual(r2[0].value, 'bbb zzz\n');
+		assert.strictEqual(r2[1].value, 'ccc zzz\n');
+		assert.strictEqual(r2[2].value, 'ddd zzz\n');
 
-		replFilter.filterQuery = 'first, line';
+		replFilter.filterQuery = 'aaa, zzz';
 		const r3 = getFilteredElements();
 		assert.strictEqual(r3.length, 4);
-		assert.strictEqual(r3[0].value, 'first line\n');
-		assert.strictEqual(r3[1].value, 'second line\n');
-		assert.strictEqual(r3[2].value, 'third line\n');
-		assert.strictEqual(r3[3].value, 'fourth line\n');
+		assert.strictEqual(r3[0].value, 'aaa zzz\n');
+		assert.strictEqual(r3[1].value, 'bbb zzz\n');
+		assert.strictEqual(r3[2].value, 'ccc zzz\n');
+		assert.strictEqual(r3[3].value, 'ddd zzz\n');
 
-		replFilter.filterQuery = 'line, !second';
+		replFilter.filterQuery = 'zzz, !bbb';
 		const r4 = getFilteredElements();
 		assert.strictEqual(r4.length, 3);
-		assert.strictEqual(r4[0].value, 'first line\n');
-		assert.strictEqual(r4[1].value, 'third line\n');
-		assert.strictEqual(r4[2].value, 'fourth line\n');
+		assert.strictEqual(r4[0].value, 'aaa zzz\n');
+		assert.strictEqual(r4[1].value, 'ccc zzz\n');
+		assert.strictEqual(r4[2].value, 'ddd zzz\n');
 
-		replFilter.filterQuery = '!second, line';
+		replFilter.filterQuery = '!bbb, zzz';
 		const r4_same = getFilteredElements();
 		assert.strictEqual(r4.length, r4_same.length);
 
-		replFilter.filterQuery = '!line';
+		replFilter.filterQuery = '!zzz';
 		const r5 = getFilteredElements();
 		assert.strictEqual(r5.length, 0);
 

@@ -253,7 +253,7 @@ suite('QuickInput', () => { // https://github.com/microsoft/vscode/issues/147543
 			const other = { label: 'hit two' };
 			picker.items = [
 				{ type: 'separator', label: 'Commands', buttons: [{ iconClass: 'codicon-add', tooltip: 'Add' }] },
-				{ label: 'hidden command' }, visible,
+				{ label: 'excluded command' }, visible,
 				{ type: 'separator', label: 'Other commands', buttons: [{ iconClass: 'codicon-add', tooltip: 'Add' }] },
 				other,
 			];
@@ -332,7 +332,7 @@ suite('QuickInput', () => { // https://github.com/microsoft/vscode/issues/147543
 		const picker = store.add(controller.createQuickPick({ useSeparators: true }));
 		const first = { label: 'hit one' };
 		const last = { label: 'hit two' };
-		picker.items = [{ label: 'hidden' }, first, { type: 'separator' }, last];
+		picker.items = [{ label: 'excluded' }, first, { type: 'separator' }, last];
 		picker.sortByLabel = false;
 		picker.value = 'hit';
 		picker.show();
@@ -410,11 +410,11 @@ suite('QuickInput', () => { // https://github.com/microsoft/vscode/issues/147543
 	test('filtering does not carry a section label across an unlabelled boundary', () => {
 		controller.layout({ height: 500, width: 600 }, 0);
 		const picker = store.add(controller.createQuickPick({ useSeparators: true }));
-		picker.items = [{ type: 'separator', label: 'A' }, { label: 'apple' }, { type: 'separator' }, { label: 'berry' }];
+		picker.items = [{ type: 'separator', label: 'A' }, { label: 'apple' }, { type: 'separator' }, { label: 'kiwi' }];
 		picker.sortByLabel = false;
 		picker.show();
 		const states: { query: string; active: string[]; sections: (string | null)[] }[] = [];
-		for (const query of ['berry', 'apple', '']) {
+		for (const query of ['kiwi', 'apple', '']) {
 			picker.value = query;
 			states.push({
 				query,
@@ -425,7 +425,7 @@ suite('QuickInput', () => { // https://github.com/microsoft/vscode/issues/147543
 			});
 		}
 		assert.deepStrictEqual(states, [
-			{ query: 'berry', active: ['berry'], sections: [] },
+			{ query: 'kiwi', active: ['kiwi'], sections: [] },
 			{ query: 'apple', active: ['apple'], sections: ['A'] },
 			{ query: '', active: ['apple'], sections: ['A'] },
 		]);

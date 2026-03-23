@@ -216,7 +216,8 @@ suite('QuickInput keeps focus while its context menus are open', () => { // http
 	function showPicker(buttons: IQuickInputButton[] = []): IQuickPick<IQuickPickItem> {
 		editor.focus();
 		const picker = store.add(controller.createQuickPick());
-		picker.items = [{ label: 'item' }];
+		// Shares no letters with the value below, so that no fuzzy matching shows it and the picker stays short
+		picker.items = [{ label: 'quick' }];
 		picker.buttons = buttons;
 		picker.show();
 		input = fixture.querySelector<HTMLInputElement>('.quick-input-widget input')!;

@@ -14,6 +14,7 @@ import { KeyCode } from '../common/keyCodes.js';
 import { Disposable, DisposableStore, IDisposable, MutableDisposable, toDisposable } from '../common/lifecycle.js';
 import { RemoteAuthorities } from '../common/network.js';
 import * as platform from '../common/platform.js';
+import { env } from '../common/process.js';
 import { URI } from '../common/uri.js';
 import { hash } from '../common/hash.js';
 import { CodeWindow, ensureCodeWindow, mainWindow } from './window.js';
@@ -1410,6 +1411,14 @@ export function trackFocus(element: HTMLElement | Window): IFocusTracker {
  * capture phase and only re-dispatched if the window genuinely lost focus.
  */
 export function installTransientBlurGuard(targetWindow: Window): IDisposable {
+	// Only needed on KDE Wayland where the compositor causes transient
+	// window deactivation/reactivation cycles (e.g. clicking near screen edges).
+	if (!platform.isLinux
+		|| env['XDG_SESSION_TYPE'] !== 'wayland'
+		|| !(env['XDG_CURRENT_DESKTOP'] ?? '').includes('KDE')) {
+		return Disposable.None;
+	}
+
 	let isRedispatching = false;
 	let pendingTimeouts: ReturnType<typeof setTimeout>[] = [];
 	let inTransientBlur = false;
@@ -1487,15 +1496,7 @@ export function installTransientBlurGuard(targetWindow: Window): IDisposable {
 		}
 	};
 
-	// Patch document.hasFocus() to return true during transient blur so that
-	// synchronous checks in component code don't bail out during the 3ms window
 	const originalHasFocus = targetWindow.document.hasFocus.bind(targetWindow.document);
-	targetWindow.document.hasFocus = function (): boolean {
-		if (inTransientBlur) {
-			return true;
-		}
-		return originalHasFocus();
-	};
 
 	targetWindow.document.addEventListener('focusout', onFocusLoss, true);
 	targetWindow.document.addEventListener('blur', onFocusLoss, true);
@@ -1506,7 +1507,6 @@ export function installTransientBlurGuard(targetWindow: Window): IDisposable {
 
 	return toDisposable(() => {
 		clearAllPending();
-		targetWindow.document.hasFocus = originalHasFocus;
 		targetWindow.document.removeEventListener('focusout', onFocusLoss, true);
 		targetWindow.document.removeEventListener('blur', onFocusLoss, true);
 		targetWindow.document.removeEventListener('focusin', onFocusGain, true);

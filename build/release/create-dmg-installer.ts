@@ -97,11 +97,30 @@ export function createDMGWithInstaller(options: DMGOptions): void {
 		const appSizeMB = parseInt(appStats.split('\t')[0]) || 500;
 		const dmgSizeMB = Math.ceil(appSizeMB * 1.3) + 50; // 30% overhead + 50MB extra
 
-		// Create DMG with calculated size
+		// Prevent Spotlight from indexing the temp folder (can cause "Resource busy")
+		try {
+			execSync(`touch "${tempDir}/.metadata_never_index"`, { stdio: 'pipe' });
+		} catch (e) {
+			// Not critical if this fails
+		}
+
+		// Create DMG with calculated size, with retry logic for "Resource busy" errors
+		// that occur intermittently on CI runners due to Spotlight or other system processes
 		console.log(`Creating DMG volume (${dmgSizeMB}MB)...`);
-		execSync(`hdiutil create -volname "${volumeName}" -srcfolder "${tempDir}" -ov -format UDRW -size ${dmgSizeMB}m "${tempDmg}"`, {
-			stdio: 'pipe'
-		});
+		for (let attempt = 1; attempt <= 5; attempt++) {
+			try {
+				execSync(`hdiutil create -volname "${volumeName}" -srcfolder "${tempDir}" -ov -format UDRW -size ${dmgSizeMB}m "${tempDmg}"`, {
+					stdio: 'pipe'
+				});
+				break;
+			} catch (e) {
+				if (attempt === 5) {
+					throw e;
+				}
+				console.log(`hdiutil create attempt ${attempt} failed (Resource busy), retrying in ${attempt * 3}s...`);
+				execSync(`sleep ${attempt * 3}`);
+			}
+		}
 
 		// Mount the DMG
 		console.log(`Mounting DMG for customization...`);

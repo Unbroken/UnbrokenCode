@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { DeferredPromise } from './deferredPromise';
@@ -22,10 +23,22 @@ export const enum TunnelPrivacyId {
 const CLEANUP_TIMEOUT = 10_000;
 
 const versionFolder = vscode.env.appCommit?.substring(0, 10);
-let cliPath: string;
-if (process.env.VSCODE_FORWARDING_IS_DEV) {
-	cliPath = path.join(__dirname, '../../../cli/target/debug/code');
-} else {
+let cliPathPromise: Promise<string> | undefined;
+
+/**
+ * The path of the CLI, which is named after the product's `tunnelApplicationName`, since builds other than VS Code's
+ * name it differently.
+ */
+function getCliPath(): Promise<string> {
+	cliPathPromise ??= computeCliPath();
+	return cliPathPromise;
+}
+
+async function computeCliPath(): Promise<string> {
+	if (process.env.VSCODE_FORWARDING_IS_DEV) {
+		return path.join(__dirname, '../../../cli/target/debug/code');
+	}
+
 	let binPath: string;
 	if (process.platform === 'darwin') {
 		binPath = 'bin';
@@ -35,10 +48,17 @@ if (process.env.VSCODE_FORWARDING_IS_DEV) {
 		binPath = '../../bin';
 	}
 
-	const cliName = vscode.env.appQuality === 'stable' ? 'code-tunnel' : 'code-tunnel-insiders';
+	let cliName: string | undefined;
+	try {
+		const product = JSON.parse(await fs.promises.readFile(path.join(vscode.env.appRoot, 'product.json'), 'utf-8'));
+		cliName = product.tunnelApplicationName;
+	} catch {
+		// fall through to default
+	}
+	cliName ??= vscode.env.appQuality === 'stable' ? 'code-tunnel' : 'code-tunnel-insiders';
 	const extension = process.platform === 'win32' ? '.exe' : '';
 
-	cliPath = path.join(vscode.env.appRoot, binPath, cliName) + extension;
+	return path.join(vscode.env.appRoot, binPath, cliName) + extension;
 }
 
 class Tunnel implements vscode.Tunnel {
@@ -263,7 +283,20 @@ class TunnelProvider implements vscode.TunnelProvider {
 		}
 	}
 
-	private async setupPortForwardingProcess() {
+	private setupInProgress: Promise<void> | undefined;
+
+	/**
+	 * Starts the CLI. Requests that arrive while it is being started, before the state says so, share the start
+	 * rather than starting a CLI of their own.
+	 */
+	private setupPortForwardingProcess(): Promise<void> {
+		this.setupInProgress ??= this.doSetupPortForwardingProcess().finally(() => this.setupInProgress = undefined);
+		return this.setupInProgress;
+	}
+
+	private async doSetupPortForwardingProcess() {
+		// Looked up while the session is, so that starting waits no longer than for the session
+		const cliPathPromise = getCliPath();
 		const session = await vscode.authentication.getSession('github', ['user:email', 'read:org'], {
 			createIfNone: true,
 		});
@@ -276,7 +309,8 @@ class TunnelProvider implements vscode.TunnelProvider {
 			'github',
 		];
 
-		this.logger.log('info', '[forwarding] starting CLI');
+		const cliPath = await cliPathPromise;
+		this.logger.log('info', '[forwarding] starting CLI', cliPath);
 		const child = spawn(cliPath, args, { stdio: 'pipe', env: { ...process.env, NO_COLOR: '1', VSCODE_CLI_ACCESS_TOKEN: session.accessToken } });
 		this.state = { state: State.Starting, process: child };
 

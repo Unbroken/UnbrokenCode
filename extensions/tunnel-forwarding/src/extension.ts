@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { DeferredPromise } from './deferredPromise';
@@ -35,7 +36,14 @@ if (process.env.VSCODE_FORWARDING_IS_DEV) {
 		binPath = '../../bin';
 	}
 
-	const cliName = vscode.env.appQuality === 'stable' ? 'code-tunnel' : 'code-tunnel-insiders';
+	let cliName: string | undefined;
+	try {
+		const product = JSON.parse(fs.readFileSync(path.join(vscode.env.appRoot, 'product.json'), 'utf-8'));
+		cliName = product.tunnelApplicationName;
+	} catch {
+		// fall through to default
+	}
+	cliName ??= vscode.env.appQuality === 'stable' ? 'code-tunnel' : 'code-tunnel-insiders';
 	const extension = process.platform === 'win32' ? '.exe' : '';
 
 	cliPath = path.join(vscode.env.appRoot, binPath, cliName) + extension;
@@ -276,7 +284,7 @@ class TunnelProvider implements vscode.TunnelProvider {
 			'github',
 		];
 
-		this.logger.log('info', '[forwarding] starting CLI');
+		this.logger.log('info', '[forwarding] starting CLI', cliPath);
 		const child = spawn(cliPath, args, { stdio: 'pipe', env: { ...process.env, NO_COLOR: '1', VSCODE_CLI_ACCESS_TOKEN: session.accessToken } });
 		this.state = { state: State.Starting, process: child };
 

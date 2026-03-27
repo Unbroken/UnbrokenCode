@@ -658,8 +658,18 @@ suite('Partial Substring Fuzzy Match', () => {
 	test('case insensitive matching', () => {
 		const result = fuzzyMatchPartialScore('FOO', 'foo');
 		assert.ok(result);
-		assert.strictEqual(result.score, 0);
+		// Case-insensitive match scores slightly above 0 due to case mismatch penalty,
+		// so exact-case matches rank higher
+		assert.ok(result.score > 0, 'case-insensitive match should score above 0');
 		assert.deepStrictEqual(result.matches, [{ start: 0, end: 3 }]);
+	});
+
+	test('exact case match ranks higher than case insensitive', () => {
+		const exact = fuzzyMatchPartialScore('foo', 'foo');
+		const caseInsensitive = fuzzyMatchPartialScore('FOO', 'foo');
+		assert.ok(exact);
+		assert.ok(caseInsensitive);
+		assert.ok(exact.score < caseInsensitive.score, `exact case score ${exact.score} should be less than case-insensitive score ${caseInsensitive.score}`);
 	});
 
 	test('better matches have lower scores', () => {

@@ -434,13 +434,6 @@ function nextWord(word: string, start: number): number {
 
 //#region --- fuzzyMatchPartial ---
 
-interface IFuzzyMatching {
-	matchId: number;
-	nMatched: number;
-	iSource: number;
-	iMatch: number;
-}
-
 /**
  * Fast Latin-aware lowercase for a single char code. Handles ASCII A-Z and
  * Latin-1 Supplement (U+00C0-U+00DE, excluding U+00D7 multiplication sign).
@@ -455,47 +448,50 @@ function charLowerCase(ch: number): number {
 	return ch;
 }
 
-/**
- * Find the first position in str1 where a contiguous prefix of str2 matches (case-insensitive).
- * Returns the index in str1 where the match starts and how many characters matched.
- * Returns { index: -1, found: 0 } if no match is found.
- */
-function strFindPartial(str1: string, str1Start: number, str2: string, str2Start: number): { index: number; found: number } {
-	const str1Len = str1.length;
-	const str2Len = str2.length;
+const FUZZY_UNSET = -1;
 
-	for (let i = str1Start; i < str1Len; i++) {
-		let j = str2Start;
-		let k = i;
-		while (k < str1Len && j < str2Len) {
-			if (charLowerCase(str1.charCodeAt(k)) !== charLowerCase(str2.charCodeAt(j))) {
-				if (j !== str2Start) {
-					return { index: i - str1Start, found: j - str2Start };
-				}
-				break;
-			}
-			k++;
-			j++;
-			if (j >= str2Len) {
-				return { index: i - str1Start, found: j - str2Start };
-			}
-		}
-		if (k >= str1Len && j !== str2Start) {
-			return { index: i - str1Start, found: j - str2Start };
+const WEIGHT_UNMATCHED_QUERY = 0.5;
+const WEIGHT_UNMATCHED = 0.1;
+const WEIGHT_MATCH_PERCENT = 1.0 - (WEIGHT_UNMATCHED_QUERY + WEIGHT_UNMATCHED);
+
+// Reusable character-head index: maps each lowercase char code to the first
+// candidate position with that char. Reused across calls to avoid allocation.
+// Only valid char codes (0-65535) are used; tracked entries are reset per call.
+const _charHead = new Int32Array(65536).fill(FUZZY_UNSET);
+const _charHeadUsed = new Uint16Array(65536);
+let _charHeadUsedLen = 0;
+
+/**
+ * Build a result for a contiguous match (entire query matches at one candidate position).
+ * Avoids the full matching pipeline for this common fast path.
+ */
+function buildContiguousMatchResult(candidate: string, query: string, candidateLen: number, queryLen: number, iStart: number): IFuzzyMatchResult {
+	let nCaseMismatches = 0;
+	for (let i = 0; i < queryLen; i++) {
+		if (candidate.charCodeAt(iStart + i) !== query.charCodeAt(i)) {
+			nCaseMismatches++;
 		}
 	}
-	return { index: -1, found: 0 };
-}
 
-function createEmptyMatching(): IFuzzyMatching {
-	return { matchId: -1, nMatched: 0, iSource: -1, iMatch: -1 };
+	const matchedPercentQuery = nCaseMismatches * 0.5 / (queryLen * queryLen);
+	const unmatchedPercent = (candidateLen - queryLen) / candidateLen;
+
+	const score =
+		matchedPercentQuery * WEIGHT_MATCH_PERCENT
+		+ unmatchedPercent * WEIGHT_UNMATCHED;
+
+	return {
+		score,
+		matches: [{ start: iStart, end: iStart + queryLen }]
+	};
 }
 
 /**
- * Fuzzy match using partial substring matching. For each starting position in the query,
- * finds all positions in the candidate where a contiguous prefix of the remaining query
- * matches. Resolves overlapping matches by preferring longer ones. Produces both match
- * positions (for highlighting) and a composite score (for sorting).
+ * Fuzzy match using partial substring matching. Uses a character position index
+ * to efficiently find all positions in the candidate where contiguous prefixes of
+ * the query match. Resolves overlapping matches by preferring longer ones, with
+ * case quality as a tiebreaker. Produces both match positions (for highlighting)
+ * and a composite score (for sorting).
  *
  * @returns null if no query characters match at all, otherwise { score, matches }
  *          where score is 0.0 (perfect) to ~1.0 (worst).
@@ -505,166 +501,256 @@ export function fuzzyMatchPartialScore(query: string, candidate: string): IFuzzy
 		return null;
 	}
 
-	const maxLen = candidate.length;
-	const nSource = query.length;
+	const candidateLen = candidate.length;
+	const queryLen = query.length;
 
-	// Phase 1 & 2: Find partial matches and resolve conflicts in candidate space
-	const matchings: IFuzzyMatching[] = new Array(maxLen);
-	for (let i = 0; i < maxLen; i++) {
-		matchings[i] = createEmptyMatching();
+	// Pre-compute lowercase for both strings to avoid repeated charLowerCase calls
+	const lowerCandidate = new Uint16Array(candidateLen);
+	const lowerQuery = new Uint16Array(queryLen);
+
+	for (let i = 0; i < queryLen; i++) {
+		lowerQuery[i] = charLowerCase(query.charCodeAt(i));
 	}
 
-	let matchingId = -1;
+	let caseSensitiveExact = candidateLen === queryLen;
+	let caseInsensitiveExact = candidateLen === queryLen;
 
-	for (let queryPos = 0; queryPos < nSource; queryPos++) {
-		let candidateOffset = 0;
+	for (let i = 0; i < candidateLen; i++) {
+		lowerCandidate[i] = charLowerCase(candidate.charCodeAt(i));
+		if (i < queryLen) {
+			if (candidate.charCodeAt(i) !== query.charCodeAt(i)) {
+				caseSensitiveExact = false;
+			}
+			if (lowerCandidate[i] !== lowerQuery[i]) {
+				caseInsensitiveExact = false;
+			}
+		}
+	}
 
-		let result = strFindPartial(candidate, candidateOffset, query, queryPos);
-		while (result.index >= 0 && result.found > 0) {
-			matchingId++;
-			const iStart = candidateOffset + result.index;
-			const found = result.found;
+	// Early exit for exact matches
+	if (caseSensitiveExact || caseInsensitiveExact) {
+		return buildContiguousMatchResult(candidate, query, candidateLen, queryLen, 0);
+	}
 
-			// Check if the new match is at least as large as all existing matches at those positions
+	// Build character position index: linked list per lowercase character.
+	// _charHead[ch] = first candidate position with that lowercase char;
+	// nextPos[i] = next position with the same char. Uses a module-level
+	// reusable Int32Array(65536) with tracked cleanup to avoid allocation.
+	for (let u = 0; u < _charHeadUsedLen; u++) {
+		_charHead[_charHeadUsed[u]] = FUZZY_UNSET;
+	}
+	_charHeadUsedLen = 0;
+
+	const nextPos = new Int32Array(candidateLen);
+	for (let i = candidateLen - 1; i >= 0; i--) {
+		const ch = lowerCandidate[i];
+		nextPos[i] = _charHead[ch];
+		if (_charHead[ch] === FUZZY_UNSET) { _charHeadUsed[_charHeadUsedLen++] = ch; }
+		_charHead[ch] = i;
+	}
+
+	// Early exit: if no query character exists in the candidate, no match is possible
+	let anyQueryCharExists = false;
+	for (let i = 0; i < queryLen; i++) {
+		if (_charHead[lowerQuery[i]] !== FUZZY_UNSET) {
+			anyQueryCharExists = true;
+			break;
+		}
+	}
+	if (!anyQueryCharExists) {
+		return null;
+	}
+
+	// Phase 1 & 2: Find matches using character index and resolve conflicts.
+	// Uses parallel typed arrays instead of object arrays to reduce GC pressure.
+	const mNMatched = new Int32Array(candidateLen);  // 0 = unset
+	const mIQuery = new Int32Array(candidateLen);
+	const mICandidate = new Int32Array(candidateLen);
+
+	// Query chain: when multiple query positions map to the same candidate match
+	// with equal length and case quality, chain them as alternatives for Phase 3.
+	const queryChainNext = new Int32Array(queryLen);
+
+	let bestContiguous = FUZZY_UNSET;
+	let bestContiguousMismatches = queryLen + 1;
+
+	for (let queryPos = 0; queryPos < queryLen; queryPos++) {
+		queryChainNext[queryPos] = FUZZY_UNSET;
+		let queryPosChained = false;
+
+		let iStart = _charHead[lowerQuery[queryPos]];
+		while (iStart !== FUZZY_UNSET) {
+			// Extend match: first char matches by construction, find how far it goes
+			const maxExtent = Math.min(candidateLen - iStart, queryLen - queryPos);
+			let found = 1;
+			while (found < maxExtent && lowerCandidate[iStart + found] === lowerQuery[queryPos + found]) {
+				found++;
+			}
+
+			// Contiguous full-query match fast path
+			if (queryPos === 0 && found === queryLen) {
+				let nMismatches = 0;
+				for (let i = 0; i < queryLen; i++) {
+					if (candidate.charCodeAt(iStart + i) !== query.charCodeAt(i)) {
+						nMismatches++;
+					}
+				}
+				if (nMismatches === 0) {
+					return buildContiguousMatchResult(candidate, query, candidateLen, queryLen, iStart);
+				}
+				if (nMismatches < bestContiguousMismatches) {
+					bestContiguous = iStart;
+					bestContiguousMismatches = nMismatches;
+				}
+				iStart = nextPos[iStart];
+				continue;
+			}
+
+			// Check if new match is at least as large as all existing at those positions
 			let isLarger = true;
 			for (let i = 0; i < found; i++) {
-				if (found < matchings[iStart + i].nMatched) {
+				if (found < mNMatched[iStart + i]) {
 					isLarger = false;
 					break;
 				}
 			}
 
+			// When same length, prefer better case quality
+			if (isLarger && mNMatched[iStart] === found && mNMatched[iStart] > 0) {
+				let newMismatches = 0;
+				let oldMismatches = 0;
+				for (let i = 0; i < found; i++) {
+					if (candidate.charCodeAt(iStart + i) !== query.charCodeAt(queryPos + i)) {
+						newMismatches++;
+					}
+					if (candidate.charCodeAt(mICandidate[iStart] + i) !== query.charCodeAt(mIQuery[iStart] + i)) {
+						oldMismatches++;
+					}
+				}
+				if (newMismatches > oldMismatches) {
+					isLarger = false;
+				} else if (newMismatches === oldMismatches) {
+					isLarger = false;
+					// Chain this query position as an alternative. Only insert once per
+					// queryPos since multiple candidates with the same head share the chain.
+					if (!queryPosChained) {
+						queryChainNext[queryPos] = queryChainNext[mIQuery[iStart]];
+						queryChainNext[mIQuery[iStart]] = queryPos;
+						queryPosChained = true;
+					}
+				}
+			}
+
 			if (isLarger) {
 				// Clear old matching that extends before the new match's start
-				const oldMatchIdBefore = matchings[iStart].matchId;
-				if (oldMatchIdBefore >= 0) {
-					for (let i = iStart - 1; i >= 0; i--) {
-						if (matchings[i].matchId !== oldMatchIdBefore) {
-							break;
-						}
-						matchings[i] = createEmptyMatching();
+				if (mNMatched[iStart] > 0) {
+					const oldStart = mICandidate[iStart];
+					for (let i = oldStart; i < iStart; i++) {
+						mNMatched[i] = 0;
 					}
 				}
 
 				// Clear old matching that extends after the new match's end
-				const oldMatchIdAfter = matchings[iStart + found - 1].matchId;
-				if (oldMatchIdAfter >= 0) {
-					for (let i = iStart + found; i < maxLen; i++) {
-						if (matchings[i].matchId !== oldMatchIdAfter) {
-							break;
-						}
-						matchings[i] = createEmptyMatching();
+				if (mNMatched[iStart + found - 1] > 0) {
+					const oldEnd = mICandidate[iStart + found - 1] + mNMatched[iStart + found - 1];
+					for (let i = iStart + found; i < oldEnd; i++) {
+						mNMatched[i] = 0;
 					}
 				}
 
 				// Record the new matching
 				for (let i = iStart; i < iStart + found; i++) {
-					matchings[i].matchId = matchingId;
-					matchings[i].nMatched = found;
-					matchings[i].iSource = queryPos;
-					matchings[i].iMatch = iStart;
+					mNMatched[i] = found;
+					mIQuery[i] = queryPos;
+					mICandidate[i] = iStart;
 				}
 			}
 
-			candidateOffset = candidateOffset + result.index + 1;
-			result = strFindPartial(candidate, candidateOffset, query, queryPos);
+			iStart = nextPos[iStart];
+		}
+
+		if (bestContiguous !== FUZZY_UNSET) {
+			return buildContiguousMatchResult(candidate, query, candidateLen, queryLen, bestContiguous);
 		}
 	}
 
-	// Phase 3: Build SourceMatchings (reverse mapping for query coverage)
-	const sourceMatchings: IFuzzyMatching[] = new Array(nSource);
-	for (let i = 0; i < nSource; i++) {
-		sourceMatchings[i] = createEmptyMatching();
-	}
+	// Phase 3: Build query matchings (reverse mapping for query coverage)
+	const qNMatched = new Int32Array(queryLen);
+	const qIQuery = new Int32Array(queryLen);
+	const qICandidate = new Int32Array(queryLen);
 
-	let nUnmatched = 0;
-	let lastMatchId = -1;
-
-	for (let i = 0; i < maxLen; i++) {
-		const m = matchings[i];
-		if (m.nMatched === 0) {
-			nUnmatched++;
-		}
-		if (m.matchId !== lastMatchId && m.nMatched !== 0) {
-			const iStart = m.iSource;
-
-			for (let j = iStart; j < iStart + m.nMatched; j++) {
-				if (m.nMatched > sourceMatchings[j].nMatched) {
-					sourceMatchings[j] = { matchId: m.matchId, nMatched: m.nMatched, iSource: m.iSource, iMatch: m.iMatch };
+	let lastCandidate = FUZZY_UNSET;
+	for (let i = 0; i < candidateLen; i++) {
+		if (mICandidate[i] !== lastCandidate && mNMatched[i] !== 0) {
+			let queryAlt = mIQuery[i];
+			let written = false;
+			while (!written && queryAlt !== FUZZY_UNSET) {
+				for (let j = queryAlt; j < queryAlt + mNMatched[i]; j++) {
+					if (mNMatched[i] > qNMatched[j]) {
+						qNMatched[j] = mNMatched[i];
+						qIQuery[j] = queryAlt;
+						qICandidate[j] = mICandidate[i];
+						written = true;
+					}
+				}
+				if (!written) {
+					queryAlt = queryChainNext[queryAlt];
 				}
 			}
 		}
-		lastMatchId = m.matchId;
+		lastCandidate = mICandidate[i];
 	}
 
-	let nUnmatchedSource = 0;
-	for (let i = 0; i < nSource; i++) {
-		if (sourceMatchings[i].nMatched === 0) {
-			nUnmatchedSource++;
+	// Phase 4: Count unmatched, mark candidate positions, and compute penalty in one pass.
+	// Reuse a Uint8Array for candidate matched flags instead of collecting + sorting positions.
+	const candidateMatched = new Uint8Array(candidateLen);
+	let nUnmatchedQuery = 0;
+	let matchPenalty = 0;
+
+	for (let i = 0; i < queryLen; i++) {
+		if (qNMatched[i] === 0) {
+			nUnmatchedQuery++;
+			matchPenalty += queryLen;
+		} else {
+			const candidatePos = qICandidate[i] + (i - qIQuery[i]);
+			candidateMatched[candidatePos] = 1;
+			matchPenalty += queryLen - qNMatched[i];
+			if (candidate.charCodeAt(candidatePos) !== query.charCodeAt(i)) {
+				matchPenalty += 0.5;
+			}
 		}
 	}
 
 	// If no characters from the query matched at all, return null
-	if (nUnmatchedSource === nSource) {
+	if (nUnmatchedQuery === queryLen) {
 		return null;
 	}
 
-
-	// Phase 4: Convert source matchings to IMatch[] ranges in candidate space.
-	// Each matched source position maps to a candidate position via iMatch + offset.
-	// Collect all matched candidate positions, sort, and merge into ranges.
-	const matchedPositions: number[] = [];
-	for (let si = 0; si < nSource; si++) {
-		const sm = sourceMatchings[si];
-		if (sm.nMatched > 0) {
-			// This source position maps to candidate position iMatch + (si - iSource)
-			matchedPositions.push(sm.iMatch + (si - sm.iSource));
-		}
-	}
-	matchedPositions.sort((a, b) => a - b);
-
+	// Build match ranges by linear scan over the candidate matched flags (avoids sort)
 	let nMatched = 0;
-	// Merge consecutive positions into ranges
 	const matches: IMatch[] = [];
-	for (let pi = 0; pi < matchedPositions.length; pi++) {
-		const start = matchedPositions[pi];
-		let end = start + 1;
-		while (pi + 1 < matchedPositions.length && matchedPositions[pi + 1] <= end) {
-			end = matchedPositions[pi + 1] + 1;
-			pi++;
+	for (let i = 0; i < candidateLen;) {
+		if (!candidateMatched[i]) {
+			i++;
+			continue;
 		}
-		matches.push({ start, end });
-		nMatched += end - start;
+		const rangeStart = i;
+		while (i < candidateLen && candidateMatched[i]) {
+			i++;
+		}
+		matches.push({ start: rangeStart, end: i });
+		nMatched += i - rangeStart;
 	}
 
-	// Phase 5: Compute composite score
-	let ret1 = 0;
-	for (let i = 0; i < nSource; i++) {
-		ret1 += nSource - sourceMatchings[i].nMatched;
-		// Penalize case mismatches: subtract half a match point when the
-		// character matched but in a different case, so exact-case matches
-		// rank higher.
-		if (sourceMatchings[i].nMatched > 0) {
-			const candidatePos = sourceMatchings[i].iMatch + (i - sourceMatchings[i].iSource);
-			if (candidate.charCodeAt(candidatePos) !== query.charCodeAt(i)) {
-				ret1 += 0.5;
-			}
-		}
-	}
-
-	//const matchedPercent = ret0 / (maxLen * maxLen);
-	const matchedPercentSource = ret1 / (nSource * nSource);
-	const unmatchedPercent = (maxLen - nMatched) / maxLen;
-	const unmatchedPercentSource = nUnmatchedSource / nSource;
-
-	const weightUnmatchedSource = 0.5;
-	const weightUnmatched = 0.1;
-	const weightMatchPercent = 1.0 - (weightUnmatchedSource + weightUnmatched);
+	// Compute composite score
+	const matchedPercentQuery = matchPenalty / (queryLen * queryLen);
+	const unmatchedPercent = (candidateLen - nMatched) / candidateLen;
+	const unmatchedPercentQuery = nUnmatchedQuery / queryLen;
 
 	const score =
-		matchedPercentSource * weightMatchPercent
-		+ unmatchedPercent * weightUnmatched
-		+ unmatchedPercentSource * weightUnmatchedSource;
+		matchedPercentQuery * WEIGHT_MATCH_PERCENT
+		+ unmatchedPercent * WEIGHT_UNMATCHED
+		+ unmatchedPercentQuery * WEIGHT_UNMATCHED_QUERY;
 
 	return { score, matches };
 }

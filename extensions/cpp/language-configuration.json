@@ -117,8 +117,10 @@
 		},
 		// Add // when pressing enter from inside line comment
 		{
-			"beforeText": "^\\s*//|\\s//\\s",
+			"beforeText": "//.*",
 			"afterText": "^(?!\\s*$)",
+			"beforeTextTokenTypes": ["comment"],
+			"inTokenTypes": ["comment"],
 			"action": {
 				"indent": "none",
 				"appendText": "// "

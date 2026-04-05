@@ -6973,6 +6973,16 @@ declare namespace monaco.languages {
 	}
 
 	/**
+	 * A standard token type.
+	 */
+	export enum StandardTokenType {
+		Other = 0,
+		Comment = 1,
+		String = 2,
+		RegEx = 3
+	}
+
+	/**
 	 * Configuration for line comments.
 	 */
 	export interface LineCommentConfig {
@@ -7133,6 +7143,22 @@ declare namespace monaco.languages {
 		 * This rule will only execute if the text above the this line matches this regular expression.
 		 */
 		previousLineText?: RegExp;
+		/**
+		 * When specified, `beforeText` is only tested against text from tokens of the given types.
+		 */
+		beforeTextTokenTypes?: StandardTokenType[];
+		/**
+		 * When specified, `afterText` is only tested against text from tokens of the given types.
+		 */
+		afterTextTokenTypes?: StandardTokenType[];
+		/**
+		 * When specified, `previousLineText` is only tested against text from tokens of the given types.
+		 */
+		previousLineTextTokenTypes?: StandardTokenType[];
+		/**
+		 * When specified, this rule will only execute if the cursor is within a token of the given types.
+		 */
+		inTokenTypes?: StandardTokenType[];
 		/**
 		 * The action to execute.
 		 */

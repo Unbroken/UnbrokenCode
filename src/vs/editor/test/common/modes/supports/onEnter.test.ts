@@ -7,7 +7,29 @@ import { CharacterPair, IndentAction } from '../../../../common/languages/langua
 import { OnEnterSupport } from '../../../../common/languages/supports/onEnter.js';
 import { javascriptOnEnterRules } from './onEnterRules.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
+import { StandardTokenType } from '../../../../common/encodedTokenAttributes.js';
+import { IViewLineTokens } from '../../../../common/tokens/lineTokens.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+function createMockTokens(segments: { text: string; type: StandardTokenType }[]): IViewLineTokens {
+	return {
+		getCount: () => segments.length,
+		getStandardTokenType: (i: number) => segments[i].type,
+		getTokenText: (i: number) => segments[i].text,
+		getLineContent: () => segments.map(s => s.text).join(''),
+		forEach: (cb: (tokenIndex: number) => void) => { for (let i = 0; i < segments.length; i++) { cb(i); } },
+		getEndOffset: (i: number) => segments.slice(0, i + 1).reduce((sum, s) => sum + s.text.length, 0),
+		findTokenIndexAtOffset: () => 0,
+		equals: () => false,
+		getForeground: () => 0,
+		getClassName: () => '',
+		getInlineStyle: () => '',
+		getPresentation: () => ({ foreground: 0, italic: false, bold: false, underline: false, strikethrough: false }),
+		getMetadata: () => 0,
+		getLanguageId: () => '',
+		languageIdCodec: { encodeLanguageId: () => 0, decodeLanguageId: () => '' },
+	} satisfies IViewLineTokens;
+}
 
 suite('OnEnter', () => {
 
@@ -170,6 +192,67 @@ suite('OnEnter', () => {
 		testIndentAction('class A {', '  * test() {', '', IndentAction.Indent, null, 0);
 		testIndentAction('', '  * test() {', '', IndentAction.Indent, null, 0);
 		testIndentAction('  ', '  * test() {', '', IndentAction.Indent, null, 0);
+	});
+
+	test('beforeTextTokenTypes filters beforeText by token type', () => {
+		const support = new OnEnterSupport({
+			onEnterRules: [{
+				beforeText: /\/\/.*/,
+				afterText: /^(?!\s*$).+/,
+				beforeTextTokenTypes: [StandardTokenType.Comment],
+				action: { indentAction: IndentAction.None, appendText: '// ' }
+			}]
+		});
+
+		// beforeText is all comment tokens -> regex matches "// hello"
+		const commentTokens = createMockTokens([
+			{ text: '// hello', type: StandardTokenType.Comment }
+		]);
+		const commentResult = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '// hello', 'world', commentTokens);
+		assert.strictEqual(commentResult?.appendText, '// ');
+
+		// beforeText has "//" inside a string token -> comment text is empty -> no match
+		const stringTokens = createMockTokens([
+			{ text: '"//"', type: StandardTokenType.String },
+			{ text: ' ', type: StandardTokenType.Other }
+		]);
+		const stringResult = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '"//" ', 'world', stringTokens);
+		assert.strictEqual(stringResult, null);
+
+		// beforeText has "//" in string then "/" in comment -> comment text is only "/" -> no match
+		const mixedTokens = createMockTokens([
+			{ text: '"//"', type: StandardTokenType.String },
+			{ text: ' ', type: StandardTokenType.Other },
+			{ text: '/', type: StandardTokenType.Comment }
+		]);
+		const mixedResult = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '"//" /', '/ x', mixedTokens);
+		assert.strictEqual(mixedResult, null);
+
+		// No tokens provided -> falls back to full beforeText (backwards compatibility)
+		const noTokenResult = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '// hello', 'world');
+		assert.strictEqual(noTokenResult?.appendText, '// ');
+	});
+
+	test('inTokenTypes filters by cursor token type', () => {
+		const support = new OnEnterSupport({
+			onEnterRules: [{
+				beforeText: /\/\/.*/,
+				inTokenTypes: [StandardTokenType.Comment],
+				action: { indentAction: IndentAction.None, appendText: '// ' }
+			}]
+		});
+
+		// Cursor in comment -> rule fires
+		const result1 = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '// hello', '', undefined, undefined, undefined, StandardTokenType.Comment);
+		assert.strictEqual(result1?.appendText, '// ');
+
+		// Cursor in string -> rule skipped
+		const result2 = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '// hello', '', undefined, undefined, undefined, StandardTokenType.String);
+		assert.strictEqual(result2, null);
+
+		// No cursor token type -> rule fires (backwards compatibility)
+		const result3 = support.onEnter(EditorAutoIndentStrategy.Advanced, '', '// hello', '');
+		assert.strictEqual(result3?.appendText, '// ');
 	});
 
 	test('issue #141816', () => {

@@ -9,6 +9,7 @@ import { IndentAction, CompleteEnterAction } from './languageConfiguration.js';
 import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
 import { getIndentationAtPosition, ILanguageConfigurationService } from './languageConfigurationRegistry.js';
 import { IndentationContextProcessor } from './supports/indentationLineProcessor.js';
+import { getStandardTokenTypeAtPosition } from '../tokens/lineTokens.js';
 
 export function getEnterAction(
 	autoIndent: EditorAutoIndentStrategy,
@@ -28,7 +29,17 @@ export function getEnterAction(
 	const beforeEnterText = processedContextTokens.beforeRangeProcessedTokens.getLineContent();
 	const afterEnterText = processedContextTokens.afterRangeProcessedTokens.getLineContent();
 
-	const enterResult = richEditSupport.onEnter(autoIndent, previousLineText, beforeEnterText, afterEnterText);
+	const cursorTokenType = getStandardTokenTypeAtPosition(model, range.getStartPosition());
+	const enterResult = richEditSupport.onEnter(
+		autoIndent,
+		previousLineText,
+		beforeEnterText,
+		afterEnterText,
+		processedContextTokens.beforeRangeProcessedTokens,
+		processedContextTokens.afterRangeProcessedTokens,
+		processedContextTokens.previousLineProcessedTokens,
+		cursorTokenType
+	);
 	if (!enterResult) {
 		return null;
 	}

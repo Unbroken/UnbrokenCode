@@ -6589,6 +6589,22 @@ declare module 'vscode' {
 		 */
 		previousLineText?: RegExp;
 		/**
+		 * When specified, `beforeText` is only tested against text from tokens of the given types.
+		 */
+		beforeTextTokenTypes?: SyntaxTokenType[];
+		/**
+		 * When specified, `afterText` is only tested against text from tokens of the given types.
+		 */
+		afterTextTokenTypes?: SyntaxTokenType[];
+		/**
+		 * When specified, `previousLineText` is only tested against text from tokens of the given types.
+		 */
+		previousLineTextTokenTypes?: SyntaxTokenType[];
+		/**
+		 * When specified, this rule will only execute if the cursor is within a token of the given types.
+		 */
+		inTokenTypes?: SyntaxTokenType[];
+		/**
 		 * The action to execute.
 		 */
 		action: EnterAction;

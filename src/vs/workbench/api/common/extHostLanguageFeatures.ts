@@ -2979,10 +2979,15 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 	}
 
 	private static _serializeOnEnterRule(onEnterRule: vscode.OnEnterRule): extHostProtocol.IOnEnterRuleDto {
+		const castTokenTypes = (types: vscode.SyntaxTokenType[] | undefined) => types as number[] as extHostProtocol.IOnEnterRuleDto['beforeTextTokenTypes'];
 		return {
 			beforeText: ExtHostLanguageFeatures._serializeRegExp(onEnterRule.beforeText),
 			afterText: onEnterRule.afterText ? ExtHostLanguageFeatures._serializeRegExp(onEnterRule.afterText) : undefined,
 			previousLineText: onEnterRule.previousLineText ? ExtHostLanguageFeatures._serializeRegExp(onEnterRule.previousLineText) : undefined,
+			beforeTextTokenTypes: castTokenTypes(onEnterRule.beforeTextTokenTypes),
+			afterTextTokenTypes: castTokenTypes(onEnterRule.afterTextTokenTypes),
+			previousLineTextTokenTypes: castTokenTypes(onEnterRule.previousLineTextTokenTypes),
+			inTokenTypes: castTokenTypes(onEnterRule.inTokenTypes),
 			action: onEnterRule.action
 		};
 	}

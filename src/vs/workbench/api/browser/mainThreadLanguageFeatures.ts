@@ -959,6 +959,10 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 			beforeText: MainThreadLanguageFeatures._reviveRegExp(onEnterRule.beforeText),
 			afterText: onEnterRule.afterText ? MainThreadLanguageFeatures._reviveRegExp(onEnterRule.afterText) : undefined,
 			previousLineText: onEnterRule.previousLineText ? MainThreadLanguageFeatures._reviveRegExp(onEnterRule.previousLineText) : undefined,
+			beforeTextTokenTypes: onEnterRule.beforeTextTokenTypes,
+			afterTextTokenTypes: onEnterRule.afterTextTokenTypes,
+			previousLineTextTokenTypes: onEnterRule.previousLineTextTokenTypes,
+			inTokenTypes: onEnterRule.inTokenTypes,
 			action: onEnterRule.action
 		};
 	}

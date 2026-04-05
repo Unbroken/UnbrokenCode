@@ -3,6 +3,11 @@ name: Build Release Binaries
 on:
   workflow_dispatch:
     inputs:
+      allow_overwrite:
+        description: 'Allow overwriting a finalized release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -45,6 +50,30 @@ jobs:
             exit 1
           fi
           echo "Authorized actor: $ACTOR"
+
+      - name: Checkout sources
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Check for finalized release
+        if: ${{ !inputs.allow_overwrite }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG_NAME="release/${VERSION}"
+          echo "Checking for existing release with tag: $TAG_NAME"
+
+          BODY=$(gh release view "$TAG_NAME" --json body --jq '.body' 2>/dev/null || true)
+          if [ -n "$BODY" ] && [ "$BODY" != "TBD" ]; then
+            echo "::error::Release $TAG_NAME already exists and has been finalized (release description has been generated). Set 'allow_overwrite' to true to overwrite it."
+            exit 1
+          fi
+
+          echo "No finalized release found for $TAG_NAME, proceeding."
 
   macos:
     name: Build macOS

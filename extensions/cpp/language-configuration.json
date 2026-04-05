@@ -119,6 +119,8 @@
 		{
 			"beforeText": "^\\s*//\\s*\\S|\\s//\\s+\\S",
 			"afterText": "^(?!\\s*$)",
+			"beforeTextTokenTypes": ["comment"],
+			"inTokenTypes": ["comment"],
 			"action": {
 				"indent": "none",
 				"appendText": "// "

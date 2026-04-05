@@ -135,6 +135,7 @@ declare namespace monaco.languages {
 #include(vs/base/common/glob.js): IRelativePattern
 #include(vs/editor/common/languageSelector.js): LanguageSelector, LanguageFilter
 #includeAll(vs/editor/standalone/browser/standaloneLanguages.js;languages.=>;editorCommon.=>editor.;model.=>editor.;IMarkerData=>editor.IMarkerData):
+#include(vs/editor/common/encodedTokenAttributes.js): StandardTokenType
 #includeAll(vs/editor/common/languages/languageConfiguration.js):
 #includeAll(vs/editor/common/languages.js;IMarkerData=>editor.IMarkerData;ISingleEditOperation=>editor.ISingleEditOperation;model.=>editor.;ThemeIcon=>editor.ThemeIcon): Token
 #include(vs/editor/common/languages/language.js): ILanguageExtensionPoint

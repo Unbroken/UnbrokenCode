@@ -881,6 +881,16 @@ export enum SignatureHelpTriggerKind {
 }
 
 /**
+ * A standard token type.
+ */
+export enum StandardTokenType {
+	Other = 0,
+	Comment = 1,
+	String = 2,
+	RegEx = 3
+}
+
+/**
  * A symbol kind.
  */
 export enum SymbolKind {

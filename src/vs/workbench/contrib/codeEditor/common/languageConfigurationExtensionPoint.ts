@@ -9,6 +9,7 @@ import { IJSONSchema } from '../../../../base/common/jsonSchema.js';
 import * as types from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CharacterPair, CommentRule, EnterAction, ExplicitLanguageConfiguration, FoldingMarkers, FoldingRules, IAutoClosingPair, IAutoClosingPairConditional, IndentAction, IndentationRule, OnEnterRule } from '../../../../editor/common/languages/languageConfiguration.js';
+import { StandardTokenType } from '../../../../editor/common/encodedTokenAttributes.js';
 import { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { Extensions, IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
@@ -41,6 +42,10 @@ interface IOnEnterRule {
 	beforeText: string | IRegExp;
 	afterText?: string | IRegExp;
 	previousLineText?: string | IRegExp;
+	beforeTextTokenTypes?: string[];
+	afterTextTokenTypes?: string[];
+	previousLineTextTokenTypes?: string[];
+	inTokenTypes?: string[];
 	action: IEnterAction;
 }
 
@@ -389,6 +394,18 @@ export class LanguageConfigurationFileHandler extends Disposable {
 					resultingOnEnterRule.previousLineText = previousLineText;
 				}
 			}
+			for (const prop of ['beforeTextTokenTypes', 'afterTextTokenTypes', 'previousLineTextTokenTypes', 'inTokenTypes'] as const) {
+				if (onEnterRule[prop]) {
+					if (Array.isArray(onEnterRule[prop])) {
+						const tokenTypes = this._parseTokenTypes(languageId, i, prop, onEnterRule[prop]);
+						if (tokenTypes) {
+							resultingOnEnterRule[prop] = tokenTypes;
+						}
+					} else {
+						console.warn(`[${languageId}]: language configuration: expected \`onEnterRules[${i}].${prop}\` to be an array.`);
+					}
+				}
+			}
 			result = result || [];
 			result.push(resultingOnEnterRule);
 		}
@@ -467,6 +484,25 @@ export class LanguageConfigurationFileHandler extends Disposable {
 		}
 		console.warn(`[${languageId}]: language configuration: expected \`${confPath}\` to be a string or an object.`);
 		return undefined;
+	}
+
+	private static _parseTokenTypes(languageId: string, ruleIndex: number, propName: string, values: string[]): StandardTokenType[] | undefined {
+		const tokenTypeMap: Record<string, StandardTokenType> = {
+			'other': StandardTokenType.Other,
+			'comment': StandardTokenType.Comment,
+			'string': StandardTokenType.String,
+			'regex': StandardTokenType.RegEx,
+		};
+		const result: StandardTokenType[] = [];
+		for (const value of values) {
+			const tokenType = tokenTypeMap[value];
+			if (tokenType === undefined) {
+				console.warn(`[${languageId}]: language configuration: expected \`onEnterRules[${ruleIndex}].${propName}\` values to be one of 'other', 'comment', 'string', 'regex'. Got '${value}'.`);
+				return undefined;
+			}
+			result.push(tokenType);
+		}
+		return result.length > 0 ? result : undefined;
 	}
 
 	private static _mapIndentationRules(languageId: string, indentationRules: IIndentationRules): IndentationRule | undefined {
@@ -846,6 +882,38 @@ const schema: IJSONSchema = {
 								pattern: '^([gimuy]+)$',
 								patternErrorMessage: nls.localize('schema.onEnterRules.previousLineText.errorMessage', 'Must match the pattern `/^([gimuy]+)$/`.')
 							}
+						}
+					},
+					beforeTextTokenTypes: {
+						type: 'array',
+						description: nls.localize('schema.onEnterRules.beforeTextTokenTypes', 'When specified, `beforeText` is only tested against text from tokens of the given types.'),
+						items: {
+							type: 'string',
+							enum: ['other', 'comment', 'string', 'regex'],
+						}
+					},
+					afterTextTokenTypes: {
+						type: 'array',
+						description: nls.localize('schema.onEnterRules.afterTextTokenTypes', 'When specified, `afterText` is only tested against text from tokens of the given types.'),
+						items: {
+							type: 'string',
+							enum: ['other', 'comment', 'string', 'regex'],
+						}
+					},
+					previousLineTextTokenTypes: {
+						type: 'array',
+						description: nls.localize('schema.onEnterRules.previousLineTextTokenTypes', 'When specified, `previousLineText` is only tested against text from tokens of the given types.'),
+						items: {
+							type: 'string',
+							enum: ['other', 'comment', 'string', 'regex'],
+						}
+					},
+					inTokenTypes: {
+						type: 'array',
+						description: nls.localize('schema.onEnterRules.inTokenTypes', 'When specified, this rule will only execute if the cursor is within a token of the given types.'),
+						items: {
+							type: 'string',
+							enum: ['other', 'comment', 'string', 'regex'],
 						}
 					},
 					action: {

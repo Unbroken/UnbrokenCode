@@ -398,6 +398,10 @@ export interface IOnEnterRuleDto {
 	beforeText: IRegExpDto;
 	afterText?: IRegExpDto;
 	previousLineText?: IRegExpDto;
+	beforeTextTokenTypes?: StandardTokenType[];
+	afterTextTokenTypes?: StandardTokenType[];
+	previousLineTextTokenTypes?: StandardTokenType[];
+	inTokenTypes?: StandardTokenType[];
 	action: EnterAction;
 }
 export interface ILanguageConfigurationDto {

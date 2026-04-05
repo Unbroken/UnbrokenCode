@@ -831,6 +831,7 @@ export function createMonacoLanguagesAPI(): typeof monaco.languages {
 		CompletionItemInsertTextRule: standaloneEnums.CompletionItemInsertTextRule,
 		SymbolKind: standaloneEnums.SymbolKind,
 		SymbolTag: standaloneEnums.SymbolTag,
+		StandardTokenType: standaloneEnums.StandardTokenType,
 		IndentAction: standaloneEnums.IndentAction,
 		CompletionTriggerKind: standaloneEnums.CompletionTriggerKind,
 		SignatureHelpTriggerKind: standaloneEnums.SignatureHelpTriggerKind,

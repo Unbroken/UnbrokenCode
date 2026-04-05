@@ -5,8 +5,10 @@
 
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import * as strings from '../../../../base/common/strings.js';
+import { StandardTokenType } from '../../encodedTokenAttributes.js';
 import { CharacterPair, EnterAction, IndentAction, OnEnterRule } from '../languageConfiguration.js';
 import { EditorAutoIndentStrategy } from '../../config/editorOptions.js';
+import { IViewLineTokens } from '../../tokens/lineTokens.js';
 
 export interface IOnEnterSupportOptions {
 	brackets?: CharacterPair[];
@@ -49,20 +51,46 @@ export class OnEnterSupport {
 		this._regExpRules = opts.onEnterRules || [];
 	}
 
-	public onEnter(autoIndent: EditorAutoIndentStrategy, previousLineText: string, beforeEnterText: string, afterEnterText: string): EnterAction | null {
+	public onEnter(
+		autoIndent: EditorAutoIndentStrategy,
+		previousLineText: string,
+		beforeEnterText: string,
+		afterEnterText: string,
+		beforeRangeTokens?: IViewLineTokens,
+		afterRangeTokens?: IViewLineTokens,
+		previousLineTokens?: IViewLineTokens,
+		cursorTokenType?: StandardTokenType
+	): EnterAction | null {
 		// (1): `regExpRules`
 		if (autoIndent >= EditorAutoIndentStrategy.Advanced) {
 			for (let i = 0, len = this._regExpRules.length; i < len; i++) {
 				const rule = this._regExpRules[i];
+
+				if (rule.inTokenTypes && cursorTokenType !== undefined) {
+					if (!rule.inTokenTypes.includes(cursorTokenType)) {
+						continue;
+					}
+				}
+
+				const effectiveBeforeText = rule.beforeTextTokenTypes && beforeRangeTokens
+					? OnEnterSupport._getTextForTokenTypes(beforeRangeTokens, rule.beforeTextTokenTypes)
+					: beforeEnterText;
+				const effectiveAfterText = rule.afterTextTokenTypes && afterRangeTokens
+					? OnEnterSupport._getTextForTokenTypes(afterRangeTokens, rule.afterTextTokenTypes)
+					: afterEnterText;
+				const effectivePreviousLineText = rule.previousLineTextTokenTypes && previousLineTokens
+					? OnEnterSupport._getTextForTokenTypes(previousLineTokens, rule.previousLineTextTokenTypes)
+					: previousLineText;
+
 				const regResult = [{
 					reg: rule.beforeText,
-					text: beforeEnterText
+					text: effectiveBeforeText
 				}, {
 					reg: rule.afterText,
-					text: afterEnterText
+					text: effectiveAfterText
 				}, {
 					reg: rule.previousLineText,
-					text: previousLineText
+					text: effectivePreviousLineText
 				}].every((obj): boolean => {
 					if (!obj.reg) {
 						return true;
@@ -122,6 +150,16 @@ export class OnEnterSupport {
 		}
 		str = '^\\s*' + str;
 		return OnEnterSupport._safeRegExp(str);
+	}
+
+	private static _getTextForTokenTypes(tokens: IViewLineTokens, tokenTypes: StandardTokenType[]): string {
+		let result = '';
+		tokens.forEach((tokenIndex: number) => {
+			if (tokenTypes.includes(tokens.getStandardTokenType(tokenIndex))) {
+				result += tokens.getTokenText(tokenIndex);
+			}
+		});
+		return result;
 	}
 
 	private static _safeRegExp(def: string): RegExp | null {

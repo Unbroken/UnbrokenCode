@@ -9,6 +9,8 @@ import * as strings from '../../../base/common/strings.js';
 import { ITextModel } from '../model.js';
 import { DEFAULT_WORD_REGEXP, ensureValidWordDefinition } from '../core/wordHelper.js';
 import { EnterAction, FoldingRules, IAutoClosingPair, IndentationRule, LanguageConfiguration, AutoClosingPairs, CharacterPair, ExplicitLanguageConfiguration } from './languageConfiguration.js';
+import { StandardTokenType } from '../encodedTokenAttributes.js';
+import { IViewLineTokens } from '../tokens/lineTokens.js';
 import { CharacterPairSupport } from './supports/characterPair.js';
 import { BracketElectricCharacterSupport } from './supports/electricCharacter.js';
 import { IndentRulesSupport } from './supports/indentRules.js';
@@ -423,7 +425,11 @@ export class ResolvedLanguageConfiguration {
 		autoIndent: EditorAutoIndentStrategy,
 		previousLineText: string,
 		beforeEnterText: string,
-		afterEnterText: string
+		afterEnterText: string,
+		beforeRangeTokens?: IViewLineTokens,
+		afterRangeTokens?: IViewLineTokens,
+		previousLineTokens?: IViewLineTokens,
+		cursorTokenType?: StandardTokenType
 	): EnterAction | null {
 		if (!this._onEnterSupport) {
 			return null;
@@ -432,7 +438,11 @@ export class ResolvedLanguageConfiguration {
 			autoIndent,
 			previousLineText,
 			beforeEnterText,
-			afterEnterText
+			afterEnterText,
+			beforeRangeTokens,
+			afterRangeTokens,
+			previousLineTokens,
+			cursorTokenType
 		);
 	}
 

@@ -120,7 +120,25 @@
 				"group": "buildWatchers",
 				"close": false
 			},
-			"problemMatcher": "$esbuild-watch"
+			"problemMatcher": {
+				"owner": "esbuild",
+				"applyTo": "closedDocuments",
+				"fileLocation": [
+					"relative",
+					"${workspaceFolder}/extensions/copilot"
+				],
+				"pattern": {
+					"regexp": "^(.+?):(\\d+):(\\d+): ERROR: (.+)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"message": 4
+				},
+				"background": {
+					"beginsPattern": "\\[watch\\] build started",
+					"endsPattern": "\\[watch\\] build finished"
+				}
+			}
 		},
 		{
 			"label": "VS Code - Build",
@@ -182,7 +200,7 @@
 				"group": "buildKillers",
 				"close": true
 			},
-			"problemMatcher": "$esbuild"
+			"problemMatcher": []
 		},
 		{
 			"label": "Kill VS Code - Build",

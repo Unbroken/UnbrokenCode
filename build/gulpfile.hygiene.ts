@@ -26,8 +26,9 @@ function checkPackageJSON(this: NodeJS.ReadWriteStream, actualPath: string, allo
 		for (const depName in set1) {
 			const depVersion = set1[depName];
 			const rootDepVersion = set2[depName];
-			if (!rootDepVersion || allowedDifferences.includes(depName)) {
-				// missing in root, or allowed to differ
+			if (!rootDepVersion || allowedDifferences.includes(depName) || rootDepVersion.startsWith('file:')) {
+				// missing in root, allowed to differ, or a local package of the root, such as the
+				// xterm.js fork, which the other folders take from the registry instead
 				continue;
 			}
 			if (depVersion !== rootDepVersion) {

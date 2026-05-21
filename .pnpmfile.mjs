@@ -10,4 +10,19 @@
 // install roots. See build/npm/pnpm/nativeBuildEnv.ts.
 import { createNativeBuildHooks } from './build/npm/pnpm/nativeBuildEnv.ts';
 
-export const hooks = createNativeBuildHooks(import.meta.dirname, { exportFrozenLockfileOfCi: true });
+const nativeBuildHooks = createNativeBuildHooks(import.meta.dirname, { exportFrozenLockfileOfCi: true });
+
+export const hooks = {
+	...nativeBuildHooks,
+	// The xterm.js packages are tarballs that every machine builds from the packages/xterm.js
+	// submodule (see setup.sh), so their integrity differs between machines. Leaving it out of the
+	// lockfile keeps `pnpm install --frozen-lockfile` working with any build of the same commit.
+	afterAllResolved(lockfile) {
+		for (const snapshot of Object.values(lockfile.packages ?? {})) {
+			if (snapshot.resolution?.tarball?.startsWith('file:packages/xterm.js/')) {
+				delete snapshot.resolution.integrity;
+			}
+		}
+		return lockfile;
+	},
+};

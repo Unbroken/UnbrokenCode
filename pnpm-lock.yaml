@@ -177,7 +177,7 @@ overrides:
 
 packageExtensionsChecksum: sha256-hEMMTAFgGzw4mGnzRRe054b9j0b0pAas190lwXAci5s=
 
-pnpmfileChecksum: sha256-RvI1MUtrmmQk7tkmroskFwrMO+nsJ522YtxOLkd6hCs=
+pnpmfileChecksum: sha256-JxWLIMLQUduXbE0dzREyoeSwuiO72E6yqEUjNixbb6E=
 
 patchedDependencies:
   foundry-local-sdk: 144dc233226af4a735d3bbf7e0476ef09c2c7336c8f47d488703c483b013745e
@@ -285,36 +285,45 @@ importers:
       '@vscode/windows-registry':
         specifier: ^1.3.0
         version: 1.3.0
+      '@xterm/addon-attach':
+        specifier: file:packages/xterm.js/packages/xterm-addon-attach.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-attach.tgz
       '@xterm/addon-clipboard':
-        specifier: ^0.3.0-beta.335
-        version: 0.3.0-beta.335(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-clipboard.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-clipboard.tgz
+      '@xterm/addon-fit':
+        specifier: file:packages/xterm.js/packages/xterm-addon-fit.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-fit.tgz
       '@xterm/addon-image':
-        specifier: ^0.10.0-beta.332
-        version: 0.10.0-beta.332(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-image.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-image.tgz
       '@xterm/addon-ligatures':
-        specifier: ^0.11.0-beta.331
-        version: 0.11.0-beta.331(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-ligatures.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-ligatures.tgz
       '@xterm/addon-progress':
-        specifier: ^0.3.0-beta.331
-        version: 0.3.0-beta.331(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-progress.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-progress.tgz
       '@xterm/addon-search':
-        specifier: ^0.17.0-beta.331
-        version: 0.17.0-beta.331(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-search.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-search.tgz
       '@xterm/addon-serialize':
-        specifier: ^0.15.0-beta.331
-        version: 0.15.0-beta.331(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-serialize.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-serialize.tgz
       '@xterm/addon-unicode11':
-        specifier: ^0.10.0-beta.331
-        version: 0.10.0-beta.331(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-unicode11.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-unicode11.tgz
+      '@xterm/addon-web-links':
+        specifier: file:packages/xterm.js/packages/xterm-addon-web-links.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-web-links.tgz
       '@xterm/addon-webgl':
-        specifier: ^0.20.0-beta.330
-        version: 0.20.0-beta.330(@xterm/xterm@6.1.0-beta.337)
+        specifier: file:packages/xterm.js/packages/xterm-addon-webgl.tgz
+        version: file:packages/xterm.js/packages/xterm-addon-webgl.tgz
       '@xterm/headless':
-        specifier: ^6.1.0-beta.335
-        version: 6.1.0-beta.335
+        specifier: file:packages/xterm.js/packages/xterm-headless.tgz
+        version: file:packages/xterm.js/packages/xterm-headless.tgz
       '@xterm/xterm':
-        specifier: ^6.1.0-beta.337
-        version: 6.1.0-beta.337
+        specifier: file:packages/xterm.js/packages/xterm-xterm.tgz
+        version: file:packages/xterm.js/packages/xterm-xterm.tgz
       chrome-remote-interface:
         specifier: ^0.33.0
         version: 0.33.0
@@ -5035,6 +5044,7 @@ packages:
   '@secretlint/secretlint-rule-preset-recommend@10.2.2':
     resolution: {integrity: sha512-K3jPqjva8bQndDKJqctnGfwuAxU2n9XNCPtbXVI5JvC7FnQiNg/yWlQPbMUlBXtBoBGFYp08A94m6fvtc9v+zA==}
     engines: {node: '>=20.0.0'}
+    deprecated: Built into secretlint v14 and later. Remove this package; the rule id still works. https://github.com/secretlint/secretlint/blob/HEAD/docs/rules/preset-recommend.md
 
   '@secretlint/source-creator@10.2.2':
     resolution: {integrity: sha512-h6I87xJfwfUTgQ7irWq7UTdq/Bm1RuQ/fYhA3dtTIAop5BwSFmZyrchph4WcoEvbN460BWKmk4RYSvPElIIvxw==}
@@ -6010,52 +6020,58 @@ packages:
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
     engines: {node: '>=10.0.0'}
 
-  '@xterm/addon-clipboard@0.3.0-beta.335':
-    resolution: {integrity: sha512-LVuJcdUTMxzT9oWj5IrAaVe33pveD04izzIM5g3ny4pgbz0Csffn6qVmZ5SnwfJ08fp/0wDxRwnpcsd7cTpZBA==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-attach@file:packages/xterm.js/packages/xterm-addon-attach.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-attach.tgz}
+    version: 0.12.0
 
-  '@xterm/addon-image@0.10.0-beta.332':
-    resolution: {integrity: sha512-9Ny3X2w41hTnr4pTraV0PkwhS4rEtUR6UkbBWJCu22pngzoSb7RdLDDi221aacsIKiKtQwQCIDVq3m6wGhw9Mg==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-clipboard@file:packages/xterm.js/packages/xterm-addon-clipboard.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-clipboard.tgz}
+    version: 0.2.0
 
-  '@xterm/addon-ligatures@0.11.0-beta.331':
-    resolution: {integrity: sha512-RZjGMHwraIB/fZEZOrhtUYxvJobGQGBEY3ao/hbi5oxwGfQoUlX6PaFTUN3KCX+zFBDgpvq70kK53wyTzcnXVQ==}
+  '@xterm/addon-fit@file:packages/xterm.js/packages/xterm-addon-fit.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-fit.tgz}
+    version: 0.11.0
+
+  '@xterm/addon-image@file:packages/xterm.js/packages/xterm-addon-image.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-image.tgz}
+    version: 0.9.0
+
+  '@xterm/addon-ligatures@file:packages/xterm.js/packages/xterm-addon-ligatures.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-ligatures.tgz}
+    version: 0.10.0
     engines: {node: '>8.0.0'}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
 
-  '@xterm/addon-progress@0.3.0-beta.331':
-    resolution: {integrity: sha512-4PylaZeZnBeJmTLFZ76DAF/hmUW8kk0igYhDvgeVpLV5no/ud+hmtXXOFAC7BrtE5ltkW9fFjItm+cHXTj13+A==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-progress@file:packages/xterm.js/packages/xterm-addon-progress.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-progress.tgz}
+    version: 0.2.0
 
-  '@xterm/addon-search@0.17.0-beta.331':
-    resolution: {integrity: sha512-oYdFS2BXVXzwosRJ9kf9niHABDaLBBk2YgAmCyYz3gQgqXb5omgQH2NcBESc1qqf0G5SzJRWTcFaNWE7aakd6A==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-search@file:packages/xterm.js/packages/xterm-addon-search.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-search.tgz}
+    version: 0.16.0
 
-  '@xterm/addon-serialize@0.15.0-beta.331':
-    resolution: {integrity: sha512-UQL26TFwWulbhrvdLE21hx32hju5B6B9tTihqvd1XwfB7Fbje459/gC2Eha2Dane7YU+SZ+PIcsloA5zd4AwnQ==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-serialize@file:packages/xterm.js/packages/xterm-addon-serialize.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-serialize.tgz}
+    version: 0.14.0
 
-  '@xterm/addon-unicode11@0.10.0-beta.331':
-    resolution: {integrity: sha512-GW2EOP+4+ZXQS/KfTgriP2QxDOSMe9ffnEkq7tgIwAfiTUcE3X/oxn6wBNdyxuM/5mLyK7wzi1O8ycV83yAYPw==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-unicode11@file:packages/xterm.js/packages/xterm-addon-unicode11.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-unicode11.tgz}
+    version: 0.9.0
 
-  '@xterm/addon-webgl@0.20.0-beta.330':
-    resolution: {integrity: sha512-gcxemutOlpGCEnxZckSwR8oZ/twZXrcQw6N3aRcDVrPguIMr9YvrzegfllCo4WxRnOc4gWkHhjD1toX3emug3A==}
-    peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.337
+  '@xterm/addon-web-links@file:packages/xterm.js/packages/xterm-addon-web-links.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-web-links.tgz}
+    version: 0.12.0
 
-  '@xterm/headless@6.1.0-beta.335':
-    resolution: {integrity: sha512-3/hfyBw8B67K1x0yy7R6H8oodJgleTxCpuc57Ulwb5YLNc7kF6yMJF8ig/tk4vZilRzdSmoh1xFvwbBjgnU6hg==}
+  '@xterm/addon-webgl@file:packages/xterm.js/packages/xterm-addon-webgl.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-addon-webgl.tgz}
+    version: 0.19.0
 
-  '@xterm/xterm@6.1.0-beta.337':
-    resolution: {integrity: sha512-zstczNBAT/FaaWzCCoLx3DavRcAW0ndK7g/Y0893nPvZwWmjMU8WeuqJYqMRVommGwv1KRoxdlOOt0KukxHadA==}
+  '@xterm/headless@file:packages/xterm.js/packages/xterm-headless.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-headless.tgz}
+    version: 6.0.0
+
+  '@xterm/xterm@file:packages/xterm.js/packages/xterm-xterm.tgz':
+    resolution: {tarball: file:packages/xterm.js/packages/xterm-xterm.tgz}
+    version: 6.0.0
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -17119,43 +17135,34 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
-  '@xterm/addon-clipboard@0.3.0-beta.335(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-attach@file:packages/xterm.js/packages/xterm-addon-attach.tgz': {}
 
-  '@xterm/addon-image@0.10.0-beta.332(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-clipboard@file:packages/xterm.js/packages/xterm-addon-clipboard.tgz': {}
 
-  '@xterm/addon-ligatures@0.11.0-beta.331(@xterm/xterm@6.1.0-beta.337)':
+  '@xterm/addon-fit@file:packages/xterm.js/packages/xterm-addon-fit.tgz': {}
+
+  '@xterm/addon-image@file:packages/xterm.js/packages/xterm-addon-image.tgz': {}
+
+  '@xterm/addon-ligatures@file:packages/xterm.js/packages/xterm-addon-ligatures.tgz':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
       lru-cache: 11.5.1
       opentype.js: 2.0.0
 
-  '@xterm/addon-progress@0.3.0-beta.331(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-progress@file:packages/xterm.js/packages/xterm-addon-progress.tgz': {}
 
-  '@xterm/addon-search@0.17.0-beta.331(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-search@file:packages/xterm.js/packages/xterm-addon-search.tgz': {}
 
-  '@xterm/addon-serialize@0.15.0-beta.331(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-serialize@file:packages/xterm.js/packages/xterm-addon-serialize.tgz': {}
 
-  '@xterm/addon-unicode11@0.10.0-beta.331(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-unicode11@file:packages/xterm.js/packages/xterm-addon-unicode11.tgz': {}
 
-  '@xterm/addon-webgl@0.20.0-beta.330(@xterm/xterm@6.1.0-beta.337)':
-    dependencies:
-      '@xterm/xterm': 6.1.0-beta.337
+  '@xterm/addon-web-links@file:packages/xterm.js/packages/xterm-addon-web-links.tgz': {}
 
-  '@xterm/headless@6.1.0-beta.335': {}
+  '@xterm/addon-webgl@file:packages/xterm.js/packages/xterm-addon-webgl.tgz': {}
 
-  '@xterm/xterm@6.1.0-beta.337': {}
+  '@xterm/headless@file:packages/xterm.js/packages/xterm-headless.tgz': {}
+
+  '@xterm/xterm@file:packages/xterm.js/packages/xterm-xterm.tgz': {}
 
   '@xtuc/ieee754@1.2.0': {}
 

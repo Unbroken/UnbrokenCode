@@ -131,10 +131,14 @@ export function splitFiles(files: readonly string[], count: number, maxLength = 
 	return groups.map(group => group.paths);
 }
 
+// The configuration of the repository is the only one: submodules such as packages/xterm.js bring their own, which
+// oxlint would otherwise load for their folders, and fail on, although their files are ignored.
+const oxlintConfigArgs = ['--disable-nested-config'];
+
 function runOxlint(args: readonly string[]): Promise<IOxlintOutput & { readonly duration: number }> {
 	const started = Date.now();
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, [oxlintBin, '--format', 'json', '--no-error-on-unmatched-pattern', ...args], { cwd: root });
+		const child = spawn(process.execPath, [oxlintBin, ...oxlintConfigArgs, '--format', 'json', '--no-error-on-unmatched-pattern', ...args], { cwd: root });
 		let stdout = '';
 		let stderr = '';
 		child.stdout.on('data', data => stdout += data);
@@ -152,7 +156,7 @@ function runOxlint(args: readonly string[]): Promise<IOxlintOutput & { readonly 
 
 async function listFiles(paths: readonly string[]): Promise<string[]> {
 	return new Promise((resolve, reject) => {
-		const child = spawn(process.execPath, [oxlintBin, '--debug=files', '--no-error-on-unmatched-pattern', ...paths], { cwd: root });
+		const child = spawn(process.execPath, [oxlintBin, ...oxlintConfigArgs, '--debug=files', '--no-error-on-unmatched-pattern', ...paths], { cwd: root });
 		let stdout = '';
 		child.stdout.on('data', data => stdout += data);
 		child.on('error', reject);

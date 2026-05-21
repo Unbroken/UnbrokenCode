@@ -1,0 +1,127 @@
+{
+  "name": "esbuild-problem-matchers",
+  "displayName": "esbuild Problem Matchers",
+  "description": "Problem matchers for esbuild tasks. Bundled copy of connor4312/esbuild-problem-matchers (commit 51e17a9f4464dd008bfc07871482b94dc87901ce), republished under the 'unbroken' publisher because the upstream extension ID is blocklisted on the Open VSX extension-control list.",
+  "publisher": "unbroken",
+  "version": "0.0.3",
+  "engines": {
+    "vscode": "^1.55.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/connor4312/esbuild-problem-matchers/blob/master/README.md",
+  "bugs": {
+    "url": "https://github.com/connor4312/esbuild-problem-matchers/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/connor4312/esbuild-problem-matchers.git"
+  },
+  "keywords": [
+    "esbuild",
+    "problem matcher",
+    "tasks"
+  ],
+  "contributes": {
+    "problemMatchers": [
+      {
+        "name": "esbuild",
+        "label": "esbuild problem matcher",
+        "severity": "error",
+        "applyTo": "closedDocuments",
+        "source": "esbuild",
+        "fileLocation": "relative",
+        "pattern": [
+          {
+            "regexp": "^[✘▲] \\[([A-Z]+)\\] (.+)",
+            "severity": 1,
+            "message": 2
+          },
+          {
+            "regexp": "^(?:\\t| {4})(?!\\s)([^:]+)(?::([0-9]+))?(?::([0-9]+))?:$",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ]
+      },
+      {
+        "name": "esbuild-watch",
+        "label": "esbuild --watch problem matcher",
+        "severity": "error",
+        "applyTo": "closedDocuments",
+        "source": "esbuild",
+        "fileLocation": "relative",
+        "pattern": [
+          {
+            "regexp": "^[✘▲] \\[([A-Z]+)\\] (.+)",
+            "severity": 1,
+            "message": 2
+          },
+          {
+            "regexp": "^(?:\\t| {4})(?!\\s)([^:]+)(?::([0-9]+))?(?::([0-9]+))?:$",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "\\[watch\\] build started"
+          },
+          "endsPattern": {
+            "regexp": "\\[watch\\] build finished"
+          }
+        }
+      },
+      {
+        "name": "esbuild-0.13",
+        "label": "esbuild <0.14 problem matcher",
+        "severity": "error",
+        "applyTo": "closedDocuments",
+        "source": "esbuild",
+        "fileLocation": "relative",
+        "pattern": [
+          {
+            "regexp": "> (.*?):([0-9]+):([0-9]+): (warning|error): (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        ]
+      },
+      {
+        "name": "esbuild-0.13-watch",
+        "label": "esbuild <0.14 --watch problem matcher",
+        "severity": "error",
+        "applyTo": "closedDocuments",
+        "source": "esbuild",
+        "fileLocation": "relative",
+        "pattern": [
+          {
+            "regexp": "> (.*?):([0-9]+):([0-9]+): (warning|error): (.+)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "severity": 4,
+            "message": 5
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "\\[watch\\] build started"
+          },
+          "endsPattern": {
+            "regexp": "\\[watch\\] build finished"
+          }
+        }
+      }
+    ]
+  }
+}

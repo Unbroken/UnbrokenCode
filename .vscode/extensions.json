@@ -8,6 +8,6 @@
 		"ms-vscode.extension-test-runner",
 		"typescriptteam.native-preview",
 		"ms-vscode.ts-customized-language-service",
-		"connor4312.esbuild-problem-matchers"
+		"unbroken.esbuild-problem-matchers"
 	]
 }

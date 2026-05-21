@@ -35,6 +35,7 @@ export const all = Object.freeze<string[]>([
 	'!extensions/codelldb/**',
 	'!extensions/vscode-clangd/**',
 	'!extensions/Highlighterr/**', // a local link to the project that the malterlib extension generates files from
+	'!packages/**',
 ]);
 
 export const unicodeFilter = Object.freeze<string[]>([

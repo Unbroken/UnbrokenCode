@@ -65,6 +65,9 @@ export class ElectronPtyHostStarter extends Disposable implements IPtyHostStarte
 			env: this._createPtyHostConfiguration()
 		});
 
+		this.utilityProcess.onStdout(data => this._logService.info(`[pty-host stdout] ${data}`));
+		this.utilityProcess.onStderr(data => this._logService.error(`[pty-host stderr] ${data}`));
+
 		const port = this.utilityProcess.connect();
 		const client = new MessagePortClient(port, 'ptyHost');
 

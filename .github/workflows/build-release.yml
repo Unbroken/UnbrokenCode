@@ -176,6 +176,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           ./build-unbroken-code.sh --macos-arch=${{ matrix.arch }} --release
         shell: bash
 
@@ -217,6 +218,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           ./build-unbroken-code.sh --windows --windows-arch=x64 --release
         shell: bash
 
@@ -249,6 +251,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           ./build-unbroken-code.sh --windows --windows-arch=arm64 --release
         shell: bash
 
@@ -300,6 +303,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           ./build-unbroken-code.sh --linux --release
         shell: bash
 
@@ -351,6 +355,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           ./build-unbroken-code.sh --linux --release
         shell: bash
 
@@ -370,6 +375,7 @@ jobs:
         uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Install pnpm
         uses: ./.github/actions/setup-pnpm
@@ -391,6 +397,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          ./setup.sh
           (cd build && pnpm install --frozen-lockfile)
           ./build-unbroken-code.sh --generate-release-description
         shell: bash

@@ -10,3 +10,6 @@
 	path = extensions/codelldb
 	url = https://github.com/Unbroken/codelldb.git
 	branch = master
+[submodule "packages/xterm.js"]
+	path = packages/xterm.js
+	url = https://github.com/Unbroken/xterm.js.git

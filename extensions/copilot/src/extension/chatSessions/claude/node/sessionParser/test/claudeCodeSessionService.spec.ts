@@ -5,6 +5,7 @@
 
 import type { SDKSessionInfo, SessionMessage } from '@anthropic-ai/claude-agent-sdk';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { ConfigKey, IConfigurationService } from '../../../../../../platform/configuration/common/configurationService';
 import { IFileSystemService } from '../../../../../../platform/filesystem/common/fileSystemService';
 import { MockFileSystemService } from '../../../../../../platform/filesystem/node/test/mockFileSystemService';
 import { TestingServiceCollection } from '../../../../../../platform/test/node/services';
@@ -88,6 +89,7 @@ describe('ClaudeCodeSessionService', () => {
 	let mockSdkService: MockClaudeCodeSdkService;
 	let testingServiceCollection: TestingServiceCollection;
 	let service: ClaudeCodeSessionService;
+	let configurationService: IConfigurationService;
 
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -105,8 +107,41 @@ describe('ClaudeCodeSessionService', () => {
 
 		const accessor = testingServiceCollection.createTestingAccessor();
 		mockFs = accessor.get(IFileSystemService) as MockFileSystemService;
+		configurationService = accessor.get(IConfigurationService);
+		void configurationService.setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
 		const instaService = accessor.get(IInstantiationService);
 		service = instaService.createInstance(ClaudeCodeSessionService);
+	});
+
+	it('returns no sessions when Claude session history is disabled', async () => {
+		let called = false;
+		mockSdkService.listSessions = async () => {
+			called = true;
+			return [];
+		};
+
+		await configurationService.setConfig(ConfigKey.ClaudeAgentSessionsEnabled, false);
+
+		const sessions = await service.getAllSessions(CancellationToken.None);
+
+		expect(sessions).toHaveLength(0);
+		expect(called).toBe(false);
+	});
+
+	it('returns no session when Claude session history is disabled', async () => {
+		let called = false;
+		mockSdkService.getSessionInfo = async () => {
+			called = true;
+			return undefined;
+		};
+
+		await configurationService.setConfig(ConfigKey.ClaudeAgentSessionsEnabled, false);
+
+		const resource = URI.from({ scheme: 'claude-code', path: '/disabled-session' });
+		const session = await service.getSession(resource, CancellationToken.None);
+
+		expect(session).toBeUndefined();
+		expect(called).toBe(false);
 	});
 
 	// #region getAllSessions
@@ -286,7 +321,9 @@ describe('ClaudeCodeSessionService', () => {
 				sc.define(IFolderRepositoryManager, new MockFolderRepositoryManager());
 				sc.set(IAgentSessionsWorkspace, { _serviceBrand: undefined, isAgentSessionsWorkspace: true });
 
-				agentSessionsService = sc.createTestingAccessor().get(IInstantiationService).createInstance(ClaudeCodeSessionService);
+				const accessor = sc.createTestingAccessor();
+				void accessor.get(IConfigurationService).setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
+				agentSessionsService = accessor.get(IInstantiationService).createInstance(ClaudeCodeSessionService);
 			});
 
 			it('lists all sessions without a dir argument', async () => {
@@ -583,6 +620,7 @@ describe('ClaudeCodeSessionService', () => {
 			]);
 
 			const accessor = noWorkspaceTestingServiceCollection.createTestingAccessor();
+			void accessor.get(IConfigurationService).setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
 			const instaService = accessor.get(IInstantiationService);
 			noWorkspaceService = instaService.createInstance(ClaudeCodeSessionService);
 		});
@@ -609,6 +647,7 @@ describe('ClaudeCodeSessionService', () => {
 			noMruServiceCollection.set(IAgentSessionsWorkspace, { _serviceBrand: undefined, isAgentSessionsWorkspace: false });
 
 			const accessor = noMruServiceCollection.createTestingAccessor();
+			void accessor.get(IConfigurationService).setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
 			const noMruService = accessor.get(IInstantiationService).createInstance(ClaudeCodeSessionService);
 
 			const sessions = await noMruService.getAllSessions(CancellationToken.None);
@@ -636,6 +675,7 @@ describe('ClaudeCodeSessionService', () => {
 			multiMruServiceCollection.set(IAgentSessionsWorkspace, { _serviceBrand: undefined, isAgentSessionsWorkspace: false });
 
 			const accessor = multiMruServiceCollection.createTestingAccessor();
+			void accessor.get(IConfigurationService).setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
 			const multiMruService = accessor.get(IInstantiationService).createInstance(ClaudeCodeSessionService);
 			const sessions = await multiMruService.getAllSessions(CancellationToken.None);
 
@@ -664,6 +704,7 @@ describe('ClaudeCodeSessionService', () => {
 			multiRootTestingServiceCollection.set(IAgentSessionsWorkspace, { _serviceBrand: undefined, isAgentSessionsWorkspace: false });
 
 			const accessor = multiRootTestingServiceCollection.createTestingAccessor();
+			void accessor.get(IConfigurationService).setConfig(ConfigKey.ClaudeAgentSessionsEnabled, true);
 			const instaService = accessor.get(IInstantiationService);
 			multiRootService = instaService.createInstance(ClaudeCodeSessionService);
 		});

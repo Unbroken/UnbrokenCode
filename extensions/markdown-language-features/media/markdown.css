@@ -403,8 +403,17 @@ blockquote {
 
 code {
 	font-family: var(--vscode-editor-font-family, "SF Mono", Monaco, Menlo, Consolas, "Ubuntu Mono", "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace);
-	font-size: 1em;
-	line-height: 1.357em;
+	font-size: var(--vscode-editor-font-size);
+	line-height: var(--vscode-editor-font-size);
+}
+
+:not(pre) > code {
+	vertical-align: middle;
+	border: 1px solid var(--vscode-widget-border);
+	padding-top: 2px;
+	padding-bottom: 1px;
+	padding-left: 3px;
+	padding-right: 3px;
 }
 
 body.wordWrap pre {
@@ -413,7 +422,7 @@ body.wordWrap pre {
 
 pre:not(.hljs),
 pre.hljs code > div {
-	padding: 16px;
+	padding: 10px;
 	border-radius: 3px;
 	overflow: auto;
 }
@@ -431,6 +440,7 @@ pre {
 	position: relative;
 	background-color: var(--vscode-textCodeBlock-background);
 	border: 1px solid var(--vscode-widget-border);
+	line-height: var(--vscode-editor-font-size);
 }
 
 /* Code block copy button */

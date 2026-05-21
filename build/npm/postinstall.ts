@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import path from 'path';
 import * as os from 'os';
 import * as child_process from 'child_process';
-import { separateRoots, distroRoots } from './dirs.ts';
+import { separateRoots, distroRoots, npmRoots } from './dirs.ts';
 import { ensureElectronTypes } from './electronTypes.ts';
 import { finishCloudSandbox } from './cloudSandbox.ts';
 import { getNativeBuildEnv, nativeBuildKeys } from './pnpm/nativeBuildEnv.ts';
@@ -103,6 +103,32 @@ async function pnpmInstallAsync(dir: string, env: NodeJS.ProcessEnv): Promise<vo
 			for (const line of output.trim().split('\n')) {
 				log(dir, line);
 			}
+		}
+	}
+}
+
+/**
+ * Installs an npm project (see `npmRoots`) with `npm ci`. pnpm passes its settings to this script as
+ * `npm_config_*` variables, which npm would read as its own configuration, so they are removed and
+ * the project's own `.npmrc` applies. Skips projects whose submodule isn't checked out.
+ */
+async function npmCiAsync(dir: string): Promise<void> {
+	if (!fs.existsSync(path.join(root, dir, 'package-lock.json'))) {
+		log(dir, 'Skipping, not checked out.');
+		return;
+	}
+	const env: NodeJS.ProcessEnv = {};
+	for (const [key, value] of Object.entries(process.env)) {
+		if (!/^npm_(config|package|lifecycle)_/i.test(key) && !/^npm_(execpath|node_execpath|command)$/i.test(key)) {
+			env[key] = value;
+		}
+	}
+	const isWindows = process.platform === 'win32';
+	log(dir, 'Installing dependencies with npm...');
+	const output = await spawnAsync(isWindows ? 'npm.cmd' : 'npm', ['ci'], { env, cwd: path.join(root, dir), shell: isWindows });
+	if (output.trim()) {
+		for (const line of output.trim().split('\n')) {
+			log(dir, line);
 		}
 	}
 }
@@ -243,6 +269,10 @@ async function main() {
 		} else {
 			parallelTasks.push(install(clearNativeBuildEnv({ ...process.env })));
 		}
+	}
+
+	for (const dir of npmRoots) {
+		parallelTasks.push(() => npmCiAsync(dir));
 	}
 
 	// The native roots install in parallel: each has its own node_modules, and their native modules

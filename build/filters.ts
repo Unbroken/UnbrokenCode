@@ -31,10 +31,18 @@ export const all = Object.freeze<string[]>([
 	'!**/node_modules/**',
 	'!**/*.js.map',
 	'!**/*.tsbuildinfo',
+	'!extensions/malterlib/**',
+	'!extensions/codelldb/**',
+	'!extensions/vscode-clangd/**',
+	'!extensions/Highlighterr/**', // a local link to the project that the malterlib extension generates files from
 ]);
 
 export const unicodeFilter = Object.freeze<string[]>([
 	'**',
+
+	'!**/build-unbroken-code.sh',
+
+	'!**/build/release/create-github-release.*',
 
 	'!**/ThirdPartyNotices.txt',
 	'!**/ThirdPartyNotices.cli.txt',
@@ -42,7 +50,7 @@ export const unicodeFilter = Object.freeze<string[]>([
 	'!LICENSES.chromium.html',
 	'!**/LICENSE',
 
-	'!**/*.{dll,exe,png,bmp,jpg,gif,webp,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm}',
+	'!**/*.{dll,exe,png,bmp,jpg,gif,webp,scpt,cur,ttf,woff,eot,template,ico,icns,opus,wasm,tiff}',
 	'!**/test/**',
 	'!**/*.test.ts',
 	'!**/*.{d.ts,json,md}',
@@ -148,8 +156,8 @@ export const indentationFilter = Object.freeze<string[]>([
 	'!src/vs/*/**/*.d.ts',
 	'!src/typings/**/*.d.ts',
 	'!extensions/**/*.d.ts',
-	'!**/*.{svg,exe,png,bmp,jpg,gif,webp,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm}',
-	'!build/{lib,download,linux,darwin}/**/*.js',
+	'!**/*.{svg,exe,png,bmp,jpg,gif,webp,scpt,bat,cmd,cur,ttf,woff,eot,md,ps1,psm1,template,yaml,yml,d.ts.recipe,ico,icns,plist,opus,admx,adml,wasm,tiff}',
+	'!build/{lib,download,linux,darwin,release}/**/*.js',
 	'!build/**/*.sh',
 	'!build/azure-pipelines/**/*.js',
 	'!build/azure-pipelines/**/*.config',

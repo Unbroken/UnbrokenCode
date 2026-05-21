@@ -11,7 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
 import { create } from 'tar';
-import { copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getCopilotRuntimeVersion, prepareBuiltInCopilotRipgrepShim, renderCopilotShimLauncher } from '../copilot.ts';
+import { claudeAgentSdkVendorPlatforms, copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getCopilotRuntimeVersion, prepareBuiltInCopilotRipgrepShim, renderCopilotShimLauncher } from '../copilot.ts';
 import { writePnpmLockfile } from './pnpmLockfileFixture.ts';
 
 /**
@@ -368,6 +368,10 @@ suite('copilot', () => {
 				'**',
 				...copilotPlatforms.map(platform => `!**/node_modules/@github/copilot-${platform}/**`),
 				...copilotPlatforms.map(platform => `!**/node_modules/@github/copilot-sdk-${platform}/**`),
+				...claudeAgentSdkVendorPlatforms.flatMap(platform => [
+					`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/${platform}/**`,
+					`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/${platform}/**`,
+				]),
 			]
 		);
 	});

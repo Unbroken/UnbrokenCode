@@ -43,6 +43,7 @@
 **/extensions/malterlib/**
 **/extensions/codelldb/**
 **/extensions/vscode-clangd/**
+**/packages/**
 **/fixtures/**
 **/node_modules/**
 **/out/**

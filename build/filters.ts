@@ -34,6 +34,7 @@ export const all = Object.freeze<string[]>([
 	'!extensions/malterlib/**',
 	'!extensions/codelldb/**',
 	'!extensions/vscode-clangd/**',
+	'!packages/**',
 ]);
 
 export const unicodeFilter = Object.freeze<string[]>([

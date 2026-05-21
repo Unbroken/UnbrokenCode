@@ -332,7 +332,8 @@ if (import.meta.main) {
 					!!l &&
 					l !== 'extensions/malterlib' &&
 					l !== 'extensions/vscode-clangd' &&
-					l !== 'extensions/codelldb'
+					l !== 'extensions/codelldb' &&
+					l !== 'packages/xterm.js'
 				);
 
 

@@ -14,6 +14,7 @@
  */
 
 import type { CancellationToken } from 'vscode';
+import { ConfigKey, IConfigurationService } from '../../../../../platform/configuration/common/configurationService';
 import { ILogService } from '../../../../../platform/log/common/logService';
 import { IWorkspaceService } from '../../../../../platform/workspace/common/workspaceService';
 import { createServiceIdentifier } from '../../../../../util/common/services';
@@ -63,6 +64,7 @@ export class ClaudeCodeSessionService implements IClaudeCodeSessionService {
 	declare _serviceBrand: undefined;
 
 	constructor(
+		@IConfigurationService private readonly _configurationService: IConfigurationService,
 		@IClaudeCodeSdkService private readonly _sdkService: IClaudeCodeSdkService,
 		@ILogService private readonly _logService: ILogService,
 		@IWorkspaceService private readonly _workspace: IWorkspaceService,
@@ -75,6 +77,10 @@ export class ClaudeCodeSessionService implements IClaudeCodeSessionService {
 	 * Delegates to the SDK's `listSessions()` and converts results.
 	 */
 	async getAllSessions(token: CancellationToken): Promise<readonly IClaudeCodeSessionInfo[]> {
+		if (!this._configurationService.getConfig(ConfigKey.ClaudeAgentSessionsEnabled)) {
+			return [];
+		}
+
 		if (this._agentSessionsWorkspace.isAgentSessionsWorkspace) {
 			try {
 				const sdkSessions = await this._sdkService.listSessions();
@@ -113,6 +119,10 @@ export class ClaudeCodeSessionService implements IClaudeCodeSessionService {
 	 * Uses SDK APIs for metadata, messages, and subagent transcripts.
 	 */
 	async getSession(resource: URI, token: CancellationToken): Promise<IClaudeCodeSession | undefined> {
+		if (!this._configurationService.getConfig(ConfigKey.ClaudeAgentSessionsEnabled)) {
+			return undefined;
+		}
+
 		const sessionId = ClaudeSessionUri.getSessionId(resource);
 
 		if (this._agentSessionsWorkspace.isAgentSessionsWorkspace) {

@@ -35,7 +35,7 @@ export class LinuxUpdateService extends AbstractUpdateService {
 	}
 
 	protected buildUpdateFeedUrl(quality: string, commit: string, options?: IUpdateURLOptions): string {
-		return createUpdateURL(this.productService.updateUrl!, `linux-${process.arch}`, quality, commit, options);
+		return createUpdateURL(this.productService.updateUrl!, `linux-${process.arch}`, quality, commit, { ...options, releaseStream: this.releaseStream });
 	}
 
 	protected doCheckForUpdates(explicit: boolean, _pendingCommit?: string): void {
@@ -58,9 +58,17 @@ export class LinuxUpdateService extends AbstractUpdateService {
 
 				if (!update || !update.url || !update.version || !update.productVersion) {
 					this.setState(State.Idle(UpdateType.Archive, undefined, explicit || undefined));
-				} else {
-					this.setState(State.AvailableForDownload(update));
+					return;
 				}
+
+				// Compare commits - if they're the same, no update is needed
+				if (update.version === this.productService.commit) {
+					this.logService.trace('update#doCheckForUpdates(): no update available, current commit matches server commit', { current: this.productService.commit, server: update.version });
+					this.setState(State.Idle(UpdateType.Archive, undefined, explicit || undefined));
+					return;
+				}
+
+				this.setState(State.AvailableForDownload(update));
 			})
 			.then(undefined, err => {
 				if (this.state.type !== StateType.CheckingForUpdates) {

@@ -174,6 +174,16 @@ export function getRipgrepExcludeFilter(platform: string, arch: string): string[
 	return ['**', ...excludes];
 }
 
+/**
+ * The vendor directories shipped by @anthropic-ai/claude-agent-sdk. These use
+ * reversed `{arch}-{platform}` naming (e.g. `x64-darwin`, `arm64-win32`)
+ * following Node's runtime values.
+ */
+export const claudeAgentSdkVendorPlatforms = [
+	'arm64-darwin', 'arm64-linux', 'arm64-win32',
+	'x64-darwin', 'x64-linux', 'x64-win32',
+];
+
 export function getCopilotTgrepExcludeFilter(platform: string, arch: string): string[] {
 	const target = toCopilotTgrepPlatformArch(platform, arch);
 	const nonTargetPlatforms = copilotTgrepPlatforms.filter(p => p !== target);
@@ -198,10 +208,22 @@ export function getCopilotExcludeFilter(platform: string, arch: string): string[
 	const targetPlatformArch = toCopilotPackagePlatformArch(platform, arch);
 	const nonTargetPlatforms = copilotPlatforms.filter(p => p !== targetPlatformArch);
 
+	// Strip non-target binaries bundled inside @anthropic-ai/claude-agent-sdk —
+	// the package ships vendor binaries for every platform regardless of host.
+	const { nodePlatform, nodeArch } = toNodePlatformArch(platform, arch);
+	const claudeSdkVendorTarget = `${nodeArch}-${nodePlatform}`;
+	const claudeSdkVendorExcludes = claudeAgentSdkVendorPlatforms
+		.filter(p => p !== claudeSdkVendorTarget)
+		.flatMap(p => [
+			`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/${p}/**`,
+			`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/${p}/**`,
+		]);
+
 	return [
 		'**',
 		...copilotPlatforms.map(p => `!**/node_modules/@github/copilot-${p}/**`),
 		...nonTargetPlatforms.map(p => `!**/node_modules/@github/copilot-sdk-${p}/**`),
+		...claudeSdkVendorExcludes,
 	];
 }
 

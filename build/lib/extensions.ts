@@ -129,7 +129,7 @@ function fromLocalNormal(extensionPath: string): Stream {
 	const vsce = require('@vscode/vsce') as typeof import('@vscode/vsce');
 	const result = es.through();
 
-	vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm })
+	vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.Npm })
 		.then(fileNames => {
 			const files = fileNames
 				.map(fileName => path.join(extensionPath, fileName))
@@ -181,7 +181,7 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 		});
 	}).then(() => {
 		// After esbuild completes, collect all files using vsce
-		return vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None });
+		return vsce.listFiles({ cwd: fs.realpathSync(extensionPath), packageManager: vsce.PackageManager.None });
 	}).then(fileNames => {
 		if (packagedDependencies.length > 0) {
 			const packagedDependencyFileNames = packagedDependencies.flatMap(dependency =>
@@ -313,6 +313,7 @@ export function fromGithub({ name, version, repo, sha256, metadata }: IExtension
 const nativeExtensions = [
 	'git',
 	'microsoft-authentication',
+	'codelldb',
 ];
 
 const excludedExtensions = [
@@ -429,8 +430,42 @@ function doPackageLocalExtensionsStream(forWeb: boolean, native: boolean): Strea
 	const localExtensionsStream = minifyExtensionResources(
 		es.merge(
 			...localExtensionsDescriptions.map(extension => {
-				return fromLocal(extension.path, forWeb)
+				// Special handling for CodeLLDB packaging (require VSIX)
+				console.log('Processing extension:', extension.name, forWeb);
+				if (extension.name === 'codelldb' && !forWeb) {
+					console.log('Processing extension VSIX:', extension.name, forWeb);
+					const buildRoot = path.join(extension.path, 'build');
+					const vsixPath = path.join(buildRoot, 'codelldb-full.vsix');
+					if (!fs.existsSync(vsixPath)) {
+						throw new Error(`CodeLLDB VSIX not found at ${vsixPath}. Ensure the 'vsix_full' target built successfully.`);
+					}
+					const packageJsonFilter = filter('package.json', { restore: true });
+					const vsixStream = gulp.src(vsixPath)
+						.pipe(buffer())
+						.pipe(vinylZip.src())
+						.pipe(filter('extension/**'))
+						.pipe(rename(p => p.dirname = p.dirname!.replace(/^extension\/?/, '')))
+						// Exclude unnecessary CPython sysconfig artifact from CodeLLDB VSIX
+						.pipe(filter(['**', '!lldb/lib/python*/_sysconfigdata__darwin_darwin.py']))
+						.pipe(packageJsonFilter)
+						.pipe(buffer())
+						.pipe(es.mapSync((f: File) => {
+							try {
+								const data = JSON.parse(f.contents!.toString('utf8'));
+								delete data.scripts;
+								delete data.devDependencies;
+								f.contents = Buffer.from(JSON.stringify(data));
+							} catch { }
+							return f;
+						}))
+						.pipe(packageJsonFilter.restore)
+						.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+					// Only package content from the VSIX to avoid source package.json (@VERSION@)
+					return vsixStream;
+				}
+				const baseStream = fromLocal(extension.path, forWeb)
 					.pipe(rename(p => p.dirname = `extensions/${extension.name}/${p.dirname}`));
+				return baseStream;
 			})
 		)
 	);
@@ -476,15 +511,36 @@ export function packageCopilotExtensionStream(): Stream {
 			.pipe(rename(p => p.dirname = `extensions/copilot/${p.dirname}`))
 	);
 
-	const productionDependencies = getProductionDependencies('extensions/copilot');
-	const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
+	// The extension build re-runs its postinstall script, which rewrites
+	// node_modules/@github/copilot. Glob the production dependencies only once
+	// the build has finished, otherwise the copy races the rewrite and can
+	// silently drop files or fail on files deleted mid-stream.
+	const result = es.through();
+	localExtensionsStream.on('error', err => result.emit('error', err));
+	localExtensionsStream.pipe(result, { end: false });
+	localExtensionsStream.on('end', () => {
+		const copilotCliPackage = path.join('extensions', 'copilot', 'node_modules', '@github', 'copilot');
+		const productionDependencies = getProductionDependencies('extensions/copilot').map(d => path.relative(root, d)).filter(d => d !== copilotCliPackage);
+		const dependenciesSrc = productionDependencies.map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat();
+		// .moduleignore strips @github/copilot since the app's agent host uses the runtime
+		// bundled with @github/copilot-sdk, but this extension loads the SDK inside that
+		// package. Take the same files that its .vscodeignore selects for the VSIX.
+		const copilotCliSrc = fs.readFileSync(path.join(extensionPath, '.vscodeignore'), 'utf8')
+			.split(/\r?\n/g)
+			.map(line => line.trim())
+			.filter(line => line.startsWith('!node_modules/@github/copilot/'))
+			.map(line => `extensions/copilot/${line.substring(1)}`);
+		const dependenciesStream = es.merge(
+			gulp.src(dependenciesSrc, { base: '.' })
+				.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
+				.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`))),
+			gulp.src(copilotCliSrc, { base: '.' })
+		);
+		dependenciesStream.on('error', err => result.emit('error', err));
+		dependenciesStream.pipe(result, { end: true });
+	});
 
-	return es.merge(
-		localExtensionsStream,
-		gulp.src(dependenciesSrc, { base: '.' })
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)))
-	).pipe(util2.setExecutableBit(['**/*.sh']));
+	return result.pipe(util2.setExecutableBit(['**/*.sh']));
 }
 
 export function packageMarketplaceExtensionsStream(forWeb: boolean): Stream {
@@ -572,7 +628,7 @@ export function translatePackageJSON(packageJSON: string, packageNLSPath: string
 			} else if (val && typeof val === 'object') {
 				translate(val);
 			} else if (typeof val === 'string' && val.charCodeAt(0) === CharCode_PC && val.charCodeAt(val.length - 1) === CharCode_PC) {
-				const translated = packageNls[val.substr(1, val.length - 2)];
+				const translated = packageNls[val.substring(1, val.length - 1)];
 				if (translated) {
 					obj[key] = typeof translated === 'string' ? translated : (typeof translated.message === 'string' ? translated.message : val);
 				}
@@ -586,11 +642,13 @@ export function translatePackageJSON(packageJSON: string, packageNLSPath: string
 const extensionsPath = path.join(root, 'extensions');
 
 export async function esbuildExtensions(taskName: string, isWatch: boolean, scripts: { script: string; outputRoot?: string }[]): Promise<void> {
-	function reporter(stdError: string, script: string) {
+	function reporter(stdError: string, script: string, isIncremental: boolean) {
 		const matches = (stdError || '').match(/\> (.+): error: (.+)?/g);
-		fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		if (!isIncremental) {
+			fancyLog(`Finished ${ansiColors.green(taskName)} ${script} with ${matches ? matches.length : 0} errors.`);
+		}
 		for (const match of matches || []) {
-			fancyLog.error(match);
+			fancyLog.error(ansiColors.red(match));
 		}
 	}
 
@@ -607,12 +665,16 @@ export async function esbuildExtensions(taskName: string, isWatch: boolean, scri
 				if (error) {
 					return reject(error);
 				}
-				reporter(stderr, script);
+				reporter(stderr, script, false);
 				return resolve();
 			});
 
 			proc.stdout!.on('data', (data) => {
 				fancyLog(`${ansiColors.green(taskName)}: ${data.toString('utf8')}`);
+			});
+
+			proc.stderr!.on('data', (data) => {
+				reporter(data, script, true);
 			});
 		});
 	});
@@ -622,7 +684,7 @@ export async function esbuildExtensions(taskName: string, isWatch: boolean, scri
 
 
 // Additional projects to run esbuild on. These typically build code for webviews
-const esbuildMediaScripts: { script: string; tsconfig: string }[] = [
+const esbuildMediaScripts: { script: string; tsconfig?: string }[] = [
 	{ script: 'ipynb/esbuild.notebook.mts', tsconfig: 'ipynb/notebook-src/tsconfig.json' },
 	{ script: 'markdown-language-features/esbuild.notebook.mts', tsconfig: 'markdown-language-features/notebook/tsconfig.json' },
 	{ script: 'markdown-language-features/esbuild.webview.mts', tsconfig: 'markdown-language-features/preview-src/tsconfig.json' },
@@ -631,6 +693,10 @@ const esbuildMediaScripts: { script: string; tsconfig: string }[] = [
 	{ script: 'mermaid-markdown-features/esbuild.webview.mts', tsconfig: 'mermaid-markdown-features/preview-src/tsconfig.json' },
 	{ script: 'notebook-renderers/esbuild.notebook.mts', tsconfig: 'notebook-renderers/tsconfig.json' },
 	{ script: 'simple-browser/esbuild.webview.mts', tsconfig: 'simple-browser/preview-src/tsconfig.json' },
+	// malterlib and vscode-clangd are typechecked separately (via the extension
+	// compilations list and scripts/typecheck-extensions.sh respectively)
+	{ script: 'malterlib/esbuild.mjs' },
+	{ script: 'vscode-clangd/esbuild.mjs' },
 ];
 
 export function buildExtensionMedia(isWatch: boolean, outputRoot?: string): Promise<void> {
@@ -639,13 +705,16 @@ export function buildExtensionMedia(isWatch: boolean, outputRoot?: string): Prom
 		outputRoot: outputRoot ? path.join(root, outputRoot, path.dirname(script)) : undefined
 	})));
 
-	const typeCheckTasks = esbuildMediaScripts.map(({ tsconfig }) => {
+	const typeCheckTasks = esbuildMediaScripts.flatMap(({ tsconfig }) => {
+		if (!tsconfig) {
+			return [];
+		}
 		const tsconfigPath = path.join(extensionsPath, tsconfig);
 		const config = { taskName: 'typechecking extension media (tsgo)', noEmit: true };
 		if (!isWatch) {
-			return spawnTsgo(tsconfigPath, config);
+			return [spawnTsgo(tsconfigPath, config)];
 		} else {
-			return watchTypeCheckExtensionMedia(tsconfigPath, config);
+			return [watchTypeCheckExtensionMedia(tsconfigPath, config)];
 		}
 	});
 

@@ -24,12 +24,12 @@ export interface INodeCompileCachePaths {
 	readonly cacheDirectory: string;
 }
 
-export function shouldGenerateNodeCompileCache(platform: string, arch: string, product: INodeCompileCacheProduct): boolean {
-	if (!product.quality) {
-		return false;
-	}
-
-	return platform === 'darwin' ? arch === 'arm64' : (platform === 'linux' || platform === 'win32') && arch === 'x64';
+export function shouldGenerateNodeCompileCache(_platform: string, _arch: string, _product: INodeCompileCacheProduct): boolean {
+	// Bundling a cache needs the Node.js read-only mode (nodejs/node@65f518c72a) and portable caches
+	// that aren't split by uid (nodejs/node@adad4d650d). Without them, as in stock Electron, the app
+	// writes to the cache inside its own resources, which breaks the code signature on macOS.
+	// Without a generated cache the runtime never enables it.
+	return false;
 }
 
 export function getNodeCompileCachePaths(platform: string, outputDirectory: string, versionedResourcesFolder: string, product: INodeCompileCacheProduct): INodeCompileCachePaths {

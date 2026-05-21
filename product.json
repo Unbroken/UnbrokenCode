@@ -1,7 +1,7 @@
 {
 	"nameShort": "Unbroken Code",
 	"nameLong": "Unbroken Code",
-	"applicationName": "unbroken-code",
+	"applicationName": "uc",
 	"dataFolderName": ".unbroken-code",
 	"sharedDataFolderName": ".unbroken-code-shared",
 	"win32MutexName": "unbrokencode",

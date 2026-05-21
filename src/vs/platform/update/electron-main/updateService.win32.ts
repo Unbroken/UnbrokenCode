@@ -62,7 +62,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 	@memoize
 	get cachePath(): Promise<string> {
-		const result = path.join(tmpdir(), `vscode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
+		const result = path.join(tmpdir(), `unbrokencode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
 		return mkdir(result, { recursive: true }).then(() => result);
 	}
 
@@ -183,7 +183,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 			platform += '-user';
 		}
 
-		return createUpdateURL(this.productService.updateUrl!, platform, quality, commit, options);
+		return createUpdateURL(this.productService.updateUrl!, platform, quality, commit, { ...options, releaseStream: this.releaseStream });
 	}
 
 	protected doCheckForUpdates(explicit: boolean, pendingCommit?: string): void {
@@ -215,6 +215,13 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 					} else {
 						this.setState(State.Idle(updateType, undefined, explicit || undefined));
 					}
+					return Promise.resolve(null);
+				}
+
+				// Compare commits - if they're the same, no update is needed
+				if (update.version === this.productService.commit) {
+					this.logService.trace('update#doCheckForUpdates(): no update available, current commit matches server commit', { current: this.productService.commit, server: update.version });
+					this.setState(State.Idle(updateType));
 					return Promise.resolve(null);
 				}
 
@@ -315,7 +322,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 
 	private async getUpdatePackagePath(version: string): Promise<string> {
 		const cachePath = await this.cachePath;
-		return path.join(cachePath, `CodeSetup-${this.productService.quality}-${version}.exe`);
+		return path.join(cachePath, `UnbrokenCodeSetup-${this.productService.quality}-${version}.exe`);
 	}
 
 	private async cleanup(exceptVersion: string | null = null): Promise<void> {
@@ -349,7 +356,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
 		const progressFilePath = path.join(cachePath, `update-progress`);
 		await this.unlink(progressFilePath);
 
-		this.availableUpdate.updateFilePath = path.join(cachePath, `CodeSetup-${this.productService.quality}-${update.version}.flag`);
+		this.availableUpdate.updateFilePath = path.join(cachePath, `UnbrokenCodeSetup-${this.productService.quality}-${update.version}.flag`);
 		this.availableUpdate.cancelFilePath = cancelFilePath;
 
 		await pfs.Promises.writeFile(this.availableUpdate.updateFilePath, 'flag');

@@ -49,6 +49,11 @@ function toNodePlatformArch(platform: string, arch: string): { nodePlatform: str
  * ALL platform packages are stripped - that's fine because the copilot CLI SDK
  * resolves `node-pty` from the embedder (VS Code) first via `hostRequire`,
  * falling back to its bundled copy only if the embedder can't provide it.
+ *
+ * Also strips non-target `@github/copilot/sdk/prebuilds/{platform-arch}/`
+ * directories — the bundled SDK ships native addons (computer.node, win32.node)
+ * for every platform regardless of host, and shipping wrong-architecture
+ * binaries breaks downstream tools like `rcedit` on Windows builds.
  */
 export function getCopilotExcludeFilter(platform: string, arch: string): string[] {
 	const { nodePlatform, nodeArch } = toNodePlatformArch(platform, arch);
@@ -60,7 +65,21 @@ export function getCopilotExcludeFilter(platform: string, arch: string): string[
 	// resolves `node-pty` from VS Code's own node_modules via `hostRequire`.
 	const excludes = nonTargetPlatforms.map(p => `!**/node_modules/@github/copilot-${p}/**`);
 
-	return ['**', ...excludes];
+	// Strip non-target SDK prebuilds bundled inside @github/copilot itself.
+	const sdkPrebuildExcludes = nonTargetPlatforms.map(p => `!**/node_modules/@github/copilot/sdk/prebuilds/${p}/**`);
+
+	// Strip non-target binaries bundled inside @anthropic-ai/claude-agent-sdk.
+	// Uses `{arch}-{platform}` directory naming (e.g. `x64-darwin`, `arm64-win32`).
+	const claudeSdkVendorExcludes = nonTargetPlatforms.flatMap(p => {
+		const [plat, ar] = p.split('-');
+		const archPlatform = `${ar}-${plat}`;
+		return [
+			`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/${archPlatform}/**`,
+			`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/${archPlatform}/**`,
+		];
+	});
+
+	return ['**', ...excludes, ...sdkPrebuildExcludes, ...claudeSdkVendorExcludes];
 }
 
 /**

@@ -56,6 +56,18 @@ configurationRegistry.registerConfiguration({
 				},
 			}
 		},
+		'update.releaseStream': {
+			type: 'string',
+			enum: ['stable', 'beta', 'rc'],
+			default: 'stable',
+			scope: ConfigurationScope.APPLICATION,
+			description: localize('releaseStream', "Controls which release stream to receive updates from. Use 'stable' for production releases, 'rc' for release candidates, or 'beta' for beta releases. Requires a restart after change."),
+			enumDescriptions: [
+				localize('releaseStreamStable', "Receive stable, production-ready releases."),
+				localize('releaseStreamBeta', "Receive beta releases with upcoming features for early testing."),
+				localize('releaseStreamRC', "Receive release candidate builds for final testing before stable.")
+			]
+		},
 		'update.channel': {
 			type: 'string',
 			default: 'default',

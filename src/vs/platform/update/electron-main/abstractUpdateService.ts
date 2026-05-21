@@ -26,18 +26,30 @@ const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
 export interface IUpdateURLOptions {
 	readonly background?: boolean;
 	readonly internalOrg?: string;
+	readonly releaseStream?: string;
 }
 
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
-	const url = new URL(`${baseUpdateUrl}/api/update/${platform}/${quality}/${commit}`);
+	// Unbroken Code: Use static GitHub releases feed structure
+	// The feed prefix is determined by the release stream setting:
+	// - 'stable' (default) -> 'latest'
+	// - 'beta'             -> 'latest-beta'
+	// - 'rc'               -> 'latest-rc'
 
-	if (options?.background) {
-		url.searchParams.set('bg', 'true');
+	const releaseStream = options?.releaseStream ?? 'stable';
+	const prefix = releaseStream === 'stable' ? 'latest' : `latest-${releaseStream}`;
+
+	// Use consistent naming for all platforms: {prefix}-{platform}.json
+	// The feed generator creates platform-specific feeds with the appropriate format:
+	// - Squirrel.Mac format for darwin-* platforms
+	// - IUpdate format for linux-* and win32-* platforms
+
+	if (platform === 'darwin' || platform === 'darwin-universal') {
+		return `${baseUpdateUrl}/${prefix}-darwin-universal.json`;
 	}
 
-	url.searchParams.set('u', options?.internalOrg ?? 'none');
-
-	return url.toString();
+	// All other platforms use their platform identifier directly
+	return `${baseUpdateUrl}/${prefix}-${platform}.json`;
 }
 
 /**
@@ -80,6 +92,7 @@ export abstract class AbstractUpdateService implements IUpdateService {
 	declare readonly _serviceBrand: undefined;
 
 	protected quality: string | undefined;
+	protected releaseStream: string = 'stable';
 
 	private _state: State = State.Uninitialized;
 	protected _overwrite: boolean = false;
@@ -183,6 +196,8 @@ export abstract class AbstractUpdateService implements IUpdateService {
 		}
 
 		this.quality = quality;
+		this.releaseStream = this.configurationService.getValue<string>('update.releaseStream') || 'stable';
+		this.logService.info('update#ctor - release stream:', this.releaseStream);
 
 		this.setState(State.Idle(this.getUpdateType()));
 

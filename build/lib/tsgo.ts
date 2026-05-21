@@ -70,6 +70,15 @@ export function spawnTsgo(projectPath: string, config: { taskName: string; noEmi
 			if (code === 0) {
 				Promise.resolve(onComplete?.()).then(() => resolve(), reject);
 			} else {
+				const outputLines = lines.length > 0 ? lines : allOutput.split(/\r?\n/).filter(line => line.trim().length > 0);
+				if (outputLines.length > 0) {
+					fancyLog(ansiColors.red(`tsgo failed for ${config.taskName} (${projectPath}). Output:`));
+					for (const line of outputLines) {
+						fancyLog(line);
+					}
+				} else {
+					fancyLog(ansiColors.red(`tsgo failed for ${config.taskName} (${projectPath}) with no output.`));
+				}
 				reject(new Error(`tsgo exited with code ${code ?? 'unknown'}`));
 			}
 		});

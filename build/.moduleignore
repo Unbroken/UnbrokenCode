@@ -90,6 +90,10 @@ native-is-elevated/deps/**
 !@vscode/vsce-sign/package.json
 !@vscode/vsce-sign/bin/**
 
+# Postinstall copies the selected platform binary into vsce-sign/bin.
+# Keep only that runtime copy, which the universal app merger combines.
+@vscode/vsce-sign-*/**
+
 windows-foreground-love/binding.gyp
 windows-foreground-love/build/**
 windows-foreground-love/src/**
@@ -100,6 +104,11 @@ kerberos/build/**
 kerberos/src/**
 kerberos/node_modules/**
 !kerberos/**/*.node
+
+keytar/binding.gyp
+keytar/build/**
+keytar/src/**
+!keytar/build/Release/keytar.node
 
 cpu-features/**
 

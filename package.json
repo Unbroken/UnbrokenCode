@@ -317,6 +317,7 @@
     "@vscode/policy-watcher@1.4.0": true,
     "@vscode/spdlog@0.15.8": true,
     "@vscode/sqlite3@5.1.12-vscode": true,
+    "@vscode/vsce-sign@2.1.0": true,
     "@vscode/windows-registry@1.2.0": true,
     "@vscode/windows-mutex@0.5.3": true,
     "ssh2": false,

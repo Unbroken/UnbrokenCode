@@ -196,7 +196,7 @@ export function hygiene(some: NodeJS.ReadWriteStream | string[] | undefined, run
 
 	const productJsonFilter = filter('product.json', { restore: true });
 	const snapshotFilter = filter(['**', '!**/*.snap', '!**/*.snap.actual']);
-	const yarnLockFilter = filter(['**', '!**/yarn.lock']);
+	const yarnLockFilter = filter(['**', '!**/yarn.lock', '!**/unbroken.version']);
 	const unicodeFilterStream = filter(Array.from(unicodeFilter), { restore: true });
 	const checkedFiles = new Set<string>();
 	const trackCheckedFile = () => es.through(function (file: VinylFile) {
@@ -343,7 +343,13 @@ if (import.meta.main) {
 					process.exit(1);
 				}
 
-				const some = out.split(/\r?\n/).filter((l) => !!l);
+				const some = out.split(/\r?\n/).filter((l) =>
+					!!l &&
+					l !== 'extensions/malterlib' &&
+					l !== 'extensions/vscode-clangd' &&
+					l !== 'extensions/codelldb'
+				);
+
 
 				if (some.length > 0) {
 					// Check copilot engines.vscode version if relevant files are staged

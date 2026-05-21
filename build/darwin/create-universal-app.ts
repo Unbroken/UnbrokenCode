@@ -55,6 +55,8 @@ async function main(buildDir?: string) {
 	// other build. The binaries are then excluded from comparison (filesToSkip)
 	// and the x64 binary is tagged as arch-specific (x64ArchFiles) so the merger
 	// keeps both.
+	const copilotExtensionNodeModules = path.join('Contents', 'Resources', 'app', 'extensions', 'copilot', 'node_modules');
+
 	for (const plat of ['darwin-x64', 'darwin-arm64']) {
 		for (const base of nodeModulesBases) {
 			// @github/copilot-{platform} packages (e.g. copilot-darwin-x64)
@@ -71,8 +73,7 @@ async function main(buildDir?: string) {
 			crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(base, '@vscode', 'ripgrep-universal', 'bin', plat));
 		}
 
-		const copilotExtensionNodeModules = path.join('Contents', 'Resources', 'app', 'extensions', 'copilot', 'node_modules');
-		// @github/copilot/sdk/prebuilds/{platform} (pty.node, spawn-helper)
+		// @github/copilot/sdk/prebuilds/{platform} (computer.node, win32.node)
 		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@github', 'copilot', 'sdk', 'prebuilds', plat));
 		// @github/copilot/sdk/ripgrep/bin/{platform} (ripgrep shim)
 		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@github', 'copilot', 'sdk', 'ripgrep', 'bin', plat));
@@ -80,6 +81,19 @@ async function main(buildDir?: string) {
 		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@github', 'copilot', 'sdk', 'tgrep', 'bin', plat));
 		// @github/copilot/tgrep/bin/{platform} (tgrep binary)
 		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@github', 'copilot', 'tgrep', 'bin', plat));
+		// @img/sharp-{platform} (sharp-{platform}.node)
+		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@img', `sharp-${plat}`));
+		// @img/sharp-libvips-{platform} (libvips-cpp.dylib)
+		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@img', `sharp-libvips-${plat}`));
+
+		// @anthropic-ai/claude-agent-sdk/vendor/{audio-capture,ripgrep}/{arch}-{platform}/
+		// uses reversed arch-platform directory naming (e.g. `x64-darwin`)
+		const [platName, archName] = plat.split('-');
+		const archPlat = `${archName}-${platName}`;
+		// audio-capture.node
+		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@anthropic-ai', 'claude-agent-sdk', 'vendor', 'audio-capture', archPlat));
+		// ripgrep binary (`rg`)
+		crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@anthropic-ai', 'claude-agent-sdk', 'vendor', 'ripgrep', archPlat));
 	}
 
 	for (const base of nodeModulesBases) {
@@ -87,6 +101,11 @@ async function main(buildDir?: string) {
 			crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(base, '@microsoft', 'mxc-sdk', 'bin', mxcArch));
 		}
 	}
+
+	// @swc/wasm is a runtime fallback pulled in only when the host can't run the
+	// arch-specific @swc/core-{platform} binary (e.g. x64 build on arm64 runner).
+	// Sync its presence so both trees match.
+	crossCopyPlatformDir(x64AppPath, arm64AppPath, path.join(copilotExtensionNodeModules, '@swc', 'wasm'));
 
 	const filesToSkip = [
 		'**/CodeResources',
@@ -124,6 +143,15 @@ async function main(buildDir?: string) {
 		// the package includes both arm64 and x64 trees regardless of host arch.
 		'**/node_modules/@microsoft/mxc-sdk/bin/**',
 		'**/node_modules.asar.unpacked/@microsoft/mxc-sdk/bin/**',
+		'**/extensions/copilot/node_modules/@img/sharp-darwin-x64/**',
+		'**/extensions/copilot/node_modules/@img/sharp-darwin-arm64/**',
+		'**/extensions/copilot/node_modules/@img/sharp-libvips-darwin-x64/**',
+		'**/extensions/copilot/node_modules/@img/sharp-libvips-darwin-arm64/**',
+		'**/extensions/copilot/node_modules/@swc/wasm/**',
+		'**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/x64-darwin/**',
+		'**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/arm64-darwin/**',
+		'**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/x64-darwin/**',
+		'**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/arm64-darwin/**',
 	];
 
 	await makeUniversalApp({
@@ -140,7 +168,7 @@ async function main(buildDir?: string) {
 		// prefix). Over-covering is harmless: the allowlist is only consulted for files
 		// that are actually unique to one arch.
 		singleArchFiles: '{**/@github/copilot-darwin-*,**/@github/copilot-darwin-*/**,**/@github/copilot/prebuilds/darwin-*,**/@github/copilot/prebuilds/darwin-*/**,**/@github/copilot/tgrep/bin/darwin-*,**/@github/copilot/tgrep/bin/darwin-*/**,**/@github/copilot/sdk/tgrep/bin/darwin-*,**/@github/copilot/sdk/tgrep/bin/darwin-*/**,**/@github/copilot/sdk/prebuilds/darwin-*,**/@github/copilot/sdk/prebuilds/darwin-*/**,**/@github/copilot/sdk/ripgrep/bin/darwin-*,**/@github/copilot/sdk/ripgrep/bin/darwin-*/**,**/@vscode/ripgrep-universal/bin/darwin-*,**/@vscode/ripgrep-universal/bin/darwin-*/**,**/@vscode/os-proxy-resolver-darwin-*,**/@vscode/os-proxy-resolver-darwin-*/**,**/@microsoft/mxc-sdk/bin/*,**/@microsoft/mxc-sdk/bin/*/**}',
-		x64ArchFiles: '{*/kerberos.node,**/extensions/microsoft-authentication/dist/libmsalruntime.dylib,**/extensions/microsoft-authentication/dist/msal-node-runtime.node,**/node_modules/@github/copilot-darwin-*/**,**/node_modules/@github/copilot/prebuilds/darwin-*/*,**/node_modules/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot-darwin-*/**,**/node_modules.asar.unpacked/@github/copilot/prebuilds/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/prebuilds/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/ripgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules/@vscode/ripgrep-universal/bin/darwin-*/*,**/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/darwin-*/*,**/node_modules/@vscode/os-proxy-resolver-darwin-*/**,**/node_modules.asar.unpacked/@vscode/os-proxy-resolver-darwin-*/**,**/node_modules/@microsoft/mxc-sdk/bin/**,**/node_modules.asar.unpacked/@microsoft/mxc-sdk/bin/**}',
+		x64ArchFiles: '{*/kerberos.node,**/extensions/microsoft-authentication/dist/libmsalruntime.dylib,**/extensions/microsoft-authentication/dist/msal-node-runtime.node,**/node_modules/@github/copilot-darwin-*/**,**/node_modules/@github/copilot/prebuilds/darwin-*/*,**/node_modules/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot-darwin-*/**,**/node_modules.asar.unpacked/@github/copilot/prebuilds/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules.asar.unpacked/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/prebuilds/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/ripgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/sdk/tgrep/bin/darwin-*/*,**/extensions/copilot/node_modules/@github/copilot/tgrep/bin/darwin-*/*,**/node_modules/@vscode/ripgrep-universal/bin/darwin-*/*,**/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/darwin-*/*,**/node_modules/@vscode/os-proxy-resolver-darwin-*/**,**/node_modules.asar.unpacked/@vscode/os-proxy-resolver-darwin-*/**,**/node_modules/@microsoft/mxc-sdk/bin/**,**/node_modules.asar.unpacked/@microsoft/mxc-sdk/bin/**,**/extensions/copilot/node_modules/@img/sharp-darwin-*/lib/*.node,**/extensions/copilot/node_modules/@img/sharp-libvips-darwin-*/lib/*.dylib,**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/*-darwin/audio-capture.node,**/extensions/copilot/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/*-darwin/rg,**/bin/vsce-sign,**/codelldb/lldb/bin/debugserver}',
 		filesToSkipComparison: (file: string) => {
 			for (const expected of filesToSkip) {
 				if (minimatch(file, expected)) {

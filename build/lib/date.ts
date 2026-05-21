@@ -16,7 +16,7 @@ const root = path.join(import.meta.dirname, '..', '..');
  */
 export function getGitCommitDate(): string {
 	try {
-		return execSync('git log -1 --format=%cI HEAD', { cwd: root, encoding: 'utf8' }).trim();
+		return process.env.VSCODE_BUILD_DATE || execSync('git log -1 --format=%cI HEAD', { cwd: root, encoding: 'utf8' }).trim();
 	} catch {
 		return new Date().toISOString();
 	}
@@ -42,6 +42,10 @@ export function writeISODate(outDir: string) {
 }
 
 export function readISODate(outDir: string): string {
+	// First check if date is provided via environment variable
+	if (process.env.VSCODE_BUILD_DATE) {
+		return process.env.VSCODE_BUILD_DATE;
+	}
 	const outDirectory = path.join(root, outDir);
 	try {
 		return fs.readFileSync(path.join(outDirectory, 'date'), 'utf8');

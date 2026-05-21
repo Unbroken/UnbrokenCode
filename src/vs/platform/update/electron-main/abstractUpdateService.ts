@@ -17,7 +17,7 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { ILifecycleMainService, LifecycleMainPhase } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
-import { IRequestService } from '../../request/common/request.js';
+import { asJson, IRequestService } from '../../request/common/request.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
@@ -28,18 +28,30 @@ const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
 export interface IUpdateURLOptions {
 	readonly background?: boolean;
 	readonly internalOrg?: string;
+	readonly releaseStream?: string;
 }
 
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
-	const url = new URL(`${baseUpdateUrl}/api/update/${platform}/${quality}/${commit}`);
+	// Unbroken Code: Use static GitHub releases feed structure
+	// The feed prefix is determined by the release stream setting:
+	// - 'stable' (default) -> 'latest'
+	// - 'beta'             -> 'latest-beta'
+	// - 'rc'               -> 'latest-rc'
 
-	if (options?.background) {
-		url.searchParams.set('bg', 'true');
+	const releaseStream = options?.releaseStream ?? 'stable';
+	const prefix = releaseStream === 'stable' ? 'latest' : `latest-${releaseStream}`;
+
+	// Use consistent naming for all platforms: {prefix}-{platform}.json
+	// The feed generator creates platform-specific feeds with the appropriate format:
+	// - Squirrel.Mac format for darwin-* platforms
+	// - IUpdate format for linux-* and win32-* platforms
+
+	if (platform === 'darwin' || platform === 'darwin-universal') {
+		return `${baseUpdateUrl}/${prefix}-darwin-universal.json`;
 	}
 
-	url.searchParams.set('u', options?.internalOrg ?? 'none');
-
-	return url.toString();
+	// All other platforms use their platform identifier directly
+	return `${baseUpdateUrl}/${prefix}-${platform}.json`;
 }
 
 /**
@@ -106,6 +118,7 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 	declare readonly _serviceBrand: undefined;
 
 	protected quality: string | undefined;
+	protected releaseStream: string = 'stable';
 
 	private _state: IInternalUpdateState = { state: State.Uninitialized, deferred: false };
 	protected _overwrite: boolean = false;
@@ -259,6 +272,8 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 		}
 
 		this.quality = quality;
+		this.releaseStream = this.configurationService.getValue<string>('update.releaseStream') || 'stable';
+		this.logService.info('update#ctor - release stream:', this.releaseStream);
 
 		// Move to Idle so one-time platform init (which may resume a pending update) can act; it requires Idle.
 		if (this.state.type === StateType.Disabled || this.state.type === StateType.Uninitialized) {
@@ -579,7 +594,8 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 		}
 
 		this.setDeferred(false);
-		const pendingUpdateCommit = this.state.update.version;
+		const pendingUpdate = this.state.update;
+		const pendingUpdateCommit = pendingUpdate.version;
 
 		if (!pendingUpdateCommit || pendingUpdateCommit === 'unknown') {
 			return false;
@@ -590,7 +606,7 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 		const cts = new CancellationTokenSource();
 		try {
 			const timeoutPromise = timeout(2000, cts.token).then(() => { cts.cancel(); return undefined; });
-			isLatest = await Promise.race([this.doIsLatestVersion(pendingUpdateCommit, cts.token), timeoutPromise]);
+			isLatest = await Promise.race([this.doIsLatestVersion(pendingUpdateCommit, cts.token, pendingUpdate.productVersion), timeoutPromise]);
 		} catch (error) {
 			this.logService.warn('update#checkForOverwriteUpdates(): failed to check for updates, proceeding with restart');
 			this.logService.warn(error);
@@ -646,7 +662,7 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 		return this.doIsLatestVersion(commit, token);
 	}
 
-	protected async doIsLatestVersion(commit?: string, token: CancellationToken = CancellationToken.None): Promise<boolean | undefined> {
+	protected async doIsLatestVersion(commit?: string, token: CancellationToken = CancellationToken.None, productVersion: string = this.productService.version): Promise<boolean | undefined> {
 		if (!this.quality) {
 			return undefined;
 		}
@@ -670,8 +686,23 @@ export abstract class AbstractUpdateService extends Disposable implements IUpdat
 			const context = await this.requestService.request({ url, headers, callSite: 'updateService.isLatestVersion' }, token);
 			const statusCode = context.res.statusCode;
 			this.logService.trace('update#isLatestVersion() - response', { statusCode });
-			// The update server replies with 204 (No Content) when no update is available.
-			return statusCode === 204;
+			// The update server replies with 204 (No Content) when no update
+			// is available. Unbroken Code uses static JSON feeds instead, so a
+			// 200 response must be compared against the version already pending.
+			if (statusCode === 204) {
+				return true;
+			}
+
+			const update = await asJson<IUpdate & { currentRelease?: string }>(context);
+
+			// Darwin feeds use the Squirrel.Mac format, which exposes the
+			// latest product version as `currentRelease` instead of the
+			// IUpdate `version`/`productVersion` fields.
+			if (typeof update?.currentRelease === 'string') {
+				return update.currentRelease === productVersion;
+			}
+
+			return update?.version === (commit ?? this.productService.commit) || update?.productVersion === productVersion;
 
 		} catch (error) {
 			this.logService.error('update#isLatestVersion(): failed to check for updates');

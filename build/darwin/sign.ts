@@ -23,6 +23,14 @@ function getEntitlementsForFile(filePath: string): string {
 	} else if (filePath.includes(' Helper.app')) {
 		return path.join(baseDir, 'azure-pipelines', 'darwin', 'helper-entitlements.plist');
 	}
+	// Apply a narrow entitlement only to the CodeLLDB adapter binary
+	// so it can load libLLDB signed by a different Team ID.
+	try {
+		const normalized = filePath.split('\\').join('/');
+		if (normalized.includes('/extensions/codelldb/') && normalized.includes('/adapter/codelldb')) {
+			return path.join(baseDir, 'azure-pipelines', 'darwin', 'codelldb-entitlements.plist');
+		}
+	} catch { }
 	return path.join(baseDir, 'azure-pipelines', 'darwin', 'app-entitlements.plist');
 }
 
@@ -34,9 +42,9 @@ function getKeychainPath(tempDir: string): string {
  * Usage descriptions shown by macOS when the app requests access to protected resources.
  */
 const infoPlistUsageDescriptions: Record<string, string> = {
-	NSAppleEventsUsageDescription: 'An application in Visual Studio Code wants to use AppleScript.',
-	NSMicrophoneUsageDescription: 'An application in Visual Studio Code wants to use the Microphone.',
-	NSCameraUsageDescription: 'An application in Visual Studio Code wants to use the Camera.',
+	NSAppleEventsUsageDescription: 'An application in Unbroken Code wants to use AppleScript.',
+	NSMicrophoneUsageDescription: 'An application in Unbroken Code wants to use the Microphone.',
+	NSCameraUsageDescription: 'An application in Unbroken Code wants to use the Camera.',
 	NSAudioCaptureUsageDescription: 'An application in Visual Studio Code wants to use Audio Capture.',
 	NSLocalNetworkUsageDescription: 'The app uses your local network for DNS resolution and to connect to locally running services.',
 };
@@ -104,7 +112,6 @@ async function main(buildDir?: string): Promise<void> {
 		}),
 		preAutoEntitlements: false,
 		preEmbedProvisioningProfile: false,
-		keychain: getKeychainPath(tempDir),
 		version: getElectronVersion(root).electronVersion,
 		identity,
 	};

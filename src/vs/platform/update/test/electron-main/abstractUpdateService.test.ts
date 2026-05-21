@@ -21,7 +21,7 @@ import { IRequestService } from '../../../request/common/request.js';
 import { IApplicationStorageMainService } from '../../../storage/electron-main/storageMainService.js';
 import { NullTelemetryService } from '../../../telemetry/common/telemetryUtils.js';
 import { DisablementReason, IUpdate, State, StateType } from '../../common/update.js';
-import { AbstractUpdateService, IUpdateURLOptions } from '../../electron-main/abstractUpdateService.js';
+import { AbstractUpdateService, createUpdateURL, getDarwinUpdatePlatform, IUpdateURLOptions } from '../../electron-main/abstractUpdateService.js';
 
 class TestMeteredConnectionService extends Disposable implements IMeteredConnectionService {
 	declare readonly _serviceBrand: undefined;
@@ -115,6 +115,29 @@ class TestUpdateService extends AbstractUpdateService {
 		await super.cancelUpdate();
 	}
 }
+
+suite('macOS update feed', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('follows the architecture of the machine, not of the running build', () => {
+		const feed = (arch: string, translated: boolean, releaseStream?: string) =>
+			createUpdateURL('https://example.com', getDarwinUpdatePlatform(arch, translated), 'stable', 'commit', { releaseStream });
+
+		assert.deepStrictEqual({
+			appleSilicon: feed('arm64', false),
+			appleSiliconUnderRosetta: feed('x64', true),
+			intel: feed('x64', false),
+			beta: feed('arm64', false, 'beta'),
+			rc: feed('x64', false, 'rc'),
+		}, {
+			appleSilicon: 'https://example.com/latest-darwin-arm64.json',
+			appleSiliconUnderRosetta: 'https://example.com/latest-darwin-arm64.json',
+			intel: 'https://example.com/latest-darwin-x64.json',
+			beta: 'https://example.com/latest-beta-darwin-arm64.json',
+			rc: 'https://example.com/latest-rc-darwin-x64.json',
+		});
+	});
+});
 
 suite('AbstractUpdateService', () => {
 

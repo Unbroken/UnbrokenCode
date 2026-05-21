@@ -110,6 +110,17 @@ export const separateRootMembers: Readonly<Record<string, readonly string[]>> = 
 };
 
 /**
+ * Extensions from submodules that are npm projects of their own, each with its own `package-lock.json`
+ * in its repository. They aren't pnpm install roots, so they aren't in {@link dirs}: the root
+ * postinstall installs each with `npm ci` after the pnpm roots.
+ */
+export const npmRoots = [
+	'extensions/malterlib',
+	'extensions/vscode-clangd',
+	'extensions/codelldb',
+];
+
+/**
  * Distro folders, present only when the distro is checked out in `.build/distro`. Each one is a
  * separate pnpm install root, never a workspace member.
  */

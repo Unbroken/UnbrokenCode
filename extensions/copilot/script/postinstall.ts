@@ -93,14 +93,26 @@ function isLinuxMuslRuntime(): boolean {
 }
 
 function getCopilotPlatformPackageCandidates(): string[] {
-	const arch = process.arch;
-
-	if (process.platform === 'linux') {
-		const linuxCandidates = [`linux-${arch}`, `linuxmusl-${arch}`];
-		return isLinuxMuslRuntime() ? linuxCandidates.reverse() : linuxCandidates;
+	// Cross-compile installs (`npm ci --cpu=<target>`) only lay down the target
+	// architecture's platform package, so consider the target arch alongside the
+	// host arch.
+	const arches = [process.arch as string];
+	for (const targetArch of [process.env['npm_config_cpu'], process.env['npm_config_arch'], process.env['VSCODE_ARCH']]) {
+		if (targetArch && !arches.includes(targetArch)) {
+			arches.push(targetArch);
+		}
 	}
 
-	return [`${process.platform}-${arch}`];
+	const candidates: string[] = [];
+	for (const arch of arches) {
+		if (process.platform === 'linux') {
+			const linuxCandidates = [`linux-${arch}`, `linuxmusl-${arch}`];
+			candidates.push(...(isLinuxMuslRuntime() ? linuxCandidates.reverse() : linuxCandidates));
+		} else {
+			candidates.push(`${process.platform}-${arch}`);
+		}
+	}
+	return candidates;
 }
 
 async function resolveCopilotCliSourceDir(): Promise<string> {
@@ -115,6 +127,22 @@ async function resolveCopilotCliSourceDir(): Promise<string> {
 
 	if (fs.existsSync(path.join(COPILOT_PACKAGE_DIR, 'sdk', 'index.js'))) {
 		return COPILOT_PACKAGE_DIR;
+	}
+
+	// Last resort: any installed platform package. The sdk JS payload is
+	// identical across platform packages; native prebuilds are re-selected for
+	// the target platform during product packaging.
+	const githubScopeDir = path.join(REPO_ROOT, 'node_modules', '@github');
+	if (fs.existsSync(githubScopeDir)) {
+		for (const entry of await fs.promises.readdir(githubScopeDir)) {
+			if (entry.startsWith('copilot-')) {
+				const sourceDir = path.join(githubScopeDir, entry);
+				if (fs.existsSync(path.join(sourceDir, 'sdk', 'index.js'))) {
+					console.warn(`Warning: no @github/copilot platform package matched the host or target architecture; falling back to ${entry}.`);
+					return sourceDir;
+				}
+			}
+		}
 	}
 
 	throw new Error(`Could not find @github/copilot SDK files. Tried: ${[COPILOT_PACKAGE_DIR, ...tried].join(', ')}`);
@@ -134,9 +162,29 @@ async function ensureCopilotSdkExport() {
 	await fs.promises.writeFile(packageJsonPath, `${JSON.stringify(packageJson, undefined, 2)}\n`);
 }
 
-async function materializeCopilotCliSdkLayout(): Promise<string> {
-	const sourceDir = await resolveCopilotCliSourceDir();
+const COPILOT_SDK_MARKER_PATH = path.join(COPILOT_PACKAGE_DIR, '.sdk-materialized');
 
+/**
+ * A stamp identifying the platform package (name and version) the sdk layout
+ * was last materialized from. Used to make re-runs of this script no-ops, so
+ * that build tasks re-running postinstall never mutate node_modules while a
+ * packaging stream is reading it.
+ */
+async function getCopilotCliSourceStamp(sourceDir: string): Promise<string> {
+	const packageJson = JSON.parse(await fs.promises.readFile(path.join(sourceDir, 'package.json'), 'utf8')) as { version?: string };
+	return `${path.basename(sourceDir)}@${packageJson.version}`;
+}
+
+async function isCopilotCliSdkUpToDate(sourceStamp: string): Promise<boolean> {
+	try {
+		const existing = await fs.promises.readFile(COPILOT_SDK_MARKER_PATH, 'utf8');
+		return existing === sourceStamp && fs.existsSync(path.join(COPILOT_PACKAGE_DIR, 'sdk', 'index.js'));
+	} catch {
+		return false;
+	}
+}
+
+async function materializeCopilotCliSdkLayout(sourceDir: string): Promise<void> {
 	if (sourceDir !== COPILOT_PACKAGE_DIR) {
 		await copyCopilotCLIFolders(path.join(sourceDir, 'sdk'), path.join(COPILOT_PACKAGE_DIR, 'sdk'));
 		for (const dir of COPILOT_CLI_TOP_LEVEL_DIRS) {
@@ -154,7 +202,6 @@ async function materializeCopilotCliSdkLayout(): Promise<string> {
 	}
 
 	await ensureCopilotSdkExport();
-	return sourceDir;
 }
 
 async function removeCopilotCLIShim() {
@@ -278,14 +325,22 @@ async function main() {
 		'node_modules/@github/blackbird-external-ingest-utils/pkg/nodejs/external_ingest_utils_bg.wasm',
 	], 'dist');
 
-	const copilotCliSourceDir = await materializeCopilotCliSdkLayout();
-	await removeCopilotCLIShim();
-	await removeCopilotCliWorkerFiles();
-	await copyCopilotCliDefinitionFiles(copilotCliSourceDir);
-	await copyCopilotCliSkillsFiles(copilotCliSourceDir);
-	await copyCopilotCliTGrepFiles(copilotCliSourceDir);
-	await copyCopilotCliQueryFiles(copilotCliSourceDir);
-	await copyCopilotCliPrebuildFiles(copilotCliSourceDir);
+	const copilotCliSourceDir = await resolveCopilotCliSourceDir();
+	const copilotCliSourceStamp = await getCopilotCliSourceStamp(copilotCliSourceDir);
+	if (await isCopilotCliSdkUpToDate(copilotCliSourceStamp)) {
+		console.log(`@github/copilot sdk layout already materialized from ${copilotCliSourceStamp}, skipping.`);
+	} else {
+		await fs.promises.rm(COPILOT_SDK_MARKER_PATH, { force: true });
+		await materializeCopilotCliSdkLayout(copilotCliSourceDir);
+		await removeCopilotCLIShim();
+		await removeCopilotCliWorkerFiles();
+		await copyCopilotCliDefinitionFiles(copilotCliSourceDir);
+		await copyCopilotCliSkillsFiles(copilotCliSourceDir);
+		await copyCopilotCliTGrepFiles(copilotCliSourceDir);
+		await copyCopilotCliQueryFiles(copilotCliSourceDir);
+		await copyCopilotCliPrebuildFiles(copilotCliSourceDir);
+		await fs.promises.writeFile(COPILOT_SDK_MARKER_PATH, copilotCliSourceStamp);
+	}
 
 	// Check if the base cache file exists (dev-only sanity check, non-fatal in CI)
 	const baseCachePath = path.join('test', 'simulation', 'cache', 'base.sqlite');

@@ -15,29 +15,41 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { ILifecycleMainService, LifecycleMainPhase } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
-import { IRequestService } from '../../request/common/request.js';
+import { asJson, IRequestService } from '../../request/common/request.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
-import { AvailableForDownload, DisablementReason, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
+import { AvailableForDownload, DisablementReason, IUpdate, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 
 const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
 
 export interface IUpdateURLOptions {
 	readonly background?: boolean;
 	readonly internalOrg?: string;
+	readonly releaseStream?: string;
 }
 
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
-	const url = new URL(`${baseUpdateUrl}/api/update/${platform}/${quality}/${commit}`);
+	// Unbroken Code: Use static GitHub releases feed structure
+	// The feed prefix is determined by the release stream setting:
+	// - 'stable' (default) -> 'latest'
+	// - 'beta'             -> 'latest-beta'
+	// - 'rc'               -> 'latest-rc'
 
-	if (options?.background) {
-		url.searchParams.set('bg', 'true');
+	const releaseStream = options?.releaseStream ?? 'stable';
+	const prefix = releaseStream === 'stable' ? 'latest' : `latest-${releaseStream}`;
+
+	// Use consistent naming for all platforms: {prefix}-{platform}.json
+	// The feed generator creates platform-specific feeds with the appropriate format:
+	// - Squirrel.Mac format for darwin-* platforms
+	// - IUpdate format for linux-* and win32-* platforms
+
+	if (platform === 'darwin' || platform === 'darwin-universal') {
+		return `${baseUpdateUrl}/${prefix}-darwin-universal.json`;
 	}
 
-	url.searchParams.set('u', options?.internalOrg ?? 'none');
-
-	return url.toString();
+	// All other platforms use their platform identifier directly
+	return `${baseUpdateUrl}/${prefix}-${platform}.json`;
 }
 
 /**
@@ -80,6 +92,7 @@ export abstract class AbstractUpdateService implements IUpdateService {
 	declare readonly _serviceBrand: undefined;
 
 	protected quality: string | undefined;
+	protected releaseStream: string = 'stable';
 
 	private _state: State = State.Uninitialized;
 	protected _overwrite: boolean = false;
@@ -183,6 +196,8 @@ export abstract class AbstractUpdateService implements IUpdateService {
 		}
 
 		this.quality = quality;
+		this.releaseStream = this.configurationService.getValue<string>('update.releaseStream') || 'stable';
+		this.logService.info('update#ctor - release stream:', this.releaseStream);
 
 		this.setState(State.Idle(this.getUpdateType()));
 
@@ -371,7 +386,8 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			return false;
 		}
 
-		const pendingUpdateCommit = this._state.update.version;
+		const pendingUpdate = this._state.update;
+		const pendingUpdateCommit = pendingUpdate.version;
 
 		if (!pendingUpdateCommit || pendingUpdateCommit === 'unknown') {
 			return false;
@@ -382,7 +398,7 @@ export abstract class AbstractUpdateService implements IUpdateService {
 		try {
 			const cts = new CancellationTokenSource();
 			const timeoutPromise = timeout(2000).then(() => { cts.cancel(); return undefined; });
-			isLatest = await Promise.race([this.isLatestVersion(pendingUpdateCommit, cts.token), timeoutPromise]);
+			isLatest = await Promise.race([this.isLatestVersion(pendingUpdateCommit, pendingUpdate.productVersion, cts.token), timeoutPromise]);
 			cts.dispose();
 		} catch (error) {
 			this.logService.warn('update#checkForOverwriteUpdates(): failed to check for updates, proceeding with restart');
@@ -410,10 +426,13 @@ export abstract class AbstractUpdateService implements IUpdateService {
 		return false;
 	}
 
-	async isLatestVersion(commit?: string, token: CancellationToken = CancellationToken.None): Promise<boolean | undefined> {
+	async isLatestVersion(commit?: string, productVersionOrToken?: string | CancellationToken, token: CancellationToken = CancellationToken.None): Promise<boolean | undefined> {
 		if (!this.quality) {
 			return undefined;
 		}
+
+		const productVersion = typeof productVersionOrToken === 'string' ? productVersionOrToken : this.productService.version;
+		token = typeof productVersionOrToken === 'string' ? token : productVersionOrToken ?? token;
 
 		const mode = this.configurationService.getValue<'none' | 'manual' | 'start' | 'default'>('update.mode');
 
@@ -434,9 +453,23 @@ export abstract class AbstractUpdateService implements IUpdateService {
 			const context = await this.requestService.request({ url, headers, callSite: 'updateService.isLatestVersion' }, token);
 			const statusCode = context.res.statusCode;
 			this.logService.trace('update#isLatestVersion() - response', { statusCode });
-			// The update server replies with 204 (No Content) when no
-			// update is available - that's all we want to know.
-			return statusCode === 204;
+			// The update server replies with 204 (No Content) when no update
+			// is available. Unbroken Code uses static JSON feeds instead, so a
+			// 200 response must be compared against the version already pending.
+			if (statusCode === 204) {
+				return true;
+			}
+
+			const update = await asJson<IUpdate & { currentRelease?: string }>(context);
+
+			// Darwin feeds use the Squirrel.Mac format, which exposes the
+			// latest product version as `currentRelease` instead of the
+			// IUpdate `version`/`productVersion` fields.
+			if (typeof update?.currentRelease === 'string') {
+				return update.currentRelease === productVersion;
+			}
+
+			return update?.version === (commit ?? this.productService.commit) || update?.productVersion === productVersion;
 
 		} catch (error) {
 			this.logService.error('update#isLatestVersion(): failed to check for updates');

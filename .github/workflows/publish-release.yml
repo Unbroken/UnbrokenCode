@@ -1,0 +1,112 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_beta:
+        description: 'Publish to beta release stream'
+        required: false
+        type: boolean
+        default: true
+      release_rc:
+        description: 'Publish to rc release stream'
+        required: false
+        type: boolean
+        default: false
+      release_stable:
+        description: 'Publish to stable release stream'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Authorize Trigger
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Ensure triggering actor is allowed
+        env:
+          ACTOR: ${{ github.triggering_actor }}
+          ALLOWED_ACTORS: ${{ vars.RELEASE_BUILD_ADMINS || github.repository_owner }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra allowed_list <<< "$ALLOWED_ACTORS"
+          authorized=false
+          for user in "${allowed_list[@]}"; do
+            trimmed="$(echo "$user" | xargs)"
+            [ -z "$trimmed" ] && continue
+            if [ "$ACTOR" = "$trimmed" ]; then
+              authorized=true
+              break
+            fi
+          done
+          if [ "$authorized" != "true" ]; then
+            echo "Current actor: $ACTOR" >&2
+            echo "This workflow may only be triggered by: $ALLOWED_ACTORS" >&2
+            exit 1
+          fi
+          echo "Authorized actor: $ACTOR"
+
+  publish:
+    needs: authorize
+    runs-on: ubuntu-24.04
+    environment: Build Deploy
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/microsoft/vscode.git
+          git fetch --all
+        shell: bash
+
+      - name: Determine release streams
+        id: streams
+        run: |
+          set -euo pipefail
+          STREAMS=""
+          if [ "${{ inputs.release_stable }}" = "true" ]; then
+            STREAMS="stable"
+          fi
+          if [ "${{ inputs.release_beta }}" = "true" ]; then
+            STREAMS="${STREAMS:+$STREAMS,}beta"
+          fi
+          if [ "${{ inputs.release_rc }}" = "true" ]; then
+            STREAMS="${STREAMS:+$STREAMS,}rc"
+          fi
+          if [ -z "$STREAMS" ]; then
+            STREAMS="stable"
+          fi
+          echo "streams=$STREAMS" >> "$GITHUB_OUTPUT"
+          echo "Publishing to release streams: $STREAMS"
+        shell: bash
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          (cd build && npm ci)
+          ./build-unbroken-code.sh --publish --release-streams="${{ steps.streams.outputs.streams }}"
+        shell: bash

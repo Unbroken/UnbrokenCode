@@ -42,6 +42,7 @@
 	"files.exclude": {
 		".git": true,
 		".build": true,
+		".dist": true,
 		".profile-oss": true,
 		"**/*.tsbuildinfo": true,
 		"**/.DS_Store": true,

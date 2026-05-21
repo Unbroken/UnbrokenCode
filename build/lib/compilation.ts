@@ -180,7 +180,11 @@ export function watchTypeCheckTask(src: string): task.Task {
 		const projectPath = path.join(import.meta.dirname, '../../', src, 'tsconfig.json');
 		const generator = new MonacoGenerator(true);
 		generator.execute();
-		const watchInput = watch(`${src}/**`, { base: src, readDelay: 200 });
+		const watchInput = watch(`${src}/**`, {
+			base: src,
+			readDelay: 200,
+			ignored: '**/*.tmp.*'
+		});
 		const tsgoStream = watchInput.pipe(generator.stream).pipe(util.debounce(() => {
 			const stream = createTsgoStream(projectPath, { taskName: 'watch-client-noEmit', noEmit: true });
 			const result = es.through();

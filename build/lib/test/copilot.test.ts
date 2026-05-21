@@ -9,7 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
 import { create } from 'tar';
-import { copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, prepareBuiltInCopilotRipgrepShim } from '../copilot.ts';
+import { claudeAgentSdkVendorPlatforms, copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, prepareBuiltInCopilotRipgrepShim } from '../copilot.ts';
 
 suite('copilot', () => {
 	test('keeps the public copilot platform package include list scoped to the selected package', () => {
@@ -210,6 +210,10 @@ suite('copilot', () => {
 			[
 				'**',
 				...copilotPlatforms.map(platform => `!**/node_modules/@github/copilot-${platform}/**`),
+				...claudeAgentSdkVendorPlatforms.flatMap(platform => [
+					`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/audio-capture/${platform}/**`,
+					`!**/node_modules/@anthropic-ai/claude-agent-sdk/vendor/ripgrep/${platform}/**`,
+				]),
 				'!**/node_modules/@github/copilot-*/copilot',
 				'!**/node_modules/@github/copilot-*/copilot.exe',
 			]

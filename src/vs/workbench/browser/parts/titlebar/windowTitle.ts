@@ -16,7 +16,7 @@ import { IBrowserWorkbenchEnvironmentService } from '../../../services/environme
 import { IWorkspaceContextService, WorkbenchState, IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { isWindows, isWeb, isMacintosh, isNative } from '../../../../base/common/platform.js';
 import { URI } from '../../../../base/common/uri.js';
-import { trim } from '../../../../base/common/strings.js';
+import { Ellipsis, trim } from '../../../../base/common/strings.js';
 import { template } from '../../../../base/common/labels.js';
 import { ILabelService, Verbosity as LabelVerbosity } from '../../../../platform/label/common/label.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -39,12 +39,27 @@ const enum WindowSettingNames {
 	title = 'window.title',
 }
 
-export const defaultWindowTitle = (() => {
-	if (isMacintosh && isNative) {
-		return '${activeEditorShort}${separator}${rootName}${separator}${folderLocation}${separator}${profileName}'; // macOS has native dirty indicator
+const ACTIVE_EDITOR_MEDIUM_MAX_LENGTH = 64;
+const ACTIVE_EDITOR_MEDIUM_PREFIX_RATIO = 0.25;
+
+function truncateEditorMediumTitle(value: string): string {
+	if (value.length <= ACTIVE_EDITOR_MEDIUM_MAX_LENGTH) {
+		return value;
 	}
 
-	const base = '${dirty}${activeEditorShort}${separator}${rootName}${separator}${folderLocation}${separator}${profileName}${separator}${appName}';
+	const availableLength = ACTIVE_EDITOR_MEDIUM_MAX_LENGTH - Ellipsis.length;
+	const prefixLength = Math.max(0, Math.round(availableLength * ACTIVE_EDITOR_MEDIUM_PREFIX_RATIO));
+	const suffixLength = availableLength - prefixLength;
+
+	return `${value.substr(0, prefixLength)}${Ellipsis}${value.substr(value.length - suffixLength)}`;
+}
+
+export const defaultWindowTitle = (() => {
+	if (isMacintosh && isNative) {
+		return '${rootName}${separator}${folderLocation}${separator}${activeEditorMedium}${separator}${profileName}'; // macOS has native dirty indicator
+	}
+
+	const base = '${dirty}${activeEditorMedium}${separator}${rootName}${separator}${folderLocation}${separator}${profileName}${separator}${appName}';
 	if (isWeb) {
 		return base + '${separator}${remoteName}'; // Web: always show remote name
 	}
@@ -103,8 +118,9 @@ export class WindowTitle extends Disposable {
 		if (!this.folderLocationInfo) {
 			if (this.isCustomTitleFormat()) {
 				label = this.getWindowTitle();
-			} else if (options.showFileName && (!options.fileNameAsFallback || !label) && this.fileName !== undefined) {
-				label = this.fileName;
+			} else if (options.showFileName && (!options.fileNameAsFallback || !label)) {
+				// The window title, which has the path of the file, rather than only the file's name
+				label = this.getWindowTitle() ?? label;
 			}
 		}
 		if (!label) {
@@ -403,7 +419,7 @@ export class WindowTitle extends Disposable {
 
 		// Variables
 		const activeEditorShort = editor ? editor.getTitle(Verbosity.SHORT) : '';
-		const activeEditorMedium = editor ? editor.getTitle(Verbosity.MEDIUM) : activeEditorShort;
+		const activeEditorMedium = editor ? truncateEditorMediumTitle(editor.getTitle(Verbosity.MEDIUM)) : activeEditorShort;
 		const activeEditorLong = editor ? editor.getTitle(Verbosity.LONG) : activeEditorMedium;
 		const activeFolderShort = editorFolderResource ? basename(editorFolderResource) : '';
 		const activeFolderMedium = editorFolderResource ? this.labelService.getUriLabel(editorFolderResource, { relative: true }) : '';

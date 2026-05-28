@@ -1412,7 +1412,7 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 	 * Falls back to file name when tabs are hidden, or "Search" when empty.
 	 */
 	private _getLabel(): string {
-		return this._windowTitle.getCommandCenterLabel({ showFileName: this.editorGroupsService.partOptions.showTabs === 'none', fileNameAsFallback: true });
+		return this._windowTitle.getCommandCenterLabel({ showFileName: this.editorGroupsService.partOptions.showTabs === 'none' });
 	}
 
 	// #endregion

@@ -184,7 +184,7 @@ class CommandCenterCenterViewItem extends BaseActionViewItem {
 							if (that._windowTitle.isCustomTitleFormat()) {
 								label = that._windowTitle.getWindowTitle();
 							} else if (that._editorGroupService.partOptions.showTabs === 'none') {
-								label = that._windowTitle.fileName ?? label;
+								label = that._windowTitle.getWindowTitle() ?? label;
 							}
 
 							if (!label) {

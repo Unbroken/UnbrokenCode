@@ -1375,8 +1375,8 @@ export class AgentTitleBarStatusWidget extends BaseActionViewItem {
 		let label = this._windowTitle.workspaceName;
 		if (this._windowTitle.isCustomTitleFormat()) {
 			label = this._windowTitle.getWindowTitle();
-		} else if (!label && this.editorGroupsService.partOptions.showTabs === 'none') {
-			label = this._windowTitle.fileName ?? '';
+		} else if (this.editorGroupsService.partOptions.showTabs === 'none') {
+			label = this._windowTitle.getWindowTitle() ?? '';
 		}
 
 		if (!label) {

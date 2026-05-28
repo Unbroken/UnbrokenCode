@@ -11,12 +11,14 @@ import { registerRemoteContributions } from './terminalRemote.js';
 import { IRemoteAgentService } from '../../../services/remote/common/remoteAgentService.js';
 import { INativeHostService } from '../../../../platform/native/common/native.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { ITerminalService } from '../browser/terminal.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { disposableWindowInterval, getActiveWindow } from '../../../../base/browser/dom.js';
 
 export class TerminalNativeContribution extends Disposable implements IWorkbenchContribution {
 	declare _serviceBrand: undefined;
+	private readonly _textureAtlasRefreshScheduler = this._register(new RunOnceScheduler(() => this._refreshTextureAtlases(), 250));
 
 	constructor(
 		@IFileService private readonly _fileService: IFileService,
@@ -27,7 +29,15 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		super();
 
 		ipcRenderer.on('vscode:openFiles', (_: unknown, ...args: unknown[]) => { this._onOpenFileRequest(args[0] as INativeOpenFileRequest); });
-		this._register(nativeHostService.onDidResumeOS(() => this._onOsResume()));
+		// GPU/display transitions can corrupt WebGL atlas textures without losing the context.
+		this._register(nativeHostService.onDidResumeOS(() => this._scheduleTextureAtlasRefresh()));
+		this._register(nativeHostService.onDidUnlockScreen(() => this._scheduleTextureAtlasRefresh()));
+		this._register(nativeHostService.onDidChangeDisplay(() => this._scheduleTextureAtlasRefresh()));
+		this._register(nativeHostService.onDidFocusMainOrAuxiliaryWindow(windowId => {
+			if (windowId === nativeHostService.windowId) {
+				this._scheduleTextureAtlasRefresh();
+			}
+		}));
 
 		this._terminalService.setNativeDelegate({
 			getWindowCount: () => nativeHostService.getWindowCount()
@@ -39,9 +49,15 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		}
 	}
 
-	private _onOsResume(): void {
+	private _scheduleTextureAtlasRefresh(): void {
+		this._textureAtlasRefreshScheduler.schedule();
+	}
+
+	private _refreshTextureAtlases(): void {
 		for (const instance of this._terminalService.instances) {
-			instance.xterm?.forceRedraw();
+			if (instance.xterm?.isGpuAccelerated) {
+				instance.xterm.forceRedraw();
+			}
 		}
 	}
 

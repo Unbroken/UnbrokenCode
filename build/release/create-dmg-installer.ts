@@ -7,6 +7,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
+/**
+ * Extracts the stderr text from an error thrown by `execSync`, regardless of
+ * whether it was captured as a string or a Buffer.
+ */
+function getStderr(error: unknown): string {
+	if (error && typeof error === 'object') {
+		const stderr = (error as { stderr?: unknown }).stderr;
+		if (stderr) {
+			return stderr.toString();
+		}
+	}
+	return '';
+}
+
 interface DMGOptions {
 	appPath: string;
 	dmgPath: string;
@@ -250,14 +264,27 @@ end tell
 			console.log(`Unmounting DMG...`);
 			detachError = undefined;
 			for (let attempt = 1; attempt <= 5; attempt++) {
+				// If the volume is no longer mounted, a previous force-detach already
+				// took effect (a deferred unmount that completed once the busy resource
+				// was released), so there is nothing left to detach.
+				if (!fs.existsSync(mountPoint)) {
+					detachError = undefined;
+					break;
+				}
 				try {
 					execSync(`hdiutil detach "${mountPoint}" -force`, { stdio: 'pipe' });
 					detachError = undefined;
 					break;
 				} catch (e) {
+					// "No such file or directory" (or the mount point disappearing) means
+					// the volume is already gone, so the detach effectively succeeded.
+					if (!fs.existsSync(mountPoint) || getStderr(e).includes('No such file or directory')) {
+						detachError = undefined;
+						break;
+					}
 					detachError = e;
 					if (attempt < 5) {
-						console.log(`Detach attempt ${attempt} failed (Resource busy), retrying in ${attempt * 2}s...`);
+						console.log(`Detach attempt ${attempt} failed, retrying in ${attempt * 2}s...`);
 						execSync(`sleep ${attempt * 2}`);
 					}
 				}

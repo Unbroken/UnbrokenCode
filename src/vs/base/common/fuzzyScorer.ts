@@ -402,7 +402,7 @@ export interface IItemAccessor<T> {
 	getItemPath(file: T): string | undefined;
 }
 
-const PATH_IDENTITY_SCORE = 1 << 18;
+export const PATH_IDENTITY_SCORE = 1 << 18;
 const LABEL_PREFIX_SCORE_THRESHOLD = 1 << 17;
 const LABEL_SCORE_THRESHOLD = 1 << 16;
 

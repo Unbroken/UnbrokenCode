@@ -6,7 +6,7 @@
 import './media/anythingQuickAccess.css';
 import { IQuickInputButton, IKeyMods, quickPickItemScorerAccessor, QuickPickItemScorerAccessor, IQuickPick, IQuickPickItemWithResource, QuickInputHideReason, IQuickInputService, IQuickPickSeparator } from '../../../../platform/quickinput/common/quickInput.js';
 import { IPickerQuickAccessItem, PickerQuickAccessProvider, TriggerAction, FastAndSlowPicks, Picks, PicksWithActive } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
-import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache, type FuzzyMatchAlgorithm } from '../../../../base/common/fuzzyScorer.js';
+import { prepareQuery, IPreparedQuery, compareItemsByFuzzyScore, scoreItemFuzzy, FuzzyScorerCache, PATH_IDENTITY_SCORE, type FuzzyMatchAlgorithm } from '../../../../base/common/fuzzyScorer.js';
 import { IFileQueryBuilderOptions, QueryBuilder } from '../../../services/search/common/queryBuilder.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getOutOfWorkspaceEditorResources, extractRangeFromFilter, IWorkbenchSearchConfiguration } from '../common/search.js';
@@ -687,12 +687,19 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IAnyt
 			// Create a single result pick and make sure to apply full
 			// highlights to ensure the pick is displayed. Since a
 			// ~ might have been used for searching, our fuzzy scorer
-			// may otherwise not properly respect the pick as a result
+			// may otherwise not properly respect the pick as a result.
+			// We also assign it a path identity score so that the score
+			// based filtering and active item selection treat this exact
+			// on-disk match as the best result. Otherwise, with the partial
+			// fuzzy algorithm, weak fuzzy matches on editor history (e.g. a
+			// pasted absolute path loosely matching a recently opened editor)
+			// could outrank and steal focus from this pick.
 			const absolutePathPick = this.createAnythingPick(absolutePathResult, this.configuration);
 			absolutePathPick.highlights = {
 				label: [{ start: 0, end: absolutePathPick.label.length }],
 				description: absolutePathPick.description ? [{ start: 0, end: absolutePathPick.description.length }] : undefined
 			};
+			absolutePathPick.fuzzyScore = PATH_IDENTITY_SCORE;
 
 			return [absolutePathPick];
 		}

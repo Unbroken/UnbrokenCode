@@ -186,7 +186,7 @@ jobs:
     name: Build Windows x64
     needs:
       - authorize
-    runs-on: windows-2025
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:
@@ -216,7 +216,7 @@ jobs:
     name: Build Windows arm64
     needs:
       - authorize
-    runs-on: windows-2025
+    runs-on: windows-2022
     permissions:
       contents: write
     steps:

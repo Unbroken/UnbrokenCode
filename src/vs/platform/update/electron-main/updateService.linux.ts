@@ -83,14 +83,25 @@ export class LinuxUpdateService extends AbstractUpdateService {
 	}
 
 	protected override async doDownloadUpdate(state: AvailableForDownload): Promise<void> {
-		// Use the download URL if available as we don't currently detect the package type that was
-		// installed and the website download page is more useful than the tarball generally.
-		if (this.productService.downloadUrl && this.productService.downloadUrl.length > 0) {
-			this.nativeHostMainService.openExternal(undefined, this.productService.downloadUrl);
-		} else if (state.update.url) {
-			this.nativeHostMainService.openExternal(undefined, state.update.url);
+		// Prefer the release page of the offered update over the generic download URL, as the
+		// latter points to the latest GitHub release which may not be the update being offered
+		// (e.g. pre-releases are never the "latest" release). The release page is more useful
+		// than the tarball as we don't currently detect the package type that was installed.
+		const url = this.getReleasePageUrl(state.update) || this.productService.downloadUrl || state.update.url;
+		if (url) {
+			this.nativeHostMainService.openExternal(undefined, url);
 		}
 
 		this.setState(State.Idle(UpdateType.Archive));
+	}
+
+	private getReleasePageUrl(update: IUpdate): string | undefined {
+		if (!update.url) {
+			return undefined;
+		}
+
+		// https://github.com/<owner>/<repo>/releases/download/<tag>/<asset> -> https://github.com/<owner>/<repo>/releases/tag/<tag>
+		const match = update.url.match(/^(?<repo>https:\/\/github\.com\/[^/]+\/[^/]+)\/releases\/download\/(?<tag>.+)\/[^/]+$/);
+		return match?.groups ? `${match.groups.repo}/releases/tag/${match.groups.tag}` : undefined;
 	}
 }

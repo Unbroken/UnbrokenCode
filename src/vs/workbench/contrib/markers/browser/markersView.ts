@@ -18,8 +18,9 @@ import { IExpression } from '../../../../base/common/glob.js';
 import { Iterable } from '../../../../base/common/iterator.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { DisposableStore, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ResourceMap } from '../../../../base/common/map.js';
+import { ResourceMap, ResourceSet } from '../../../../base/common/map.js';
 import { deepClone } from '../../../../base/common/objects.js';
+import { isEqual } from '../../../../base/common/resources.js';
 import { isDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -621,7 +622,24 @@ export class MarkersView extends FilterViewPane implements IMarkersView {
 			resources.forEach(resource => resourcesMap.set(resource, resource));
 			return resourcesMap;
 		}, 64)(resourcesMap => {
-			this.markersModel.setResourceMarkers([...resourcesMap.values()].map(resource => [resource, readMarkers(resource)]));
+			// group changed resources by the representative resource of their
+			// symlink group so that aliases of the same file are shown (and
+			// deduplicated) under one entry
+			const entries: [URI, IMarker[]][] = [];
+			const representativesRead = new ResourceSet();
+			for (const resource of resourcesMap.values()) {
+				const representative = this.markerService.getRepresentativeResource(resource);
+				if (!isEqual(representative, resource)) {
+					// clear a stale entry that was created before the resource was
+					// known to be a symlink alias
+					entries.push([resource, []]);
+				}
+				if (!representativesRead.has(representative)) {
+					representativesRead.add(representative);
+					entries.push([representative, readMarkers(representative)]);
+				}
+			}
+			this.markersModel.setResourceMarkers(entries);
 		}));
 		disposables.push(Event.any<MarkerChangesEvent | void>(this.markersModel.onDidChange, this.editorService.onDidActiveEditorChange)(changes => {
 			if (changes) {

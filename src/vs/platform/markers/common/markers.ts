@@ -33,6 +33,17 @@ export interface IMarkerService {
 
 	installResourceFilter(resource: URI, reason: string): IDisposable;
 
+	/**
+	 * Returns the representative resource for the symlink group of the given
+	 * resource: a deterministic pick among the paths markers were actually
+	 * reported against (NOT the symlink target, which may not be part of any
+	 * configured project). Returns the resource itself while symlink resolution
+	 * is pending or when the resource is not a symlink alias. Resolution happens
+	 * asynchronously after markers are first reported for a resource; an
+	 * `onMarkerChanged` event fires when a resource turns out to be an alias.
+	 */
+	getRepresentativeResource(resource: URI): URI;
+
 	readonly onMarkerChanged: Event<readonly URI[]>;
 }
 
@@ -228,10 +239,13 @@ export function getSubProblemCount(markerData: IMarker): number {
 }
 
 /**
- * Create a location-based key using resource and start position (end position may differ between sources)
+ * Create a location-based key using resource and start position (end position may differ between sources).
+ * An optional `getCanonicalResource` maps symlink aliases to their canonical resource so that markers
+ * reported against different paths of the same file share a location key.
  */
-export function makeLocationKey(marker: IMarker): string {
-	return `${marker.resource.toString()}:${marker.startLineNumber}:${marker.startColumn}`;
+export function makeLocationKey(marker: IMarker, getCanonicalResource?: (resource: URI) => URI): string {
+	const resource = getCanonicalResource ? getCanonicalResource(marker.resource) : marker.resource;
+	return `${resource.toString()}:${marker.startLineNumber}:${marker.startColumn}`;
 }
 
 /**
@@ -286,8 +300,10 @@ export function messagesAreSimilar(msg1: string, msg2: string): boolean {
 /**
  * Deduplicate markers at the same location with similar messages.
  * Prefers markers with more subProblems when duplicates are found.
+ * When `getCanonicalResource` is provided, markers on symlink aliases of the
+ * same file are considered to be at the same location.
  */
-export function deduplicateMarkers(markers: IMarker[]): IMarker[] {
+export function deduplicateMarkers(markers: IMarker[], getCanonicalResource?: (resource: URI) => URI): IMarker[] {
 	if (markers.length === 0) {
 		return markers;
 	}
@@ -295,7 +311,7 @@ export function deduplicateMarkers(markers: IMarker[]): IMarker[] {
 	// Group markers by location
 	const markersByLocation = new Map<string, IMarker[]>();
 	for (const marker of markers) {
-		const locationKey = makeLocationKey(marker);
+		const locationKey = makeLocationKey(marker, getCanonicalResource);
 		const existing = markersByLocation.get(locationKey);
 		if (!existing) {
 			markersByLocation.set(locationKey, [marker]);

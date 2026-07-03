@@ -481,4 +481,124 @@ suite('Marker Service', () => {
 		assert.strictEqual(service.read().length, 1);
 		assert.strictEqual(service.read({ resource }).length, 1);
 	});
+
+	suite('symlink deduplication', () => {
+
+		class SymlinkAwareMarkerService extends markerService.MarkerService {
+			constructor(private readonly _canonicalPaths: Map<string, URI>) {
+				super();
+			}
+			protected override _resolveCanonicalResource(resource: URI): Promise<URI | undefined> | undefined {
+				return Promise.resolve(this._canonicalPaths.get(resource.toString()));
+			}
+		}
+
+		function fixedMarkerData(message: string, startLineNumber = 1, startColumn = 1): IMarkerData {
+			return {
+				severity: MarkerSeverity.Error,
+				message,
+				startLineNumber,
+				startColumn,
+				endLineNumber: startLineNumber,
+				endColumn: startColumn,
+				resourceSequenceNumber: 0,
+				sequenceNumber: 0
+			};
+		}
+
+		async function canonicalResolution(): Promise<void> {
+			await new Promise<void>(resolve => setTimeout(resolve, 0));
+		}
+
+		const canonical = URI.parse('file:///shared/lib/shutdown.ts');
+		const alias1 = URI.parse('file:///projects/appA/lib/shutdown.ts');
+		const alias2 = URI.parse('file:///projects/appB/lib/shutdown.ts');
+
+		function createService(): SymlinkAwareMarkerService {
+			return new SymlinkAwareMarkerService(new Map([
+				[alias1.toString(), canonical],
+				[alias2.toString(), canonical]
+			]));
+		}
+
+		test('markers on symlink aliases deduplicate in aggregate reads', async () => {
+			service = createService();
+			service.changeOne('typescript', alias1, [fixedMarkerData(`Cannot find name 'shutdownTimeoutMs'.`, 19, 2)]);
+			service.changeOne('check-all', alias2, [fixedMarkerData(`TS2552: Cannot find name 'shutdownTimeoutMs'.`, 19, 2)]);
+
+			await canonicalResolution();
+
+			const markers = service.read();
+			assert.strictEqual(markers.length, 1);
+			// surviving marker is presented under the representative resource,
+			// which is one of the actually reported paths - never the symlink
+			// target, which may not be part of any configured project
+			assert.strictEqual(markers[0].resource.toString(), alias1.toString());
+		});
+
+		test('per-resource reads include markers of all aliases, presented under the requested resource', async () => {
+			service = createService();
+			service.changeOne('typescript', alias1, [fixedMarkerData('error one', 19, 2)]);
+			service.changeOne('check-all', alias2, [fixedMarkerData('unrelated error two', 99, 59)]);
+
+			await canonicalResolution();
+
+			for (const requested of [alias1, alias2, canonical]) {
+				const markers = service.read({ resource: requested });
+				assert.strictEqual(markers.length, 2, requested.toString());
+				assert.ok(markers.every(marker => marker.resource.toString() === requested.toString()), requested.toString());
+			}
+		});
+
+		test('owner reads are not rewritten so owners can clean what they reported', async () => {
+			service = createService();
+			service.changeOne('check-all', alias1, [fixedMarkerData('some error', 19, 2)]);
+			service.changeOne('check-all', alias2, [fixedMarkerData('some error', 19, 2)]);
+
+			await canonicalResolution();
+
+			const owned = service.read({ owner: 'check-all' });
+			assert.deepStrictEqual(owned.map(marker => marker.resource.toString()).sort(), [alias1.toString(), alias2.toString()]);
+		});
+
+		test('getRepresentativeResource resolves aliases and change events cover the whole group', async () => {
+			service = createService();
+			service.changeOne('typescript', alias1, [fixedMarkerData('some error')]);
+			assert.strictEqual(service.getRepresentativeResource(alias1).toString(), alias1.toString());
+
+			service.changeOne('check-all', alias2, [fixedMarkerData('some error')]);
+			await canonicalResolution();
+
+			// both aliases resolve to the same representative, which is one of the
+			// reported paths rather than the symlink target
+			assert.strictEqual(service.getRepresentativeResource(alias1).toString(), alias1.toString());
+			assert.strictEqual(service.getRepresentativeResource(alias2).toString(), alias1.toString());
+			assert.strictEqual(service.getRepresentativeResource(canonical).toString(), alias1.toString());
+
+			const changed: string[] = [];
+			const subscription = service.onMarkerChanged(resources => changed.push(...resources.map(resource => resource.toString())));
+			service.changeOne('typescript', alias1, [fixedMarkerData('another error')]);
+			await canonicalResolution();
+			subscription.dispose();
+
+			for (const expected of [alias1, alias2, canonical]) {
+				assert.ok(changed.includes(expected.toString()), expected.toString());
+			}
+		});
+
+		test('representative moves to another alias when its markers are cleared', async () => {
+			service = createService();
+			service.changeOne('typescript', alias1, [fixedMarkerData('some error')]);
+			service.changeOne('check-all', alias2, [fixedMarkerData('some error')]);
+			await canonicalResolution();
+			assert.strictEqual(service.getRepresentativeResource(alias2).toString(), alias1.toString());
+
+			service.changeOne('typescript', alias1, []);
+			assert.strictEqual(service.getRepresentativeResource(alias1).toString(), alias2.toString());
+
+			const markers = service.read();
+			assert.strictEqual(markers.length, 1);
+			assert.strictEqual(markers[0].resource.toString(), alias2.toString());
+		});
+	});
 });

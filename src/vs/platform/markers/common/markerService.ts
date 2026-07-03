@@ -9,6 +9,7 @@ import { Iterable } from '../../../base/common/iterator.js';
 import { IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { ResourceMap, ResourceSet } from '../../../base/common/map.js';
 import { Schemas } from '../../../base/common/network.js';
+import { isEqual } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { IMarker, IMarkerData, IMarkerReadOptions, IMarkerService, IResourceMarker, MarkerSeverity, MarkerStatistics, deduplicateMarkers } from './markers.js';
@@ -117,6 +118,12 @@ class MarkerStats implements MarkerStatistics {
 			return result;
 		}
 
+		// markers on symlink aliases are accounted for under the representative
+		// resource of their group to avoid counting the same problem once per alias
+		if (!isEqual(this._service.getRepresentativeResource(resource), resource)) {
+			return result;
+		}
+
 		for (const { severity } of this._service.read({ resource })) {
 			if (severity === MarkerSeverity.Error) {
 				result.errors += 1;
@@ -161,13 +168,108 @@ export class MarkerService implements IMarkerService {
 	private readonly _stats = new MarkerStats(this);
 	private readonly _filteredResources = new ResourceMap<string[]>();
 
+	private readonly _canonicalResources = new ResourceMap<URI>();	// resolved resource -> canonical resource (identity when not a symlink)
+	private readonly _canonicalGroups = new ResourceMap<ResourceSet>();	// canonical resource -> all resources known to alias it (incl. itself)
+	private readonly _pendingCanonicalResources = new ResourceSet();
+	private _disposed = false;
+
 	dispose(): void {
+		this._disposed = true;
 		this._stats.dispose();
 		this._onMarkerChanged.dispose();
 	}
 
 	getStatistics(): MarkerStatistics {
 		return this._stats;
+	}
+
+	private _getCanonicalResource(resource: URI): URI {
+		return this._canonicalResources.get(resource) ?? resource;
+	}
+
+	getRepresentativeResource(resource: URI): URI {
+		const group = this._canonicalGroups.get(this._getCanonicalResource(resource));
+		if (!group) {
+			return resource;
+		}
+		// deterministic pick among the paths markers were actually reported
+		// against - the symlink target itself may not be part of any configured
+		// project, so it only serves as the grouping key
+		let representative: URI | undefined;
+		for (const member of group) {
+			if (Iterable.first(this._data.values(member)) !== undefined) {
+				if (!representative || member.toString() < representative.toString()) {
+					representative = member;
+				}
+			}
+		}
+		return representative ?? resource;
+	}
+
+	/**
+	 * Resolves the canonical resource (symlinks resolved) for the given resource.
+	 * Subclasses may override to provide an actual resolver (e.g. via the file
+	 * service). Returning `undefined` (or resolving to `undefined`) means the
+	 * resource is its own canonical resource.
+	 */
+	protected _resolveCanonicalResource(resource: URI): Promise<URI | undefined> | undefined {
+		return undefined;
+	}
+
+	private _requestCanonicalResource(resource: URI): void {
+		if (unsupportedSchemas.has(resource.scheme) || this._canonicalResources.has(resource) || this._pendingCanonicalResources.has(resource)) {
+			return;
+		}
+		let request: Promise<URI | undefined> | undefined;
+		try {
+			request = this._resolveCanonicalResource(resource);
+		} catch {
+			// treat resolver errors as identity
+		}
+		if (!request) {
+			this._canonicalResources.set(resource, resource);
+			return;
+		}
+		this._pendingCanonicalResources.add(resource);
+		request.then(canonical => {
+			if (this._disposed) {
+				return;
+			}
+			this._pendingCanonicalResources.delete(resource);
+			if (!canonical || isEqual(canonical, resource)) {
+				this._canonicalResources.set(resource, resource);
+				return;
+			}
+			this._canonicalResources.set(resource, canonical);
+			let group = this._canonicalGroups.get(canonical);
+			if (!group) {
+				group = new ResourceSet();
+				group.add(canonical);
+				this._canonicalGroups.set(canonical, group);
+			}
+			group.add(resource);
+			// re-render consumers of all aliases so duplicates collapse
+			this._onMarkerChanged.fire([...group]);
+		}, () => {
+			if (!this._disposed) {
+				this._pendingCanonicalResources.delete(resource);
+				this._canonicalResources.set(resource, resource);
+			}
+		});
+	}
+
+	private _fireMarkerChanged(resources: readonly URI[]): void {
+		// amplify changes to all symlink aliases of the changed resources so
+		// that consumers reading through another alias update as well
+		let expanded: URI[] | undefined;
+		for (const resource of resources) {
+			const group = this._canonicalGroups.get(this._getCanonicalResource(resource));
+			if (group) {
+				expanded ??= resources.slice();
+				expanded.push(...group);
+			}
+		}
+		this._onMarkerChanged.fire(expanded ?? resources);
 	}
 
 	remove(owner: string, resources: URI[]): void {
@@ -182,7 +284,7 @@ export class MarkerService implements IMarkerService {
 			// remove marker for this (owner,resource)-tuple
 			const removed = this._data.delete(resource, owner);
 			if (removed) {
-				this._onMarkerChanged.fire([resource]);
+				this._fireMarkerChanged([resource]);
 			}
 
 		} else {
@@ -195,7 +297,8 @@ export class MarkerService implements IMarkerService {
 				}
 			}
 			this._data.set(resource, owner, markers);
-			this._onMarkerChanged.fire([resource]);
+			this._requestCanonicalResource(resource);
+			this._fireMarkerChanged([resource]);
 		}
 	}
 
@@ -207,7 +310,7 @@ export class MarkerService implements IMarkerService {
 			this._filteredResources.set(resource, reasons);
 		}
 		reasons.push(reason);
-		this._onMarkerChanged.fire([resource]);
+		this._fireMarkerChanged([resource]);
 
 		return toDisposable(() => {
 			const reasons = this._filteredResources.get(resource);
@@ -220,7 +323,7 @@ export class MarkerService implements IMarkerService {
 				if (reasons.length === 0) {
 					this._filteredResources.delete(resource);
 				}
-				this._onMarkerChanged.fire([resource]);
+				this._fireMarkerChanged([resource]);
 			}
 		});
 	}
@@ -305,11 +408,12 @@ export class MarkerService implements IMarkerService {
 			// insert all
 			for (const [resource, value] of groups) {
 				this._data.set(resource, owner, value);
+				this._requestCanonicalResource(resource);
 			}
 		}
 
 		if (changes.length > 0) {
-			this._onMarkerChanged.fire(changes);
+			this._fireMarkerChanged(changes);
 		}
 	}
 
@@ -374,9 +478,19 @@ export class MarkerService implements IMarkerService {
 
 		} else {
 			// of one resource OR owner
-			const iterable = !owner && !resource
-				? this._data.values()
-				: this._data.values(resource ?? owner!);
+			let iterable: Iterable<IMarker[]>;
+			if (resource) {
+				// expand to all symlink aliases of the resource so that markers
+				// reported against another path of the same file are included
+				const group = this._canonicalGroups.get(this._getCanonicalResource(resource));
+				iterable = group
+					? Iterable.concat(...Array.from(group, member => this._data.values(member)))
+					: this._data.values(resource);
+			} else if (owner) {
+				iterable = this._data.values(owner);
+			} else {
+				iterable = this._data.values();
+			}
 
 			const result: IMarker[] = [];
 			const filtered = new ResourceSet();
@@ -400,8 +514,24 @@ export class MarkerService implements IMarkerService {
 				}
 			}
 			// Deduplicate markers from different sources (e.g., clangd and compiler)
-			// when aggregating across owners
-			return deduplicateMarkers(result);
+			// when aggregating across owners. Owner reads are left untouched across
+			// resources because owners rely on reading back the exact resources they
+			// reported (e.g. to clean them later).
+			if (owner) {
+				return deduplicateMarkers(result);
+			}
+			const deduplicated = deduplicateMarkers(result, r => this._getCanonicalResource(r));
+			// present surviving markers under the requested resource (or under the
+			// representative resource for aggregate reads) so that symlink aliases
+			// of the same file do not surface as distinct resources
+			if (resource) {
+				const requestedResource = resource;
+				return deduplicated.map(marker => isEqual(marker.resource, requestedResource) ? marker : { ...marker, resource: requestedResource });
+			}
+			return deduplicated.map(marker => {
+				const representative = this.getRepresentativeResource(marker.resource);
+				return isEqual(representative, marker.resource) ? marker : { ...marker, resource: representative };
+			});
 		}
 	}
 

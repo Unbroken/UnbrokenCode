@@ -22,7 +22,7 @@
   "icon": "assets/copilot.png",
   "pricing": "Trial",
   "engines": {
-    "vscode": "^1.127.60",
+    "vscode": "^1.127.61",
     "npm": ">=9.0.0",
     "node": ">=22.14.0"
   },

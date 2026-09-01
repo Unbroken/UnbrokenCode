@@ -35,7 +35,7 @@ import { ITelemetryService } from '../../../../platform/telemetry/common/telemet
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkbenchEnvironmentService } from '../../environment/common/environmentService.js';
 import { IExtensionFeaturesRegistry, Extensions as ExtensionFeaturesExtensions, IExtensionFeatureMarkdownRenderer, IRenderedData, } from '../../extensionManagement/common/extensionFeatures.js';
-import { IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../extensionManagement/common/extensionManagement.js';
+import { EnablementState, IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../extensionManagement/common/extensionManagement.js';
 import { ExtensionDescriptionRegistryLock, ExtensionDescriptionRegistrySnapshot, IActivationEventsReader, LockableExtensionDescriptionRegistry } from './extensionDescriptionRegistry.js';
 import { parseExtensionDevOptions } from './extensionDevOptions.js';
 import { ExtensionHostKind, ExtensionRunningPreference, IExtensionHostKindPicker } from './extensionHostKind.js';
@@ -149,9 +149,18 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 			const toAdd: IExtension[] = [];
 			const toRemove: IExtension[] = [];
 			for (const extension of extensions) {
-				if (this._safeInvokeIsEnabled(extension)) {
-					// an extension has been enabled
+				const isEnabled = this._safeInvokeIsEnabled(extension);
+				const extensionDescription = toExtensionDescription(extension, false);
+				const hasRestrictedModeContributions = !isEnabled
+					&& this._safeGetEnablementState(extension) === EnablementState.DisabledByTrustRequirement
+					&& !!extensionDescription
+					&& !!toRestrictedModeExtensionDescription(extensionDescription, this._extensionManifestPropertiesService);
+				if (isEnabled || hasRestrictedModeContributions) {
+					// An extension has been enabled or has allowed Restricted Mode contributions
 					toAdd.push(extension);
+					if (this._registry.getExtensionDescription(extension.identifier.id)) {
+						toRemove.push(extension);
+					}
 				} else {
 					// an extension has been disabled
 					toRemove.push(extension);
@@ -300,10 +309,17 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 		for (let i = 0, len = _toAdd.length; i < len; i++) {
 			const extension = _toAdd[i];
 
-			const extensionDescription = toExtensionDescription(extension, false);
+			let extensionDescription = toExtensionDescription(extension, false);
 			if (!extensionDescription) {
 				// could not scan extension...
 				continue;
+			}
+			if (this._safeGetEnablementState(extension) === EnablementState.DisabledByTrustRequirement) {
+				const restrictedModeExtension = toRestrictedModeExtensionDescription(extensionDescription, this._extensionManifestPropertiesService);
+				if (!restrictedModeExtension) {
+					continue;
+				}
+				extensionDescription = restrictedModeExtension;
 			}
 
 			if (!this._canAddExtension(extensionDescription, toRemove)) {
@@ -523,15 +539,15 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 
 		for await (const extensions of this._resolveExtensions()) {
 			if (extensions instanceof ResolverExtensions) {
-				resolverExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false);
+				resolverExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false, this._extensionManifestPropertiesService);
 				this._registry.deltaExtensions(lock, resolverExtensions, []);
 				this._doHandleExtensionPoints(resolverExtensions, true);
 			}
 			if (extensions instanceof LocalExtensions) {
-				localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false);
+				localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false, this._extensionManifestPropertiesService);
 			}
 			if (extensions instanceof RemoteExtensions) {
-				remoteExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false);
+				remoteExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, extensions.extensions, false, this._extensionManifestPropertiesService);
 			}
 		}
 
@@ -1149,6 +1165,14 @@ export abstract class AbstractExtensionService extends Disposable implements IEx
 		}
 	}
 
+	private _safeGetEnablementState(extension: IExtension): EnablementState | undefined {
+		try {
+			return this._extensionEnablementService.getEnablementState(extension);
+		} catch (err) {
+			return undefined;
+		}
+	}
+
 	private _doHandleExtensionPoints(affectedExtensions: IExtensionDescription[], onlyResolverExtensionPoints: boolean): void {
 		const affectedExtensionPoints: { [extPointName: string]: boolean } = Object.create(null);
 		for (const extensionDescription of affectedExtensions) {
@@ -1454,19 +1478,20 @@ export function isResolverExtension(extension: IExtensionDescription): boolean {
  * @argument extensions The extensions to be checked.
  * @argument ignoreWorkspaceTrust Do not take workspace trust into account.
  */
-export function checkEnabledAndProposedAPI(logService: ILogService, extensionEnablementService: IWorkbenchExtensionEnablementService, extensionsProposedApi: ExtensionsProposedApi, extensions: IExtensionDescription[], ignoreWorkspaceTrust: boolean): IExtensionDescription[] {
+export function checkEnabledAndProposedAPI(logService: ILogService, extensionEnablementService: IWorkbenchExtensionEnablementService, extensionsProposedApi: ExtensionsProposedApi, extensions: IExtensionDescription[], ignoreWorkspaceTrust: boolean, extensionManifestPropertiesService: IExtensionManifestPropertiesService): IExtensionDescription[] {
 	// enable or disable proposed API per extension
 	extensionsProposedApi.updateEnabledApiProposals(extensions);
 
-	// keep only enabled extensions
-	return filterEnabledExtensions(logService, extensionEnablementService, extensions, ignoreWorkspaceTrust);
+	// Keep enabled extensions and product-allowed Restricted Mode contributions
+	return filterEnabledExtensions(logService, extensionEnablementService, extensions, ignoreWorkspaceTrust, extensionManifestPropertiesService);
 }
 
 /**
- * Return the subset of extensions that are enabled.
+ * Return enabled extensions, replacing trust-disabled extensions with declarative-only
+ * descriptions when the product allows specific contributions in Restricted Mode.
  * @argument ignoreWorkspaceTrust Do not take workspace trust into account.
  */
-export function filterEnabledExtensions(logService: ILogService, extensionEnablementService: IWorkbenchExtensionEnablementService, extensions: IExtensionDescription[], ignoreWorkspaceTrust: boolean): IExtensionDescription[] {
+export function filterEnabledExtensions(logService: ILogService, extensionEnablementService: IWorkbenchExtensionEnablementService, extensions: IExtensionDescription[], ignoreWorkspaceTrust: boolean, extensionManifestPropertiesService?: IExtensionManifestPropertiesService): IExtensionDescription[] {
 	const enabledExtensions: IExtensionDescription[] = [], extensionsToCheck: IExtensionDescription[] = [], mappedExtensions: IExtension[] = [];
 	for (const extension of extensions) {
 		if (extension.isUnderDevelopment) {
@@ -1479,17 +1504,46 @@ export function filterEnabledExtensions(logService: ILogService, extensionEnable
 	}
 
 	const enablementStates = extensionEnablementService.getEnablementStates(mappedExtensions, ignoreWorkspaceTrust ? { trusted: true } : undefined);
+	const workspaceEnablementStates = ignoreWorkspaceTrust ? extensionEnablementService.getEnablementStates(mappedExtensions) : enablementStates;
 	for (let index = 0; index < enablementStates.length; index++) {
+		const extension = extensionsToCheck[index];
+		const restrictedModeExtension = workspaceEnablementStates[index] === EnablementState.DisabledByTrustRequirement && extensionManifestPropertiesService
+			? toRestrictedModeExtensionDescription(extension, extensionManifestPropertiesService)
+			: undefined;
 		if (extensionEnablementService.isEnabledEnablementState(enablementStates[index])) {
-			enabledExtensions.push(extensionsToCheck[index]);
+			enabledExtensions.push(restrictedModeExtension ?? extension);
+		} else if (restrictedModeExtension) {
+			enabledExtensions.push(restrictedModeExtension);
 		} else {
 			if (isCI) {
-				logService.info(`filterEnabledExtensions: extension '${extensionsToCheck[index].identifier.value}' is disabled`);
+				logService.info(`filterEnabledExtensions: extension '${extension.identifier.value}' is disabled`);
 			}
 		}
 	}
 
 	return enabledExtensions;
+}
+
+/**
+ * Creates a non-executable extension description containing only the contributions
+ * that the product explicitly allows in Restricted Mode.
+ */
+function toRestrictedModeExtensionDescription(extension: IExtensionDescription, extensionManifestPropertiesService: IExtensionManifestPropertiesService): IExtensionDescription | undefined {
+	const allowedContributions = extensionManifestPropertiesService.getExtensionUntrustedWorkspaceAllowedContributions(extension);
+	const themes = allowedContributions.includes('themes') ? extension.contributes?.themes : undefined;
+	if (!themes) {
+		return undefined;
+	}
+
+	return {
+		...extension,
+		main: undefined,
+		browser: undefined,
+		activationEvents: undefined,
+		extensionDependencies: undefined,
+		extensionPack: undefined,
+		contributes: { themes }
+	};
 }
 
 /**

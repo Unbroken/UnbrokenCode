@@ -264,6 +264,15 @@ if (!isWeb) {
 			assertUntrustedWorkspaceSupport(extensionManifest, false);
 		});
 
+		test('test extension allowed contributions in untrusted workspaces from product.json', () => {
+			instantiationService.stub(IProductService, { extensionUntrustedWorkspaceSupport: { 'pub.a': { allowedContributions: ['themes'] } } });
+			instantiationService.stub(IWorkspaceTrustEnablementService, new TestWorkspaceTrustEnablementService());
+			testObject = instantiationService.createInstance(ExtensionManifestPropertiesService);
+
+			const extensionManifest = getExtensionManifest({ main: './out/extension.js' });
+			assert.deepStrictEqual(testObject.getExtensionUntrustedWorkspaceAllowedContributions(extensionManifest), ['themes']);
+		});
+
 		test('test extension workspace trust request when override (limited) exists in product.json', () => {
 			instantiationService.stub(IProductService, { extensionUntrustedWorkspaceSupport: { 'pub.a': { override: 'limited' } } });
 			instantiationService.stub(IWorkspaceTrustEnablementService, new TestWorkspaceTrustEnablementService());

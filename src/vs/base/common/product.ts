@@ -57,6 +57,8 @@ export type ConfigurationSyncStore = {
 export type ExtensionUntrustedWorkspaceSupport = {
 	readonly default?: boolean | 'limited';
 	readonly override?: boolean | 'limited';
+	/** Declarative contributions that remain available while the extension is disabled by workspace trust. */
+	readonly allowedContributions?: readonly 'themes'[];
 };
 
 export type ExtensionVirtualWorkspaceSupport = {

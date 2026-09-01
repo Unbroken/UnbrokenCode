@@ -138,6 +138,7 @@ export interface IExtensionManifestPropertiesService {
 	getExtensionKind(manifest: IExtensionManifest): ExtensionKind[];
 	getUserConfiguredExtensionKind(extensionIdentifier: IExtensionIdentifier): ExtensionKind[] | undefined;
 	getExtensionUntrustedWorkspaceSupportType(manifest: IExtensionManifest): ExtensionUntrustedWorkspaceSupportType;
+	getExtensionUntrustedWorkspaceAllowedContributions(manifest: IExtensionManifest): readonly (keyof IExtensionContributions)[];
 	getExtensionVirtualWorkspaceSupportType(manifest: IExtensionManifest): ExtensionVirtualWorkspaceSupportType;
 }
 
@@ -344,6 +345,10 @@ export class ExtensionManifestPropertiesService extends Disposable implements IE
 		}
 
 		return false;
+	}
+
+	getExtensionUntrustedWorkspaceAllowedContributions(manifest: IExtensionManifest): readonly (keyof IExtensionContributions)[] {
+		return this.getProductExtensionWorkspaceTrustRequest(manifest)?.allowedContributions ?? [];
 	}
 
 	getExtensionVirtualWorkspaceSupportType(manifest: IExtensionManifest): ExtensionVirtualWorkspaceSupportType {

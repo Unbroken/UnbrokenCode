@@ -6,13 +6,14 @@
 import assert from 'assert';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { mock } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
 import { TestDialogService } from '../../../../../platform/dialogs/test/common/testDialogService.js';
 import { ExtensionKind, IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
-import { ExtensionIdentifier, IExtension, IExtensionDescription } from '../../../../../platform/extensions/common/extensions.js';
+import { ExtensionIdentifier, IExtension, IExtensionDescription, TargetPlatform } from '../../../../../platform/extensions/common/extensions.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TestInstantiationService, createServices } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
@@ -32,9 +33,9 @@ import { IUserDataProfilesService, UserDataProfilesService } from '../../../../.
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustEnablementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkbenchEnvironmentService } from '../../../environment/common/environmentService.js';
-import { IWebExtensionsScannerService, IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../../extensionManagement/common/extensionManagement.js';
+import { EnablementState, IWebExtensionsScannerService, IWorkbenchExtensionEnablementService, IWorkbenchExtensionManagementService } from '../../../extensionManagement/common/extensionManagement.js';
 import { BrowserExtensionHostKindPicker } from '../../browser/extensionService.js';
-import { AbstractExtensionService, IExtensionHostFactory, ResolvedExtensions } from '../../common/abstractExtensionService.js';
+import { AbstractExtensionService, IExtensionHostFactory, ResolvedExtensions, filterEnabledExtensions } from '../../common/abstractExtensionService.js';
 import { ExtensionHostKind, ExtensionRunningPreference } from '../../common/extensionHostKind.js';
 import { IExtensionHostManager } from '../../common/extensionHostManagers.js';
 import { ExtensionManifestPropertiesService, IExtensionManifestPropertiesService } from '../../common/extensionManifestPropertiesService.js';
@@ -47,7 +48,7 @@ import { IRemoteAgentService } from '../../../remote/common/remoteAgentService.j
 import { IUserDataProfileService } from '../../../userDataProfile/common/userDataProfile.js';
 import { WorkspaceTrustEnablementService } from '../../../workspaces/common/workspaceTrust.js';
 import { TestEnvironmentService, TestLifecycleService, TestRemoteAgentService, TestRemoteExtensionsScannerService, TestWebExtensionsScannerService, TestWorkbenchExtensionEnablementService, TestWorkbenchExtensionManagementService } from '../../../../test/browser/workbenchTestServices.js';
-import { TestContextService, TestFileService, TestUserDataProfileService } from '../../../../test/common/workbenchTestServices.js';
+import { TestContextService, TestFileService, TestUserDataProfileService, TestWorkspaceTrustEnablementService } from '../../../../test/common/workbenchTestServices.js';
 
 suite('BrowserExtensionService', () => {
 
@@ -129,6 +130,76 @@ suite('BrowserExtensionService', () => {
 		assert.deepStrictEqual(BrowserExtensionHostKindPicker.pickRunningLocation(['workspace', 'web', 'ui'], false, true, ExtensionRunningPreference.None), ExtensionHostKind.Remote);
 		assert.deepStrictEqual(BrowserExtensionHostKindPicker.pickRunningLocation(['workspace', 'web', 'ui'], true, false, ExtensionRunningPreference.None), ExtensionHostKind.LocalWebWorker);
 		assert.deepStrictEqual(BrowserExtensionHostKindPicker.pickRunningLocation(['workspace', 'web', 'ui'], true, true, ExtensionRunningPreference.None), ExtensionHostKind.Remote);
+	});
+
+	test('restricted mode keeps only product-allowed declarative contributions', () => {
+		const extension: IExtensionDescription = {
+			name: 'malterlib',
+			publisher: 'Malterlib',
+			version: '1.0.0',
+			engines: { vscode: '*' },
+			identifier: new ExtensionIdentifier('Malterlib.malterlib'),
+			extensionLocation: URI.file('/extensions/malterlib'),
+			isBuiltin: true,
+			isUserBuiltin: false,
+			isUnderDevelopment: false,
+			preRelease: false,
+			targetPlatform: TargetPlatform.UNDEFINED,
+			main: './dist/extension.js',
+			activationEvents: ['onLanguage:cpp'],
+			extensionDependencies: ['publisher.dependency'],
+			extensionPack: ['publisher.extension-pack-item'],
+			contributes: {
+				themes: [{ label: 'Malterlib' }],
+				commands: [{ command: 'malterlib.build', title: 'Build' }]
+			}
+		};
+		const extensionEnablementService = new class extends TestWorkbenchExtensionEnablementService {
+			override getEnablementStates(extensions: IExtension[], workspaceTypeOverrides?: { trusted?: boolean }): EnablementState[] {
+				return extensions.map(() => workspaceTypeOverrides?.trusted ? EnablementState.EnabledGlobally : EnablementState.DisabledByTrustRequirement);
+			}
+			override isEnabledEnablementState(enablementState: EnablementState): boolean {
+				return enablementState === EnablementState.EnabledGlobally || enablementState === EnablementState.EnabledWorkspace;
+			}
+		};
+		const manifestPropertiesService = new ExtensionManifestPropertiesService(
+			{ _serviceBrand: undefined, ...product, extensionUntrustedWorkspaceSupport: { 'malterlib.malterlib': { allowedContributions: ['themes'] } } },
+			new TestConfigurationService(),
+			new TestWorkspaceTrustEnablementService(),
+			new NullLogService()
+		);
+
+		try {
+			const workspaceExtensions = filterEnabledExtensions(new NullLogService(), extensionEnablementService, [extension], false, manifestPropertiesService);
+			const extensionHostExtensions = filterEnabledExtensions(new NullLogService(), extensionEnablementService, [extension], true, manifestPropertiesService);
+			assert.deepStrictEqual([workspaceExtensions, extensionHostExtensions].map(([result]) => ({
+				main: result.main,
+				browser: result.browser,
+				activationEvents: result.activationEvents,
+				extensionDependencies: result.extensionDependencies,
+				extensionPack: result.extensionPack,
+				contributes: result.contributes
+			})), [
+				{
+					main: undefined,
+					browser: undefined,
+					activationEvents: undefined,
+					extensionDependencies: undefined,
+					extensionPack: undefined,
+					contributes: { themes: [{ label: 'Malterlib' }] }
+				},
+				{
+					main: undefined,
+					browser: undefined,
+					activationEvents: undefined,
+					extensionDependencies: undefined,
+					extensionPack: undefined,
+					contributes: { themes: [{ label: 'Malterlib' }] }
+				}
+			]);
+		} finally {
+			manifestPropertiesService.dispose();
+		}
 	});
 });
 

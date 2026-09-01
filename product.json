@@ -78,6 +78,13 @@
 		"ms-python.python",
 		"rust-lang.rust-analyzer"
 	],
+	"extensionUntrustedWorkspaceSupport": {
+		"malterlib.malterlib": {
+			"allowedContributions": [
+				"themes"
+			]
+		}
+	},
 	"builtInExtensions": [
 		{
 			"name": "ms-vscode.js-debug-companion",

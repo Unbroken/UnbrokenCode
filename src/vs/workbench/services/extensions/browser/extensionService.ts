@@ -78,6 +78,7 @@ export class ExtensionService extends AbstractExtensionService implements IExten
 			remoteAgentService,
 			remoteAuthorityResolverService,
 			extensionEnablementService,
+			extensionManifestPropertiesService,
 			logService
 		);
 		super(
@@ -234,6 +235,7 @@ class BrowserExtensionHostFactory implements IExtensionHostFactory {
 		@IRemoteAgentService private readonly _remoteAgentService: IRemoteAgentService,
 		@IRemoteAuthorityResolverService private readonly _remoteAuthorityResolverService: IRemoteAuthorityResolverService,
 		@IWorkbenchExtensionEnablementService private readonly _extensionEnablementService: IWorkbenchExtensionEnablementService,
+		@IExtensionManifestPropertiesService private readonly _extensionManifestPropertiesService: IExtensionManifestPropertiesService,
 		@ILogService private readonly _logService: ILogService,
 	) { }
 
@@ -265,7 +267,7 @@ class BrowserExtensionHostFactory implements IExtensionHostFactory {
 			getInitData: async (): Promise<IWebWorkerExtensionHostInitData> => {
 				if (isInitialStart) {
 					// Here we load even extensions that would be disabled by workspace trust
-					const localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, await this._scanWebExtensions(), /* ignore workspace trust */true);
+					const localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, await this._scanWebExtensions(), /* ignore workspace trust */true, this._extensionManifestPropertiesService);
 					const runningLocation = runningLocations.computeRunningLocation(localExtensions, [], false);
 					const myExtensions = filterExtensionDescriptions(localExtensions, runningLocation, extRunningLocation => desiredRunningLocation.equals(extRunningLocation));
 					const extensions = new ExtensionHostExtensions(0, localExtensions, myExtensions.map(extension => extension.identifier));

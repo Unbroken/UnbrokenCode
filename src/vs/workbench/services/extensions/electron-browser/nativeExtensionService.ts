@@ -101,6 +101,7 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 			configurationService,
 			remoteAgentService,
 			remoteAuthorityResolverService,
+			extensionManifestPropertiesService,
 			logService
 		);
 		super(
@@ -560,6 +561,7 @@ class NativeExtensionHostFactory implements IExtensionHostFactory {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IRemoteAgentService private readonly _remoteAgentService: IRemoteAgentService,
 		@IRemoteAuthorityResolverService private readonly _remoteAuthorityResolverService: IRemoteAuthorityResolverService,
+		@IExtensionManifestPropertiesService private readonly _extensionManifestPropertiesService: IExtensionManifestPropertiesService,
 		@ILogService private readonly _logService: ILogService,
 	) {
 		this._webWorkerExtHostEnablement = determineLocalWebWorkerExtHostEnablement(environmentService, configurationService);
@@ -602,7 +604,7 @@ class NativeExtensionHostFactory implements IExtensionHostFactory {
 						this._logService.info(`NativeExtensionHostFactory._createLocalProcessExtensionHostDataProvider.scannedExtensions: ${scannedExtensions.map(ext => ext.identifier.value).join(',')}`);
 					}
 
-					const localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, scannedExtensions, /* ignore workspace trust */true);
+					const localExtensions = checkEnabledAndProposedAPI(this._logService, this._extensionEnablementService, this._extensionsProposedApi, scannedExtensions, /* ignore workspace trust */true, this._extensionManifestPropertiesService);
 					if (isCI) {
 						this._logService.info(`NativeExtensionHostFactory._createLocalProcessExtensionHostDataProvider.localExtensions: ${localExtensions.map(ext => ext.identifier.value).join(',')}`);
 					}

@@ -13,6 +13,7 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IPath, posix, win32 } from '../../../../../base/common/path.js';
 import { ITerminalBackend } from '../../../../../platform/terminal/common/terminal.js';
 import { mainWindow } from '../../../../../base/browser/window.js';
+import { gitBashToWindowsPath } from '../../suggest/browser/terminalGitBashHelpers.js';
 
 export class TerminalLinkResolver implements ITerminalLinkResolver {
 	// Link cache could be shared across all terminals, but that could lead to weird results when
@@ -76,6 +77,10 @@ export class TerminalLinkResolver implements ITerminalLinkResolver {
 		// to get the resolved path from the wslpath util.
 		if (isWindows && link.match(/^\/mnt\/[a-z]/i) && processManager.backend) {
 			linkUrl = await processManager.backend.getWslPath(linkUrl, 'unix-to-win');
+		}
+		// Convert Git Bash absolute paths such as /c/foo to their Windows equivalent.
+		else if ((processManager.os ?? OS) === OperatingSystem.Windows && linkUrl.match(/^\/[a-zA-Z](?:\/|$)/)) {
+			linkUrl = gitBashToWindowsPath(linkUrl);
 		}
 		// Skip preprocessing if it looks like a special Windows -> WSL link
 		else if (isWindows && link.match(/^(?:\/\/|\\\\)wsl(?:\$|\.localhost)(\/|\\)/)) {

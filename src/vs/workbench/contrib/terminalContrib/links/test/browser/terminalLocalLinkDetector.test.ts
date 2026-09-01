@@ -66,6 +66,7 @@ const windowsLinks: (string | { link: string; resource: URI })[] = [
 	'c:\\foo\\bar',
 	'c:\\foo\\bar+more',
 	'c:\\foo/bar\\baz',
+	{ link: '/c/foo/bar', resource: URI.file('C:\\foo\\bar') },
 	// URI file://
 	{ link: 'file:///c:/foo', resource: URI.file('c:\\foo') },
 	{ link: 'file:///c:/foo/bar', resource: URI.file('c:\\foo\\bar') },
@@ -291,6 +292,20 @@ suite('Workbench - TerminalLocalLinkDetector', () => {
 			await assertLinks(TerminalBuiltinLinkType.LocalFile, 'bar[foo:5', [
 				{ range: [[5, 1], [9, 1]], uri: URI.file('/parent/cwd/foo') }
 			]);
+		});
+
+		test('should support Git Bash absolute paths on Windows', async () => {
+			detector = instantiationService.createInstance(TerminalLocalLinkDetector, xterm, store.add(new TerminalCapabilityStore()), {
+				initialCwd: 'C:\\Parent\\Cwd',
+				os: OperatingSystem.Windows,
+				remoteAuthority: undefined,
+				userHome: 'C:\\Home',
+				backend: undefined
+			}, resolver);
+			validResources = [URI.file('C:\\foo\\bar')];
+			fileService.setFiles(validResources);
+			await assertLinksWithWrapped('/c/foo/bar', validResources[0]);
+			await assertLinksWithWrapped('/c/foo/bar:5:3', validResources[0]);
 		});
 	});
 

@@ -1431,7 +1431,24 @@ export class CodeApplication extends Disposable {
 		sharedProcessClient.then(client => client.registerChannel('profileStorageListener', profileStorageListener));
 
 		// Terminal
-		const ptyHostChannel = ProxyChannel.fromService(accessor.get(ILocalPtyService), disposables);
+		// Windows receive per-process events over the direct message port connection to the
+		// pty host (`TerminalIpcChannels.PtyHostWindow`), never over this channel. Leaving them
+		// buffered means `Event.buffer` queues every event here for the lifetime of the process
+		// without anything ever consuming them, which for `onProcessData` grows without bound:
+		// every byte written by every terminal is retained in the main process until it OOMs.
+		// The pty host lifecycle events below are left buffered, since a window that connects
+		// late does need to learn that the pty host started or became unresponsive.
+		const ptyHostChannel = ProxyChannel.fromService(accessor.get(ILocalPtyService), disposables, {
+			unbufferedEvents: [
+				'onProcessData',
+				'onProcessReady',
+				'onProcessReplay',
+				'onProcessOrphanQuestion',
+				'onProcessExit',
+				'onDidChangeProperty',
+				'onDidRequestDetach'
+			]
+		});
 		mainProcessElectronServer.registerChannel(TerminalIpcChannels.LocalPty, ptyHostChannel);
 
 		// External Terminal

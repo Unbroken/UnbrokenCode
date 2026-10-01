@@ -41,6 +41,7 @@ import { IRemoteAgentService } from '../../../services/remote/common/remoteAgent
 import { INativeWorkbenchEnvironmentService } from '../../../services/environment/electron-browser/environmentService.js';
 import { shouldUseEnvironmentVariableCollection } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IMergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
 import { serializeEnvironmentVariableCollections } from '../../../../platform/terminal/common/environmentVariableShared.js';
 
 export class LocalTerminalBackendContribution implements IWorkbenchContribution {
@@ -61,6 +62,11 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 	readonly remoteAuthority = undefined;
 
 	private readonly _ptys: Map<number, LocalPty> = new Map();
+
+	/**
+	 * The shell launch configs of revived processes that have not been started yet, by pty id.
+	 */
+	private readonly _revivedShellLaunchConfigs: Map<number, IShellLaunchConfig> = new Map();
 
 	private _directProxyClientEventually: DeferredPromise<MessagePortClient> | undefined;
 	private _directProxy: IPtyService | undefined;
@@ -251,6 +257,26 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		return undefined;
 	}
 
+	async replayRevivedProcess(id: number): Promise<boolean> {
+		if (!this._revivedShellLaunchConfigs.has(id)) {
+			return false;
+		}
+		await this._connectToDirectProxy();
+		await this._proxy.replayRevivedProcess(id);
+		return true;
+	}
+
+	async refreshRevivedProcessEnvironment(id: number, collection: IMergedEnvironmentVariableCollection): Promise<void> {
+		const shellLaunchConfig = this._revivedShellLaunchConfigs.get(id);
+		this._revivedShellLaunchConfigs.delete(id);
+		if (!shellLaunchConfig) {
+			return;
+		}
+		const { env } = await this._resolveEnvironmentForRevive(await this._createReviveVariableResolver(), shellLaunchConfig, collection);
+		await this._connectToDirectProxy();
+		return this._proxy.updateRevivedProcessEnvironment(id, env, serializeEnvironmentVariableCollections(collection.collections));
+	}
+
 	async listProcesses(): Promise<IProcessDetails[]> {
 		await this._connectToDirectProxy();
 		return this._proxy.listProcesses();
@@ -338,16 +364,13 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		const reviveBufferState = this._deserializeTerminalState(serializedState);
 		if (reviveBufferState && reviveBufferState.length > 0) {
 			try {
-				// Create variable resolver
-				const activeWorkspaceRootUri = this._historyService.getLastActiveWorkspaceRoot();
-				const lastActiveWorkspace = activeWorkspaceRootUri ? this._workspaceContextService.getWorkspaceFolder(activeWorkspaceRootUri) ?? undefined : undefined;
-				const variableResolver = terminalEnvironment.createVariableResolver(lastActiveWorkspace, await this._terminalProfileResolverService.getEnvironment(this.remoteAuthority), this._configurationResolverService);
+				const variableResolver = await this._createReviveVariableResolver();
 
 				// Re-resolve the environments and replace it on the state so local terminals use a fresh
 				// environment
 				mark('code/terminal/willGetReviveEnvironments');
 				await Promise.all(reviveBufferState.map(async state => {
-					const { env, environmentVariableCollections } = await this._resolveEnvironmentForRevive(variableResolver, state.shellLaunchConfig);
+					const { env, environmentVariableCollections } = await this._resolveEnvironmentForRevive(variableResolver, state.shellLaunchConfig, this._environmentVariableService.getMergedCollection(this.remoteAuthority, OS));
 					state.processLaunchConfig.env = env;
 					state.processLaunchConfig.options.environmentVariableCollections = environmentVariableCollections;
 				}));
@@ -356,6 +379,14 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 				mark('code/terminal/willReviveTerminalProcesses');
 				await this._proxy.reviveTerminalProcesses(workspaceId, reviveBufferState, Intl.DateTimeFormat().resolvedOptions().locale);
 				mark('code/terminal/didReviveTerminalProcesses');
+				// Remember the launch configs so the environments can be refreshed once extensions
+				// had a chance to update their environment contributions for this session
+				await Promise.all(reviveBufferState.map(async state => {
+					const newId = await this._proxy.getRevivedPtyNewId(workspaceId, state.id);
+					if (newId !== undefined) {
+						this._revivedShellLaunchConfigs.set(newId, state.shellLaunchConfig);
+					}
+				}));
 				this._storageService.remove(TerminalStorageKeys.TerminalBufferState, StorageScope.WORKSPACE);
 				// If reviving processes, send the terminal layout info back to the pty host as it
 				// will not have been persisted on application exit
@@ -374,7 +405,13 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		return this._proxy.getTerminalLayoutInfo(layoutArgs);
 	}
 
-	private async _resolveEnvironmentForRevive(variableResolver: terminalEnvironment.VariableResolver | undefined, shellLaunchConfig: IShellLaunchConfig): Promise<{ env: IProcessEnvironment; environmentVariableCollections: ReturnType<typeof serializeEnvironmentVariableCollections> | undefined }> {
+	private async _createReviveVariableResolver(): Promise<terminalEnvironment.VariableResolver | undefined> {
+		const activeWorkspaceRootUri = this._historyService.getLastActiveWorkspaceRoot();
+		const lastActiveWorkspace = activeWorkspaceRootUri ? this._workspaceContextService.getWorkspaceFolder(activeWorkspaceRootUri) ?? undefined : undefined;
+		return terminalEnvironment.createVariableResolver(lastActiveWorkspace, await this._terminalProfileResolverService.getEnvironment(this.remoteAuthority), this._configurationResolverService);
+	}
+
+	private async _resolveEnvironmentForRevive(variableResolver: terminalEnvironment.VariableResolver | undefined, shellLaunchConfig: IShellLaunchConfig, collection: IMergedEnvironmentVariableCollection): Promise<{ env: IProcessEnvironment; environmentVariableCollections: ReturnType<typeof serializeEnvironmentVariableCollections> | undefined }> {
 		const platformKey = isWindows ? 'windows' : (isMacintosh ? 'osx' : 'linux');
 		const envFromConfigValue = this._configurationService.getValue<ITerminalEnvironment | undefined>(`terminal.integrated.env.${platformKey}`);
 		const baseEnv = await (shellLaunchConfig.useShellEnvironment ? this.getShellEnvironment() : this.getEnvironment());
@@ -382,7 +419,6 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		let environmentVariableCollections: ReturnType<typeof serializeEnvironmentVariableCollections> | undefined;
 		if (shouldUseEnvironmentVariableCollection(shellLaunchConfig)) {
 			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
-			const collection = this._environmentVariableService.getMergedCollection(this.remoteAuthority, OS);
 			await collection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
 			environmentVariableCollections = serializeEnvironmentVariableCollections(collection.collections);
 		}

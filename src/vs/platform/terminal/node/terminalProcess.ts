@@ -17,6 +17,7 @@ import { localize } from '../../../nls.js';
 import { ILogService, LogLevel } from '../../log/common/log.js';
 import { IProductService } from '../../product/common/productService.js';
 import { FlowControlConstants, IShellLaunchConfig, ITerminalChildProcess, ITerminalLaunchError, IProcessProperty, IProcessPropertyMap, ProcessPropertyType, TerminalShellType, IProcessReadyEvent, ITerminalProcessOptions, PosixShellType, IProcessReadyWindowsPty, GeneralShellType, ITerminalLaunchResult } from '../common/terminal.js';
+import { ISerializableEnvironmentVariableCollections } from '../common/environmentVariable.js';
 import { ChildProcessMonitor } from './childProcessMonitor.js';
 import { ENVIRONMENT_ONLY_INJECTION_VARIABLE, getShellIntegrationInjection, IShellIntegrationConfigInjection, sanitizeEnvForLogging } from './terminalEnvironment.js';
 import { WindowsShellHelper } from './windowsShellHelper.js';
@@ -201,6 +202,15 @@ export class TerminalProcess extends Disposable implements ITerminalChildProcess
 			this._ptyProcess = undefined;
 			this._processStartupComplete = undefined;
 		}));
+	}
+
+	/**
+	 * Replaces the environment the process will be launched with, this has no effect once the
+	 * process has been started.
+	 */
+	updateEnvironment(env: IProcessEnvironment, environmentVariableCollections: ISerializableEnvironmentVariableCollections | undefined): void {
+		this._ptyOptions.env = env as { [key: string]: string };
+		this._options.environmentVariableCollections = environmentVariableCollections;
 	}
 
 	async start(): Promise<ITerminalLaunchError | ITerminalLaunchResult | undefined> {

@@ -50,6 +50,14 @@ export interface IEnvironmentVariableService {
 	 * Deletes an extension's environment variable collection.
 	 */
 	delete(extensionIdentifier: string): void;
+
+	/**
+	 * Waits until the given extensions have had the chance to update their collections in this
+	 * session. An extension is considered done when it updated its collection, finished activating
+	 * without updating it, is not installed or does not activate unconditionally on startup. This
+	 * is bounded by a timeout since activation may take arbitrarily long.
+	 */
+	whenCollectionsUpdated(extensionIdentifiers: readonly string[]): Promise<void>;
 }
 
 export interface IEnvironmentVariableCollectionWithPersistence extends IEnvironmentVariableCollection {

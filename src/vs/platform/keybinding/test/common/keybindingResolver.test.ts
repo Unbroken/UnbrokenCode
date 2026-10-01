@@ -7,8 +7,9 @@ import assert from 'assert';
 import { decodeKeybinding, createSimpleKeybinding, KeyCodeChord } from '../../../../base/common/keybindings.js';
 import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { OS } from '../../../../base/common/platform.js';
+import { mock } from '../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { ContextKeyExpr, ContextKeyExpression, IContext } from '../../../contextkey/common/contextkey.js';
+import { ContextKeyExpr, ContextKeyExpression, IContext, IContextKeyService } from '../../../contextkey/common/contextkey.js';
 import { KeybindingResolver, ResultKind } from '../../common/keybindingResolver.js';
 import { ResolvedKeybindingItem } from '../../common/resolvedKeybindingItem.js';
 import { USLayoutResolvedKeybinding } from '../../common/usLayoutResolvedKeybinding.js';
@@ -74,6 +75,30 @@ suite('KeybindingResolver', () => {
 		const r = resolver.resolve(createContext({ bar: 'baz' }), [], getDispatchStr(runtimeKeybinding));
 		assert.ok(r.kind === ResultKind.KbFound);
 		assert.strictEqual(r.commandArgs, commandArgs);
+	});
+
+	test('lookupPrimaryKeybinding does not fall back to keybindings disabled by a setting', () => {
+		const context = new class extends mock<IContextKeyService>() {
+			override contextMatchesRules(rules: ContextKeyExpression | undefined): boolean {
+				return !rules || rules.evaluate(createContext({ 'config.scheme': 'default' }));
+			}
+		};
+		const schemeWhen = ContextKeyExpr.deserialize('config.scheme == \'other\'');
+		const resolver = new KeybindingResolver([
+			kbItem(KeyCode.F1, 'onlyScheme', null, ContextKeyExpr.and(schemeWhen, ContextKeyExpr.has('editorFocus')), true),
+			kbItem(KeyCode.F2, 'onlyEditor', null, ContextKeyExpr.has('editorFocus'), true),
+			kbItem(KeyCode.F3, 'both', null, ContextKeyExpr.has('editorFocus'), true),
+			kbItem(KeyCode.F4, 'both', null, schemeWhen, true),
+			// Normalized to (scheme && editorFocus && a) || (scheme && editorFocus && b)
+			kbItem(KeyCode.F5, 'schemeAndEither', null, ContextKeyExpr.deserialize('config.scheme == \'other\' && editorFocus && (a || b)'), true),
+			kbItem(KeyCode.F6, 'schemeOrEditor', null, ContextKeyExpr.deserialize('config.scheme == \'other\' || editorFocus'), true),
+		], [], () => { });
+
+		const lookup = (command: string) => resolver.lookupPrimaryKeybinding(command, context)?.resolvedKeybinding?.getUserSettingsLabel() ?? null;
+		assert.deepStrictEqual(
+			{ onlyScheme: lookup('onlyScheme'), onlyEditor: lookup('onlyEditor'), both: lookup('both'), schemeAndEither: lookup('schemeAndEither'), schemeOrEditor: lookup('schemeOrEditor') },
+			{ onlyScheme: null, onlyEditor: 'f2', both: 'f3', schemeAndEither: null, schemeOrEditor: 'f6' }
+		);
 	});
 
 	suite('handle keybinding removals', () => {

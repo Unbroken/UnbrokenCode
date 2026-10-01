@@ -13,6 +13,7 @@ import { ILogService, ILoggerService, LogLevel } from '../../log/common/log.js';
 import { RemoteLoggerChannelClient } from '../../log/common/logIpc.js';
 import { getResolvedShellEnv } from '../../shell/node/shellEnv.js';
 import { IPtyHostProcessReplayEvent } from '../common/capabilities/capabilities.js';
+import { ISerializableEnvironmentVariableCollections } from '../common/environmentVariable.js';
 import { RequestStore } from '../common/requestStore.js';
 import { HeartbeatConstants, IHeartbeatService, ITerminalLaunchResult, IProcessDataEvent, IProcessProperty, IProcessPropertyMap, IProcessReadyEvent, IPtyHostLatencyMeasurement, IPtyHostService, IPtyService, IRequestResolveVariablesEvent, ISerializedTerminalState, IShellLaunchConfig, ITerminalLaunchError, ITerminalProcessOptions, ITerminalProfile, ITerminalsLayoutInfo, ProcessPropertyType, TerminalIcon, TerminalIpcChannels, TerminalSettingId, TitleEventSource } from '../common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../common/terminalPlatformConfiguration.js';
@@ -355,6 +356,14 @@ export class PtyHostService extends Disposable implements IPtyHostService {
 
 	async reviveTerminalProcesses(workspaceId: string, state: ISerializedTerminalState[], dateTimeFormatLocate: string) {
 		return this._proxy.reviveTerminalProcesses(workspaceId, state, dateTimeFormatLocate);
+	}
+
+	async replayRevivedProcess(id: number): Promise<void> {
+		return this._proxy.replayRevivedProcess(id);
+	}
+
+	async updateRevivedProcessEnvironment(id: number, env: IProcessEnvironment, environmentVariableCollections: ISerializableEnvironmentVariableCollections | undefined): Promise<void> {
+		return this._proxy.updateRevivedProcessEnvironment(id, env, environmentVariableCollections);
 	}
 
 	async refreshProperty<T extends ProcessPropertyType>(id: number, property: T): Promise<IProcessPropertyMap[T]> {

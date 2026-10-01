@@ -2489,7 +2489,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.relaunch();
 			return;
 		}
-		// Re-create statuses
+		// Re-create statuses, the environment is no longer stale when no action is required
+		if (!info.requiresAction) {
+			this.statusList.remove(TerminalStatus.RelaunchNeeded);
+		}
 		const workspaceFolder = getWorkspaceForTerminal(this.shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
 		this.statusList.add(info.getStatus({ workspaceFolder }));
 	}

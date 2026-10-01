@@ -7,6 +7,9 @@ import { deepStrictEqual } from 'assert';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
+import { join } from '../../../../../base/common/path.js';
+import { isWindows } from '../../../../../base/common/platform.js';
+import { INativeWorkbenchEnvironmentService } from '../../../../services/environment/electron-browser/environmentService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
 import { NullLogService } from '../../../../../platform/log/common/log.js';
@@ -117,6 +120,7 @@ suite('LocalTerminalBackend', () => {
 		instantiationService.stub(IWorkspaceContextService, new TestContextService());
 		instantiationService.stub(ITerminalLogService, logService);
 		instantiationService.stub(IStorageService, storageService);
+		instantiationService.stub(INativeWorkbenchEnvironmentService, upcastPartial<INativeWorkbenchEnvironmentService>({ appRoot: '/app', isBuilt: false, userDataPath: '/user-data' }));
 		instantiationService.stub(IExtensionService, upcastPartial<IExtensionService>({
 			whenInstalledExtensionsRegistered: async () => true,
 			onDidChangeExtensions: Event.None,
@@ -142,6 +146,7 @@ suite('LocalTerminalBackend', () => {
 		environmentVariableService.set('foreign.extension', { ...foreignCollection, persistent: false });
 		instantiationService.stub(IEnvironmentVariableService, environmentVariableService);
 		instantiationService.stub(ILocalPtyService, upcastPartial<ILocalPtyService>({
+			getRevivedPtyNewId: async () => undefined,
 			onPtyHostExit: Event.None,
 			onPtyHostStart: Event.None,
 			onPtyHostUnresponsive: Event.None,
@@ -197,7 +202,7 @@ suite('LocalTerminalBackend', () => {
 			},
 			collections: revivedState[0].processLaunchConfig.options.environmentVariableCollections
 		}, {
-			env: { PATH: '/base/bin', SHARED_VALUE: 'available' },
+			env: { PATH: `${join('/app', 'bin_compat')}${isWindows ? ';' : ':'}/base/bin`, SHARED_VALUE: 'available' },
 			collections: [[
 				'foreign.extension',
 				[['shared-value', { variable: 'SHARED_VALUE', value: 'available', type: EnvironmentVariableMutatorType.Replace }]],

@@ -12,7 +12,26 @@ import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCol
 import { IEnvironmentVariableCollectionWithPersistence, IEnvironmentVariableService } from './environmentVariable.js';
 import { TerminalStorageKeys } from './terminalStorageKeys.js';
 import { IMergedEnvironmentVariableCollection, ISerializableEnvironmentDescriptionMap, ISerializableEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariable.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { disposableTimeout, RunOnceScheduler } from '../../../../base/common/async.js';
+import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
+
+const enum Constants {
+	/**
+	 * The maximum time to wait for extensions to update their collections.
+	 */
+	CollectionsUpdatedTimeout = 10000,
+	/**
+	 * How long an extension's collection needs to stay unchanged after an update for the update to
+	 * be considered complete, extensions often set several variables in a row.
+	 */
+	CollectionUpdateQuietTime = 200,
+	/**
+	 * How long to wait for an extension to update its collection after it has finished activating,
+	 * since extensions may update their collection asynchronously after activation.
+	 */
+	ActivationGraceTime = 1000
+}
 
 interface ISerializableExtensionEnvironmentVariableCollection {
 	extensionIdentifier: string;
@@ -31,6 +50,12 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 
 	private readonly _onDidChangeCollections = this._register(new Emitter<IMergedEnvironmentVariableCollection>());
 	get onDidChangeCollections(): Event<IMergedEnvironmentVariableCollection> { return this._onDidChangeCollections.event; }
+
+	/**
+	 * Extensions that have set or deleted their collection in this session.
+	 */
+	private readonly _updatedCollections = new Set<string>();
+	private readonly _onDidUpdateCollection = this._register(new Emitter<string>());
 
 	constructor(
 		@IExtensionService private readonly _extensionService: IExtensionService,
@@ -62,11 +87,76 @@ export class EnvironmentVariableService extends Disposable implements IEnvironme
 	set(extensionIdentifier: string, collection: IEnvironmentVariableCollectionWithPersistence): void {
 		this.collections.set(extensionIdentifier, collection);
 		this._updateCollections();
+		this._markCollectionUpdated(extensionIdentifier);
 	}
 
 	delete(extensionIdentifier: string): void {
 		this.collections.delete(extensionIdentifier);
 		this._updateCollections();
+		this._markCollectionUpdated(extensionIdentifier);
+	}
+
+	private _markCollectionUpdated(extensionIdentifier: string): void {
+		this._updatedCollections.add(extensionIdentifier);
+		this._onDidUpdateCollection.fire(extensionIdentifier);
+	}
+
+	async whenCollectionsUpdated(extensionIdentifiers: readonly string[]): Promise<void> {
+		const store = new DisposableStore();
+		try {
+			await new Promise<void>(resolve => {
+				store.add(disposableTimeout(resolve, Constants.CollectionsUpdatedTimeout));
+				this._extensionService.whenInstalledExtensionsRegistered().then(() => {
+					if (store.isDisposed) {
+						return;
+					}
+					const pending = new Set(extensionIdentifiers.filter(e => this._activatesOnStartup(e)));
+					const settle = (extensionIdentifier: string) => {
+						pending.delete(extensionIdentifier);
+						if (pending.size === 0) {
+							resolve();
+						}
+					};
+					const schedulers = new Map<string, RunOnceScheduler>();
+					const update = (extensionIdentifier: string) => {
+						const scheduler = schedulers.get(extensionIdentifier);
+						if (!scheduler) {
+							return;
+						}
+						if (this._updatedCollections.has(extensionIdentifier)) {
+							// An extension that had already settled is pending again until its new
+							// update has settled too
+							pending.add(extensionIdentifier);
+							scheduler.schedule(Constants.CollectionUpdateQuietTime);
+						} else if (pending.has(extensionIdentifier) && !scheduler.isScheduled() && this._extensionService.getExtensionsStatus()[extensionIdentifier]?.activationTimes) {
+							scheduler.schedule(Constants.ActivationGraceTime);
+						}
+					};
+					for (const extensionIdentifier of pending) {
+						schedulers.set(extensionIdentifier, store.add(new RunOnceScheduler(() => settle(extensionIdentifier), 0)));
+					}
+					store.add(this._onDidUpdateCollection.event(update));
+					store.add(this._extensionService.onDidChangeExtensionsStatus(ids => ids.forEach(id => update(id.value))));
+					if (pending.size === 0) {
+						resolve();
+						return;
+					}
+					pending.forEach(update);
+				});
+			});
+		} finally {
+			store.dispose();
+		}
+	}
+
+	/**
+	 * Whether an extension is installed and will activate without further user interaction.
+	 * `workspaceContains:` activation events are not considered since they are conditional, an
+	 * extension whose pattern doesn't match would otherwise be waited for until the timeout.
+	 */
+	private _activatesOnStartup(extensionIdentifier: string): boolean {
+		const extension = this._extensionService.extensions.find(e => ExtensionIdentifier.equals(e.identifier, extensionIdentifier));
+		return !!extension?.activationEvents?.some(e => e === '*' || e === 'onStartupFinished');
 	}
 
 	private _updateCollections(): void {

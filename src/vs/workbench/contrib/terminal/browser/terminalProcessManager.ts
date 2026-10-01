@@ -410,6 +410,14 @@ export class TerminalProcessManager extends Disposable implements ITerminalProce
 		if (newProcess.onRestoreCommands) {
 			this._processListeners.push(newProcess.onRestoreCommands(e => this._onRestoreCommands.fire(e)));
 		}
+
+		if (shellLaunchConfig.attachPersistentProcess && this.backend) {
+			await this._refreshRevivedProcessEnvironment(this.backend, newProcess);
+			if (this._isDisposed || this._process !== newProcess) {
+				return undefined;
+			}
+		}
+
 		setTimeout(() => {
 			if (this.processState === ProcessState.Launching) {
 				this._setProcessState(ProcessState.Running);
@@ -447,6 +455,49 @@ export class TerminalProcessManager extends Disposable implements ITerminalProce
 		this._hasWrittenData = false;
 
 		return this.createProcess(shellLaunchConfig, cols, rows, reset);
+	}
+
+	/**
+	 * Revived processes are created before extensions are activated, so they get the extension
+	 * environment contributions of the previous session. Extensions that contribute different
+	 * values in every session (e.g. the port of a server) would then always leave the terminal
+	 * flagged as needing a relaunch. To avoid that, the restored buffer is replayed right away while
+	 * the start of the process is deferred until the contributing extensions had a chance to update
+	 * their contributions.
+	 */
+	private async _refreshRevivedProcessEnvironment(backend: ITerminalBackend, process: ITerminalChildProcess): Promise<void> {
+		const extensionIdentifiers = this._extEnvironmentVariableCollection ? Array.from(this._extEnvironmentVariableCollection.collections.keys()) : [];
+		if (extensionIdentifiers.length === 0 || !backend.replayRevivedProcess || !backend.refreshRevivedProcessEnvironment) {
+			return;
+		}
+
+		if (!await backend.replayRevivedProcess(process.id)) {
+			return;
+		}
+
+		// Don't flag the terminal as stale while waiting for the update
+		this._environmentVariableCollectionListener.clear();
+		this._logService.debug(`Waiting for extensions to update their environment contributions before starting revived process: ${extensionIdentifiers.join(', ')}`);
+		await this._environmentVariableService.whenCollectionsUpdated(extensionIdentifiers);
+		// The terminal may have been disposed or relaunched with a new process while waiting
+		if (this._isDisposed || this._process !== process) {
+			return;
+		}
+
+		const collection = this._environmentVariableService.mergedCollection;
+		await backend.refreshRevivedProcessEnvironment(process.id, collection);
+		if (this._isDisposed || this._process !== process) {
+			return;
+		}
+		this._extEnvironmentVariableCollection = collection;
+		this._environmentVariableCollectionListener.value = this._environmentVariableService.onDidChangeCollections(newCollection => this._onEnvironmentVariableCollectionChange(newCollection));
+		this.environmentVariableInfo = this._instantiationService.createInstance(EnvironmentVariableInfoChangesActive, collection);
+		this._onEnvironmentVariableInfoChange.fire(this.environmentVariableInfo);
+
+		// Flag changes that were made while the environment was being refreshed
+		if (this._environmentVariableService.mergedCollection !== collection) {
+			this._onEnvironmentVariableCollectionChange(this._environmentVariableService.mergedCollection);
+		}
 	}
 
 	// Fetch any extension environment additions and apply them

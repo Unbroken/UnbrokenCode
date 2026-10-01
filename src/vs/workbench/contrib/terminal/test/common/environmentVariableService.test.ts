@@ -15,6 +15,9 @@ import { IProcessEnvironment } from '../../../../../base/common/platform.js';
 import { IHistoryService } from '../../../../services/history/common/history.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { runWithFakedTimers } from '../../../../../base/test/common/virtualScheduling/runWithFakedTimers.js';
+import { timeout } from '../../../../../base/common/async.js';
+import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
 
 class TestEnvironmentVariableService extends EnvironmentVariableService {
 	persistCollections(): void { this._persistCollections(); }
@@ -143,5 +146,86 @@ suite('EnvironmentVariable - EnvironmentVariableService', () => {
 			await environmentVariableService.mergedCollection.applyToProcessEnvironment(env, scope1);
 			deepStrictEqual(env, { A: 'a2:foo:a1' });
 		});
+	});
+
+	suite('whenCollectionsUpdated', () => {
+		let changeExtensionsStatusEvent: Emitter<ExtensionIdentifier[]>;
+		let activatedExtensions: Set<string>;
+		let service: TestEnvironmentVariableService;
+
+		setup(() => {
+			changeExtensionsStatusEvent = store.add(new Emitter<ExtensionIdentifier[]>());
+			activatedExtensions = new Set();
+			const extensionsInstantiationService = store.add(new TestInstantiationService());
+			extensionsInstantiationService.stub(IStorageService, store.add(new TestStorageService()));
+			extensionsInstantiationService.stub(IExtensionService, TestExtensionService);
+			extensionsInstantiationService.stub(IExtensionService, 'onDidChangeExtensions', changeExtensionsEvent.event);
+			extensionsInstantiationService.stub(IExtensionService, 'extensions', [
+				{ identifier: new ExtensionIdentifier('startup'), activationEvents: ['onStartupFinished'] },
+				{ identifier: new ExtensionIdentifier('eager'), activationEvents: ['*'] },
+				{ identifier: new ExtensionIdentifier('lazy'), activationEvents: ['onCommand:lazy'] }
+			]);
+			extensionsInstantiationService.stub(IExtensionService, 'whenInstalledExtensionsRegistered', () => Promise.resolve(true));
+			extensionsInstantiationService.stub(IExtensionService, 'onDidChangeExtensionsStatus', changeExtensionsStatusEvent.event);
+			extensionsInstantiationService.stub(IExtensionService, 'getExtensionsStatus', () => Object.fromEntries([...activatedExtensions].map(id => [id, { activationTimes: {} }])));
+			service = store.add(extensionsInstantiationService.createInstance(TestEnvironmentVariableService));
+		});
+
+		function activate(extensionIdentifier: string): void {
+			activatedExtensions.add(extensionIdentifier);
+			changeExtensionsStatusEvent.fire([new ExtensionIdentifier(extensionIdentifier)]);
+		}
+
+		function update(extensionIdentifier: string, value: string): void {
+			service.set(extensionIdentifier, { map: new Map([['A-key', { value, type: EnvironmentVariableMutatorType.Replace, variable: 'A' }]]), persistent: true });
+		}
+
+		async function measure(whenUpdated: Promise<void>, act: () => Promise<void>): Promise<number> {
+			const start = Date.now();
+			await Promise.all([whenUpdated, act()]);
+			return Date.now() - start;
+		}
+
+		test('should resolve once the updates of startup extensions have settled', () => runWithFakedTimers({}, async () => {
+			const elapsed = await measure(service.whenCollectionsUpdated(['startup', 'eager', 'lazy', 'uninstalled']), async () => {
+				await timeout(500);
+				update('eager', 'a');
+				await timeout(500);
+				update('startup', 'b');
+				await timeout(100);
+				update('startup', 'c');
+			});
+			deepStrictEqual(elapsed, 1300);
+		}));
+
+		test('should wait again for an extension that updates after it had settled', () => runWithFakedTimers({}, async () => {
+			const elapsed = await measure(service.whenCollectionsUpdated(['startup', 'eager']), async () => {
+				await timeout(100);
+				update('startup', 'a');
+				await timeout(700);
+				update('eager', 'b');
+				await timeout(100);
+				update('startup', 'c');
+			});
+			deepStrictEqual(elapsed, 1100);
+		}));
+
+		test('should resolve after a grace period when an activated extension does not update', () => runWithFakedTimers({}, async () => {
+			const elapsed = await measure(service.whenCollectionsUpdated(['startup']), async () => {
+				await timeout(300);
+				activate('startup');
+			});
+			deepStrictEqual(elapsed, 1300);
+		}));
+
+		test('should time out when an extension does not activate', () => runWithFakedTimers({}, async () => {
+			const elapsed = await measure(service.whenCollectionsUpdated(['startup']), async () => { });
+			deepStrictEqual(elapsed, 10000);
+		}));
+
+		test('should resolve immediately when no extension activates on startup', () => runWithFakedTimers({}, async () => {
+			const elapsed = await measure(service.whenCollectionsUpdated(['lazy', 'uninstalled']), async () => { });
+			deepStrictEqual(elapsed, 0);
+		}));
 	});
 });

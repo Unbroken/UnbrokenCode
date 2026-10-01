@@ -10,7 +10,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { IPtyHostProcessReplayEvent, ISerializedCommandDetectionCapability, ITerminalCapabilityStore, type ITerminalCommand } from './capabilities/capabilities.js';
 import { IGetTerminalLayoutInfoArgs, IProcessDetails, ISetTerminalLayoutInfoArgs } from './terminalProcess.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
-import { ISerializableEnvironmentVariableCollections } from './environmentVariable.js';
+import { IMergedEnvironmentVariableCollection, ISerializableEnvironmentVariableCollections } from './environmentVariable.js';
 import { IWorkspaceFolder } from '../../workspace/common/workspace.js';
 import { Registry } from '../../registry/common/platform.js';
 import type * as performance from '../../../base/common/performance.js';
@@ -383,6 +383,16 @@ export interface IPtyService {
 	 * flow for restoring terminals after reloading.
 	 */
 	reviveTerminalProcesses(workspaceId: string, state: ISerializedTerminalState[], dateTimeFormatLocate: string): Promise<void>;
+	/**
+	 * Replays the restored buffer of a revived process that has not been started yet. This allows
+	 * the start of the process to be deferred without leaving the terminal empty.
+	 */
+	replayRevivedProcess(id: number): Promise<void>;
+	/**
+	 * Replaces the environment that a revived process that has not been started yet will be
+	 * started with.
+	 */
+	updateRevivedProcessEnvironment(id: number, env: IProcessEnvironment, environmentVariableCollections: ISerializableEnvironmentVariableCollections | undefined): Promise<void>;
 	refreshProperty<T extends ProcessPropertyType>(id: number, property: T): Promise<IProcessPropertyMap[T]>;
 	updateProperty<T extends ProcessPropertyType>(id: number, property: T, value: IProcessPropertyMap[T]): Promise<void>;
 
@@ -1168,6 +1178,17 @@ export interface ITerminalBackend extends ITerminalBackendPtyServiceContribution
 
 	attachToProcess(id: number): Promise<ITerminalChildProcess | undefined>;
 	attachToRevivedProcess(id: number): Promise<ITerminalChildProcess | undefined>;
+	/**
+	 * Replays the restored buffer of a revived process that has not been started yet.
+	 * @returns Whether the process is such a process, if so its start can be deferred until
+	 * {@link refreshRevivedProcessEnvironment} has been called.
+	 */
+	replayRevivedProcess?(id: number): Promise<boolean>;
+	/**
+	 * Resolves the environment of a revived process that has not been started yet again, using the
+	 * given extension environment variable collection instead of the one from when it was revived.
+	 */
+	refreshRevivedProcessEnvironment?(id: number, collection: IMergedEnvironmentVariableCollection): Promise<void>;
 	listProcesses(): Promise<IProcessDetails[]>;
 	getLatency(): Promise<IPtyHostLatencyMeasurement[]>;
 	getDefaultSystemShell(osOverride?: OperatingSystem): Promise<string>;

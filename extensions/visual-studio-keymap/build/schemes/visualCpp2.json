@@ -1,0 +1,1221 @@
+{
+	"scheme": "visualCpp2",
+	"source": "Visual Studio 17.14.37314.3 keyboard mapping scheme 'Visual C++ 2'",
+	"bindings": {
+		"Build.BuildSolution": [
+			"Global::Ctrl+Shift+B",
+			"Global::Shift+F8"
+		],
+		"Build.Cancel": [
+			"Global::Ctrl+Break"
+		],
+		"Build.Compile": [
+			"Global::Ctrl+F8"
+		],
+		"Build.RebuildSolution": [
+			"Global::Alt+F8"
+		],
+		"Build.RunCodeAnalysisonFile": [
+			"Global::Ctrl+Shift+Alt+F7"
+		],
+		"Build.RunCodeAnalysisonSolution": [
+			"Global::Alt+F11"
+		],
+		"Debug.ApplyCodeChanges": [
+			"Global::Alt+F10"
+		],
+		"Debug.AttachtoProcess": [
+			"Global::Ctrl+Alt+P"
+		],
+		"Debug.Autos": [
+			"Global::Ctrl+Alt+V, A"
+		],
+		"Debug.Autos.Search": [
+			"Autos Window::Ctrl+E"
+		],
+		"Debug.BreakAll": [
+			"Global::Ctrl+Alt+Break"
+		],
+		"Debug.Breakpointgroup": [
+			"Breakpoints Window::Ctrl+G"
+		],
+		"Debug.Breakpoints": [
+			"Global::Ctrl+Alt+B",
+			"Global::Ctrl+B"
+		],
+		"Debug.BreakpointsWindow.Search": [
+			"Breakpoints Window::Ctrl+E"
+		],
+		"Debug.CallStack": [
+			"Global::Ctrl+Alt+C",
+			"Global::Ctrl+K",
+			"Text Editor::Ctrl+K",
+			"Global::Alt+6"
+		],
+		"Debug.CallStack.FindNext": [
+			"Call Stack Window::F3"
+		],
+		"Debug.CallStack.FindPrevious": [
+			"Call Stack Window::Shift+F3"
+		],
+		"Debug.CallStack.Search": [
+			"Call Stack Window::Ctrl+E"
+		],
+		"Debug.DiagnosticAnalysis": [
+			"Global::Ctrl+Shift+Alt+D"
+		],
+		"Debug.Disassembly": [
+			"Global::Ctrl+Alt+D",
+			"Global::Alt+7"
+		],
+		"Debug.EnableBreakpoint": [
+			"Global::Ctrl+F9"
+		],
+		"Debug.ExceptionSettings": [
+			"Global::Ctrl+Alt+E"
+		],
+		"Debug.Immediate": [
+			"Global::Ctrl+Alt+I"
+		],
+		"Debug.Locals": [
+			"Global::Ctrl+Alt+V, L",
+			"Global::Alt+3"
+		],
+		"Debug.Locals.Search": [
+			"Locals Window::Ctrl+E"
+		],
+		"Debug.LocationToolbar.ToggleCurrentThreadFlaggedState": [
+			"Global::Ctrl+8"
+		],
+		"Debug.LocationToolbar.ToggleFlaggedThreads": [
+			"Global::Ctrl+9"
+		],
+		"Debug.Memory1": [
+			"Global::Ctrl+Alt+M, 1",
+			"Global::Alt+5"
+		],
+		"Debug.Memory2": [
+			"Global::Ctrl+Alt+M, 2"
+		],
+		"Debug.Memory3": [
+			"Global::Ctrl+Alt+M, 3"
+		],
+		"Debug.Memory4": [
+			"Global::Ctrl+Alt+M, 4"
+		],
+		"Debug.Modules": [
+			"Global::Ctrl+Alt+U"
+		],
+		"Debug.ModulesWindow.Search": [
+			"Modules Window::Ctrl+E"
+		],
+		"Debug.Processes": [
+			"Global::Ctrl+Alt+Z"
+		],
+		"Debug.QuickWatch": [
+			"Global::Shift+F9",
+			"Global::Ctrl+Alt+Q"
+		],
+		"Debug.ReattachtoProcess": [
+			"Global::Shift+Alt+P"
+		],
+		"Debug.Registers": [
+			"Global::Ctrl+Alt+G",
+			"Global::Alt+4"
+		],
+		"Debug.Restart": [
+			"Global::Ctrl+Shift+F5",
+			"Global::Shift+F5"
+		],
+		"Debug.RunToCursor": [
+			"Global::Ctrl+F10",
+			"Global::F7"
+		],
+		"Debug.SetNextStatement": [
+			"Global::Ctrl+Shift+F10",
+			"Global::Ctrl+Shift+F7"
+		],
+		"Debug.ShowNextStatement": [
+			"Global::Alt+Num *"
+		],
+		"Debug.Start": [
+			"Global::F5"
+		],
+		"Debug.StartWithoutDebugging": [
+			"Global::Ctrl+F5"
+		],
+		"Debug.StepInto": [
+			"Global::F8"
+		],
+		"Debug.StepOut": [
+			"Global::Shift+F7"
+		],
+		"Debug.StepOutCurrentProcess": [
+			"Global::Ctrl+Shift+Alt+F11"
+		],
+		"Debug.StepOver": [
+			"Global::F10"
+		],
+		"Debug.StepOverCurrentProcess": [
+			"Global::Ctrl+Alt+F10"
+		],
+		"Debug.StopDebugging": [
+			"Global::Alt+F5"
+		],
+		"Debug.Threads": [
+			"Global::Ctrl+Alt+H"
+		],
+		"Debug.ToggleBreakpoint": [
+			"Global::F9",
+			"Global::Ctrl+Shift+F9"
+		],
+		"Debug.ToggleDisassembly": [
+			"Global::Ctrl+F7"
+		],
+		"Debug.Watch.Search": [
+			"Watch Windows::Ctrl+E"
+		],
+		"DebuggerContextMenus.BreakpointsWindow.Delete": [
+			"Global::Alt+F9, D"
+		],
+		"DebuggerContextMenus.BreakpointsWindow.GoToDisassembly": [
+			"Global::Alt+F9, A"
+		],
+		"DebuggerContextMenus.BreakpointsWindow.GoToSourceCode": [
+			"Global::Alt+F9, S"
+		],
+		"Edit.BreakLine": [
+			"Text Editor::Enter",
+			"Windows Forms Designer::Enter"
+		],
+		"Edit.CharLeft": [
+			"Text Editor::Left Arrow",
+			"Windows Forms Designer::Left Arrow"
+		],
+		"Edit.CharLeftExtend": [
+			"Text Editor::Shift+Left Arrow",
+			"Windows Forms Designer::Shift+Left Arrow"
+		],
+		"Edit.CharLeftExtendColumn": [
+			"Text Editor::Shift+Alt+Left Arrow"
+		],
+		"Edit.CharRight": [
+			"Text Editor::Right Arrow",
+			"Windows Forms Designer::Right Arrow"
+		],
+		"Edit.CharRightExtend": [
+			"Text Editor::Shift+Right Arrow",
+			"Windows Forms Designer::Shift+Right Arrow"
+		],
+		"Edit.CharRightExtendColumn": [
+			"Text Editor::Shift+Alt+Right Arrow"
+		],
+		"Edit.CheckMnemonics": [
+			"VC Dialog Editor::Ctrl+M"
+		],
+		"Edit.ClearAll": [
+			"Unknown Editor::Ctrl+Alt+C"
+		],
+		"Edit.CompleteWord": [
+			"Text Editor::Ctrl+Space",
+			"Text Editor::Alt+Right Arrow"
+		],
+		"Edit.Copy": [
+			"Global::Ctrl+C",
+			"Global::Ctrl+Ins"
+		],
+		"Edit.CopyParameterTip": [
+			"Text Editor::Ctrl+Shift+Alt+C"
+		],
+		"Edit.Cut": [
+			"Global::Ctrl+X",
+			"Global::Shift+Del",
+			"Global::Ctrl+Alt+W"
+		],
+		"Edit.Delete": [
+			"Global::Del",
+			"Team Explorer::Del"
+		],
+		"Edit.DeleteBackwards": [
+			"Text Editor::Bkspce",
+			"Text Editor::Shift+Bkspce"
+		],
+		"Edit.DocumentEnd": [
+			"Text Editor::Ctrl+End",
+			"Windows Forms Designer::End"
+		],
+		"Edit.DocumentEndExtend": [
+			"Text Editor::Ctrl+Shift+End",
+			"Windows Forms Designer::Shift+End"
+		],
+		"Edit.DocumentStart": [
+			"Text Editor::Ctrl+Home",
+			"Windows Forms Designer::Home"
+		],
+		"Edit.DocumentStartExtend": [
+			"Text Editor::Ctrl+Shift+Home",
+			"Windows Forms Designer::Shift+Home"
+		],
+		"Edit.Find": [
+			"Global::Alt+F3"
+		],
+		"Edit.FindinFiles": [
+			"Global::Ctrl+Shift+F"
+		],
+		"Edit.FindNext": [
+			"Global::F3"
+		],
+		"Edit.FindNextSelected": [
+			"Global::Ctrl+F3"
+		],
+		"Edit.FindPrevious": [
+			"Global::Shift+F3"
+		],
+		"Edit.FindPreviousSelected": [
+			"Global::Ctrl+Shift+F3"
+		],
+		"Edit.FindSymbol": [
+			"Global::Ctrl+Alt+F11",
+			"Global::Ctrl+F11"
+		],
+		"Edit.FormatSelection": [
+			"Text Editor::Ctrl+Shift+F",
+			"Text Editor::Ctrl+Alt+I"
+		],
+		"Edit.GoTo": [
+			"Global::Ctrl+G"
+		],
+		"Edit.GotoBrace": [
+			"Text Editor::Ctrl+]",
+			"Text Editor::Ctrl+M"
+		],
+		"Edit.GotoBraceExtend": [
+			"Text Editor::Ctrl+Shift+]",
+			"Text Editor::Ctrl+Shift+M"
+		],
+		"Edit.GoToDefinition": [
+			"Global::F11",
+			"Global::Alt+F1"
+		],
+		"Edit.GoToNextLocation": [
+			"Global::F4"
+		],
+		"Edit.GoToPrevLocation": [
+			"Global::Shift+F4"
+		],
+		"Edit.GoToReference": [
+			"Global::Shift+F11",
+			"Global::Shift+Alt+F11"
+		],
+		"Edit.IncrementalSearch": [
+			"Text Editor::Ctrl+I"
+		],
+		"Edit.InsertTab": [
+			"Text Editor::Tab",
+			"Windows Forms Designer::Tab"
+		],
+		"Edit.LineCut": [
+			"Text Editor::Ctrl+L",
+			"Text Editor::Ctrl+Y"
+		],
+		"Edit.LineDelete": [
+			"Text Editor::Ctrl+Shift+L"
+		],
+		"Edit.LineDown": [
+			"Text Editor::Down Arrow",
+			"Windows Forms Designer::Down Arrow"
+		],
+		"Edit.LineDownExtend": [
+			"Text Editor::Shift+Down Arrow",
+			"Windows Forms Designer::Shift+Up Arrow"
+		],
+		"Edit.LineDownExtendColumn": [
+			"Text Editor::Shift+Alt+Down Arrow"
+		],
+		"Edit.LineEnd": [
+			"Text Editor::End"
+		],
+		"Edit.LineEndExtend": [
+			"Text Editor::Shift+End"
+		],
+		"Edit.LineEndExtendColumn": [
+			"Text Editor::Shift+Alt+End"
+		],
+		"Edit.LineOpenAbove": [
+			"Text Editor::Ctrl+Enter"
+		],
+		"Edit.LineOpenBelow": [
+			"Text Editor::Ctrl+Shift+Enter"
+		],
+		"Edit.LineStart": [
+			"Text Editor::Home"
+		],
+		"Edit.LineStartExtend": [
+			"Text Editor::Shift+Home"
+		],
+		"Edit.LineStartExtendColumn": [
+			"Text Editor::Shift+Alt+Home"
+		],
+		"Edit.LineTranspose": [
+			"Text Editor::Shift+Alt+T"
+		],
+		"Edit.LineUp": [
+			"Text Editor::Up Arrow",
+			"Windows Forms Designer::Up Arrow"
+		],
+		"Edit.LineUpExtend": [
+			"Text Editor::Shift+Up Arrow",
+			"Windows Forms Designer::Shift+Down Arrow"
+		],
+		"Edit.LineUpExtendColumn": [
+			"Text Editor::Shift+Alt+Up Arrow"
+		],
+		"Edit.ListMembers": [
+			"Text Editor::Ctrl+J",
+			"Global::Ctrl+Alt+T"
+		],
+		"Edit.MakeLowercase": [
+			"Text Editor::Ctrl+U"
+		],
+		"Edit.MakeUppercase": [
+			"Text Editor::Ctrl+Shift+U"
+		],
+		"Edit.MoveControlDown": [
+			"Global::Ctrl+Down Arrow",
+			"HTML Editor Design View::Ctrl+Down Arrow",
+			"VC Dialog Editor::Down Arrow",
+			"Windows Forms Designer::Ctrl+Down Arrow",
+			"Global::Down Arrow"
+		],
+		"Edit.MoveControlLeft": [
+			"Global::Ctrl+Left Arrow",
+			"VC Dialog Editor::Left Arrow",
+			"Windows Forms Designer::Ctrl+Left Arrow",
+			"Global::Left Arrow"
+		],
+		"Edit.MoveControlRight": [
+			"Global::Ctrl+Right Arrow",
+			"VC Dialog Editor::Right Arrow",
+			"Windows Forms Designer::Ctrl+Right Arrow",
+			"Global::Right Arrow"
+		],
+		"Edit.MoveControlUp": [
+			"Global::Ctrl+Up Arrow",
+			"HTML Editor Design View::Ctrl+Up Arrow",
+			"VC Dialog Editor::Up Arrow",
+			"Windows Forms Designer::Ctrl+Up Arrow",
+			"Global::Up Arrow"
+		],
+		"Edit.MoveSelectedLinesDown": [
+			"Text Editor::Alt+Down Arrow"
+		],
+		"Edit.MoveSelectedLinesUp": [
+			"Text Editor::Alt+Up Arrow"
+		],
+		"Edit.NewAccelerator": [
+			"VC Accelerator Editor::Ins"
+		],
+		"Edit.NewString": [
+			"VC String Editor::Ins"
+		],
+		"Edit.NextBookmark": [
+			"Text Editor::F2"
+		],
+		"Edit.NextBookmarkInFolder": [
+			"Global::Ctrl+Shift+K, Ctrl+Shift+N"
+		],
+		"Edit.NextHighlightedReference": [
+			"Text Editor::Ctrl+Shift+Down Arrow"
+		],
+		"Edit.NextKeyTyped": [
+			"VC Accelerator Editor::Ctrl+W"
+		],
+		"Edit.OpenFile": [
+			"Global::Ctrl+Shift+G"
+		],
+		"Edit.OvertypeMode": [
+			"Text Editor::Ins"
+		],
+		"Edit.PageDown": [
+			"Text Editor::PgDn"
+		],
+		"Edit.PageDownExtend": [
+			"Text Editor::Shift+PgDn"
+		],
+		"Edit.PageUp": [
+			"Text Editor::PgUp"
+		],
+		"Edit.PageUpExtend": [
+			"Text Editor::Shift+PgUp"
+		],
+		"Edit.ParameterInfo": [
+			"Text Editor::Ctrl+Shift+Space"
+		],
+		"Edit.Paste": [
+			"Global::Ctrl+V",
+			"Global::Shift+Ins"
+		],
+		"Edit.PasteParameterTip": [
+			"Text Editor::Ctrl+Shift+Alt+P"
+		],
+		"Edit.PeekBackward": [
+			"Text Editor::Ctrl+Alt+-"
+		],
+		"Edit.PeekDefinition": [
+			"Text Editor::Alt+F12"
+		],
+		"Edit.PeekDifference": [
+			"Text Editor::Alt+F8"
+		],
+		"Edit.PeekForward": [
+			"Text Editor::Ctrl+Alt+="
+		],
+		"Edit.PreviousBookmark": [
+			"Text Editor::Shift+F2"
+		],
+		"Edit.PreviousBookmarkInFolder": [
+			"Global::Ctrl+Shift+K, Ctrl+Shift+P"
+		],
+		"Edit.PreviousHighlightedReference": [
+			"Text Editor::Ctrl+Shift+Up Arrow"
+		],
+		"Edit.QuickFindSymbol": [
+			"Global::Shift+Alt+F12"
+		],
+		"Edit.QuickInfo": [
+			"Find All References Tool Window::Ctrl+K, Ctrl+I",
+			"Global::Ctrl+T"
+		],
+		"Edit.Redo": [
+			"Global::Ctrl+Y",
+			"Global::Ctrl+Shift+Z",
+			"Global::Shift+Alt+Bkspce",
+			"Global::Ctrl+A"
+		],
+		"Edit.Remove": [
+			"Managed Resources Editor (Legacy)::Del"
+		],
+		"Edit.Replace": [
+			"Global::Ctrl+H"
+		],
+		"Edit.ReplaceinFiles": [
+			"Global::Ctrl+Shift+H"
+		],
+		"Edit.ReverseIncrementalSearch": [
+			"Text Editor::Ctrl+Shift+I"
+		],
+		"Edit.ScrollColumnLeft": [
+			"VC Dialog Editor::Ctrl+Left Arrow"
+		],
+		"Edit.ScrollColumnRight": [
+			"VC Dialog Editor::Ctrl+Right Arrow"
+		],
+		"Edit.ScrollLineDown": [
+			"Text Editor::Ctrl+Down Arrow",
+			"VC Dialog Editor::Ctrl+Down Arrow"
+		],
+		"Edit.ScrollLineUp": [
+			"Text Editor::Ctrl+Up Arrow",
+			"VC Dialog Editor::Ctrl+Up Arrow"
+		],
+		"Edit.SelectCurrentWord": [
+			"Text Editor::Ctrl+W"
+		],
+		"Edit.SelectionCancel": [
+			"Text Editor::Esc",
+			"Managed Resources Editor (Legacy)::Esc",
+			"Settings Designer::Esc",
+			"Windows Forms Designer::Esc"
+		],
+		"Edit.SelectNextControl": [
+			"Global::Tab"
+		],
+		"Edit.SelectPreviousControl": [
+			"Global::Shift+Tab"
+		],
+		"Edit.SelectToLastGoBack": [
+			"Text Editor::Ctrl+="
+		],
+		"Edit.ShowTileGrid": [
+			"Global::Enter"
+		],
+		"Edit.SizeControlDown": [
+			"Global::Ctrl+Shift+Down Arrow",
+			"VC Dialog Editor::Shift+Down Arrow",
+			"Windows Forms Designer::Ctrl+Shift+Down Arrow",
+			"Global::Shift+Down Arrow"
+		],
+		"Edit.SizeControlLeft": [
+			"Global::Ctrl+Shift+Left Arrow",
+			"VC Dialog Editor::Shift+Left Arrow",
+			"Windows Forms Designer::Ctrl+Shift+Left Arrow",
+			"Global::Shift+Left Arrow"
+		],
+		"Edit.SizeControlRight": [
+			"Global::Ctrl+Shift+Right Arrow",
+			"VC Dialog Editor::Shift+Right Arrow",
+			"Windows Forms Designer::Ctrl+Shift+Right Arrow",
+			"Global::Shift+Right Arrow"
+		],
+		"Edit.SizeControlUp": [
+			"Global::Ctrl+Shift+Up Arrow",
+			"VC Dialog Editor::Shift+Up Arrow",
+			"Windows Forms Designer::Ctrl+Shift+Up Arrow",
+			"Global::Shift+Up Arrow"
+		],
+		"Edit.SmartBreakLine": [
+			"Global::Shift+Enter"
+		],
+		"Edit.SwapAnchor": [
+			"Text Editor::Ctrl+Shift+X"
+		],
+		"Edit.SwitchbetweenautomaticandtabonlyIntelliSensecompletion": [
+			"Text Editor::Ctrl+Alt+Space"
+		],
+		"Edit.TabLeft": [
+			"Text Editor::Shift+Tab",
+			"Windows Forms Designer::Shift+Tab"
+		],
+		"Edit.ToggleBookmark": [
+			"Text Editor::Ctrl+F2"
+		],
+		"Edit.ToggleWordWrap": [
+			"Text Editor::Ctrl+E, Ctrl+W"
+		],
+		"Edit.Undo": [
+			"Global::Ctrl+Z",
+			"Global::Alt+Bkspce"
+		],
+		"Edit.ViewBottom": [
+			"Text Editor::Ctrl+PgDn"
+		],
+		"Edit.ViewBottomExtend": [
+			"Text Editor::Ctrl+Shift+PgDn"
+		],
+		"Edit.ViewTop": [
+			"Text Editor::Ctrl+PgUp"
+		],
+		"Edit.ViewTopExtend": [
+			"Text Editor::Ctrl+Shift+PgUp"
+		],
+		"Edit.ViewWhiteSpace": [
+			"Text Editor::Ctrl+R, Ctrl+W",
+			"Text Editor::Ctrl+Alt+T"
+		],
+		"Edit.WordDeleteToEnd": [
+			"Text Editor::Ctrl+Del"
+		],
+		"Edit.WordDeleteToStart": [
+			"Text Editor::Ctrl+Bkspce"
+		],
+		"Edit.WordNext": [
+			"Text Editor::Ctrl+Right Arrow"
+		],
+		"Edit.WordNextExtend": [
+			"Text Editor::Ctrl+Shift+Right Arrow"
+		],
+		"Edit.WordPrevious": [
+			"Text Editor::Ctrl+Left Arrow"
+		],
+		"Edit.WordPreviousExtend": [
+			"Text Editor::Ctrl+Shift+Left Arrow"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.BreakpointConditions": [
+			"Global::Alt+F9, C"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.BreakpointEditlabels": [
+			"Global::Alt+F9, L"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.BreakpointQuickSettings": [
+			"Global::Alt+F9, Q"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.BreakpointSettings": [
+			"Breakpoints Window::F2"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.InsertDependentBreakpoint": [
+			"Global::Shift+Alt+F9, D"
+		],
+		"EditorContextMenus.CodeWindow.Breakpoint.InsertTemporaryBreakpoint": [
+			"Global::Shift+Alt+F9, T"
+		],
+		"EditorContextMenus.CodeWindow.Execute": [
+			"Global::Ctrl+Alt+F5"
+		],
+		"EditorContextMenus.CodeWindow.QuickActionsForPosition": [
+			"Global::Ctrl+."
+		],
+		"File.Exit": [
+			"Global::Alt+F4"
+		],
+		"File.NewFile": [
+			"Global::Ctrl+N"
+		],
+		"File.NewProject": [
+			"Global::Ctrl+Shift+N"
+		],
+		"File.OpenFile": [
+			"Global::Ctrl+O",
+			"Global::Ctrl+F12"
+		],
+		"File.OpenProject": [
+			"Global::Ctrl+Shift+O"
+		],
+		"File.Print": [
+			"Global::Ctrl+P",
+			"Global::Ctrl+Shift+Alt+F2",
+			"Global::Ctrl+Shift+F12"
+		],
+		"File.Rename": [
+			"Solution Explorer::F2",
+			"Team Explorer::F2",
+			"Global::F2"
+		],
+		"File.SaveAll": [
+			"Global::Ctrl+Shift+S"
+		],
+		"File.SaveSelectedItems": [
+			"Global::Ctrl+S",
+			"Global::Shift+F12"
+		],
+		"File.SaveSelectedItemsAs": [
+			"Global::F12"
+		],
+		"File.ViewinBrowser": [
+			"Global::Ctrl+Shift+W"
+		],
+		"FocusAllEnvironmentsComboBox": [
+			"Rest Api Editor::F6"
+		],
+		"FocusAllRequestsComboBox": [
+			"Rest Api Editor::F4"
+		],
+		"FocusSchemaSelection": [
+			"JSON Editor::F4"
+		],
+		"Format.AlignBottoms": [
+			"VC Dialog Editor::Ctrl+Shift+Down Arrow"
+		],
+		"Format.AlignLefts": [
+			"VC Dialog Editor::Ctrl+Shift+Left Arrow"
+		],
+		"Format.AlignRights": [
+			"VC Dialog Editor::Ctrl+Shift+Right Arrow"
+		],
+		"Format.AlignTops": [
+			"VC Dialog Editor::Ctrl+Shift+Up Arrow"
+		],
+		"Format.Bold": [
+			"HTML Editor Design View::Ctrl+B"
+		],
+		"Format.ButtonBottom": [
+			"VC Dialog Editor::Ctrl+Shift+B"
+		],
+		"Format.ButtonRight": [
+			"VC Dialog Editor::Ctrl+R",
+			"VC Dialog Editor::Ctrl+B"
+		],
+		"Format.CenterHorizontal": [
+			"VC Dialog Editor::F9"
+		],
+		"Format.CenterHorizontally": [
+			"VC Dialog Editor::Ctrl+Shift+F9"
+		],
+		"Format.CenterVertical": [
+			"VC Dialog Editor::Shift+F9"
+		],
+		"Format.CenterVertically": [
+			"VC Dialog Editor::Ctrl+F9"
+		],
+		"Format.ConverttoHyperlink": [
+			"HTML Editor Design View::Ctrl+L"
+		],
+		"Format.InsertBookmark": [
+			"HTML Editor Design View::Ctrl+Shift+L"
+		],
+		"Format.Italic": [
+			"HTML Editor Design View::Ctrl+I"
+		],
+		"Format.MakeSameHeight": [
+			"VC Dialog Editor::Ctrl+\\"
+		],
+		"Format.MakeSameSize": [
+			"VC Dialog Editor::Ctrl+="
+		],
+		"Format.MakeSameWidth": [
+			"VC Dialog Editor::Ctrl+-"
+		],
+		"Format.SizetoContent": [
+			"VC Dialog Editor::Shift+F7",
+			"VC Dialog Editor::F7"
+		],
+		"Format.SpaceAcross": [
+			"VC Dialog Editor::Alt+Right Arrow",
+			"VC Dialog Editor::Alt+Left Arrow"
+		],
+		"Format.SpaceDown": [
+			"VC Dialog Editor::Alt+Up Arrow",
+			"VC Dialog Editor::Alt+Down Arrow"
+		],
+		"Format.TabOrder": [
+			"VC Dialog Editor::Ctrl+D"
+		],
+		"Format.TestDialog": [
+			"VC Dialog Editor::Ctrl+T"
+		],
+		"Format.ToggleGuides": [
+			"VC Dialog Editor::Ctrl+G"
+		],
+		"Format.Underline": [
+			"HTML Editor Design View::Ctrl+U"
+		],
+		"GitHub.Copilot.Chat.NewThread": [
+			"GitHub Copilot Chat::Ctrl+N"
+		],
+		"GitHub.Copilot.Chat.NextThread": [
+			"GitHub Copilot Chat::Ctrl+PgDn"
+		],
+		"GitHub.Copilot.Chat.OpenThreads": [
+			"GitHub Copilot Chat::Ctrl+Shift+T"
+		],
+		"GitHub.Copilot.Chat.PreviousThread": [
+			"GitHub Copilot Chat::Ctrl+PgUp"
+		],
+		"GitHub.Copilot.Chat.ZoomIn": [
+			"GitHub Copilot Chat::Ctrl+Num +",
+			"GitHub Copilot Chat::Ctrl+="
+		],
+		"GitHub.Copilot.Chat.ZoomOut": [
+			"GitHub Copilot Chat::Ctrl+Num -",
+			"GitHub Copilot Chat::Ctrl+-"
+		],
+		"Help.AddandRemoveHelpContent": [
+			"Global::Ctrl+Alt+F1"
+		],
+		"Help.F1Help": [
+			"Global::F1"
+		],
+		"Help.ViewHelp": [
+			"Global::Ctrl+F1"
+		],
+		"Help.WindowHelp": [
+			"Global::Shift+F1"
+		],
+		"Image.AirbrushTool": [
+			"VC Image Editor::Ctrl+A"
+		],
+		"Image.BrushTool": [
+			"VC Image Editor::Ctrl+B"
+		],
+		"Image.CopyandOutlineSelection": [
+			"VC Image Editor::Ctrl+Shift+U"
+		],
+		"Image.DrawOpaque": [
+			"VC Image Editor::Ctrl+J"
+		],
+		"Image.EllipseTool": [
+			"VC Image Editor::Alt+P"
+		],
+		"Image.EraseTool": [
+			"VC Image Editor::Ctrl+Shift+I"
+		],
+		"Image.FilledEllipseTool": [
+			"VC Image Editor::Ctrl+Shift+Alt+P"
+		],
+		"Image.FilledRectangleTool": [
+			"VC Image Editor::Ctrl+Shift+Alt+R"
+		],
+		"Image.FilledRoundedRectangleTool": [
+			"VC Image Editor::Ctrl+Shift+Alt+W"
+		],
+		"Image.FillTool": [
+			"VC Image Editor::Ctrl+F"
+		],
+		"Image.FlipHorizontal": [
+			"VC Image Editor::Ctrl+H"
+		],
+		"Image.FlipVertical": [
+			"VC Image Editor::Shift+Alt+H"
+		],
+		"Image.LargerBrush": [
+			"VC Image Editor::Ctrl+="
+		],
+		"Image.LineTool": [
+			"VC Image Editor::Ctrl+L"
+		],
+		"Image.MagnificationTool": [
+			"VC Image Editor::Ctrl+M"
+		],
+		"Image.Magnify": [
+			"VC Image Editor::Ctrl+Shift+M"
+		],
+		"Image.NewImageType": [
+			"VC Image Editor::Ins"
+		],
+		"Image.NextColor": [
+			"VC Image Editor::Ctrl+]",
+			"VC Image Editor::Ctrl+Right Arrow"
+		],
+		"Image.NextRightColor": [
+			"VC Image Editor::Ctrl+Shift+]",
+			"VC Image Editor::Ctrl+Shift+Right Arrow"
+		],
+		"Image.OutlinedEllipseTool": [
+			"VC Image Editor::Shift+Alt+P"
+		],
+		"Image.OutlinedRectangleTool": [
+			"VC Image Editor::Shift+Alt+R"
+		],
+		"Image.OutlinedRoundedRectangleTool": [
+			"VC Image Editor::Shift+Alt+W"
+		],
+		"Image.PencilTool": [
+			"VC Image Editor::Ctrl+I"
+		],
+		"Image.PreviousColor": [
+			"VC Image Editor::Ctrl+[",
+			"VC Image Editor::Ctrl+Left Arrow"
+		],
+		"Image.PreviousRightColor": [
+			"VC Image Editor::Ctrl+Shift+[",
+			"VC Image Editor::Ctrl+Shift+Left Arrow"
+		],
+		"Image.RectangleSelectionTool": [
+			"VC Image Editor::Shift+Alt+S"
+		],
+		"Image.RectangleTool": [
+			"VC Image Editor::Alt+R"
+		],
+		"Image.Rotate90Degrees": [
+			"VC Image Editor::Ctrl+Shift+H"
+		],
+		"Image.RoundedRectangleTool": [
+			"VC Image Editor::Alt+W"
+		],
+		"Image.ShowGrid": [
+			"VC Image Editor::Ctrl+Alt+S"
+		],
+		"Image.ShowTileGrid": [
+			"VC Image Editor::Ctrl+Shift+Alt+S"
+		],
+		"Image.SmallBrush": [
+			"VC Image Editor::Ctrl+."
+		],
+		"Image.SmallerBrush": [
+			"VC Image Editor::Ctrl+-"
+		],
+		"Image.TextTool": [
+			"VC Image Editor::Ctrl+T"
+		],
+		"Image.UseSelectionasBrush": [
+			"VC Image Editor::Ctrl+U"
+		],
+		"Image.ZoomIn": [
+			"VC Image Editor::Ctrl+Shift+.",
+			"VC Image Editor::Ctrl+Up Arrow"
+		],
+		"Image.ZoomOut": [
+			"VC Image Editor::Ctrl+Shift+,",
+			"VC Image Editor::Ctrl+Down Arrow"
+		],
+		"MoveLeftEdgetotheleft": [
+			"XAML Designer::Ctrl+Shift+,"
+		],
+		"MoveLeftEdgetotheright": [
+			"XAML Designer::Ctrl+Shift+."
+		],
+		"MoveRightEdgetotheleft": [
+			"XAML Designer::Ctrl+Shift+Alt+,"
+		],
+		"MoveRightEdgetotheright": [
+			"XAML Designer::Ctrl+Shift+Alt+."
+		],
+		"OtherContextMenus.ErrorList.Copyrow": [
+			"Error List Tool Window::Ctrl+Shift+C"
+		],
+		"OtherContextMenus.ErrorList.Searchthewebforhelp": [
+			"Error List Tool Window::Ctrl+F1"
+		],
+		"OtherContextMenus.HTMLContext.WrapWithdiv": [
+			"HTML Editor::Shift+Alt+W"
+		],
+		"OtherContextMenus.JSONContext.ReloadSchemas": [
+			"JSON Editor::Ctrl+Shift+J"
+		],
+		"OtherContextMenus.RestContext.SendRequest": [
+			"Rest Api Editor::Ctrl+Alt+S"
+		],
+		"PreviousHTMLDocumentView": [
+			"HTML Editor Design View::Ctrl+PgUp",
+			"HTML Editor Source View::Ctrl+PgUp"
+		],
+		"Project.AddContentPage": [
+			"HTML Editor Design View::Ctrl+M, Ctrl+C"
+		],
+		"Project.AddExistingItem": [
+			"Global::Shift+Alt+A"
+		],
+		"Project.AddNewItem": [
+			"Global::Ctrl+Shift+A"
+		],
+		"Project.AddResource": [
+			"Global::Ctrl+R"
+		],
+		"Project.Override": [
+			"Global::Ctrl+Alt+Ins"
+		],
+		"ProjectandSolutionContextMenus.Project.SolutionExplorer.CollapseAllDescendants": [
+			"Solution Explorer::Ctrl+Left Arrow"
+		],
+		"QueryDesigner.Criteria": [
+			"Query Designer::Ctrl+2",
+			"View Designer::Ctrl+2"
+		],
+		"QueryDesigner.Diagram": [
+			"Query Designer::Ctrl+1",
+			"View Designer::Ctrl+1"
+		],
+		"QueryDesigner.ExecuteSQL": [
+			"Query Designer::Ctrl+R",
+			"View Designer::Ctrl+R"
+		],
+		"QueryDesigner.GotoRow": [
+			"Query Designer::Ctrl+G",
+			"View Designer::Ctrl+G"
+		],
+		"QueryDesigner.Results": [
+			"Query Designer::Ctrl+4",
+			"View Designer::Ctrl+4"
+		],
+		"QueryDesigner.SQL": [
+			"Query Designer::Ctrl+3",
+			"View Designer::Ctrl+3"
+		],
+		"Tools.ForceGC": [
+			"Global::Ctrl+Shift+Alt+F12, Ctrl+Shift+Alt+F12"
+		],
+		"Tools.GoToCommandLine": [
+			"Global::Ctrl+/"
+		],
+		"View.AllWindows": [
+			"Global::Shift+Alt+M"
+		],
+		"View.Backward": [
+			"Global::Alt+Left Arrow"
+		],
+		"View.BrowseNext": [
+			"Global::Ctrl+Shift+1"
+		],
+		"View.BrowsePrevious": [
+			"Global::Ctrl+Shift+2"
+		],
+		"View.ClassView": [
+			"Global::Ctrl+Shift+C"
+		],
+		"View.CodeDefinitionWindow": [
+			"Global::Ctrl+\\, D",
+			"Global::Ctrl+\\, Ctrl+D"
+		],
+		"View.CommandWindow": [
+			"Global::Ctrl+Alt+A"
+		],
+		"View.EditMaster": [
+			"HTML Editor Design View::Ctrl+M, Ctrl+M"
+		],
+		"View.ErrorList": [
+			"Global::Ctrl+\\, E",
+			"Global::Ctrl+\\, Ctrl+E"
+		],
+		"View.FindSymbolResults": [
+			"Global::Ctrl+Alt+F12"
+		],
+		"View.Forward": [
+			"Global::Alt+Right Arrow"
+		],
+		"View.ForwardBrowseContext": [
+			"Global::Ctrl+Shift+7"
+		],
+		"View.FullScreen": [
+			"Global::Shift+Alt+Enter"
+		],
+		"View.NavigateBackward": [
+			"Global::Ctrl+-",
+			"Text Editor::Ctrl+Num *"
+		],
+		"View.NavigateForward": [
+			"Global::Ctrl+Shift+-"
+		],
+		"View.NextView": [
+			"HTML Editor Design View::Ctrl+PgDn",
+			"HTML Editor Source View::Ctrl+PgDn"
+		],
+		"View.ObjectBrowser": [
+			"Global::Ctrl+Alt+J",
+			"Global::Shift+Alt+F1"
+		],
+		"View.Output": [
+			"Global::Ctrl+Alt+O",
+			"Global::Alt+1"
+		],
+		"View.PopBrowseContext": [
+			"Global::Ctrl+Shift+8",
+			"Global::Ctrl+Num *"
+		],
+		"View.PropertiesWindow": [
+			"Global::Ctrl+W",
+			"Global::Alt+Enter"
+		],
+		"View.QuickActions": [
+			"Text Editor::Alt+Enter",
+			"Text Editor::Ctrl+.",
+			"XAML Designer::Alt+Enter",
+			"XAML Designer::Ctrl+."
+		],
+		"View.QuickActionsForPosition": [
+			"Text Editor::Ctrl+\\, Ctrl+."
+		],
+		"View.Refresh": [
+			"Team Foundation Build Detail Editor::F5",
+			"Team Explorer::F5"
+		],
+		"View.ResourceView": [
+			"Global::Ctrl+Shift+E"
+		],
+		"View.ServerExplorer": [
+			"Global::Ctrl+Alt+S"
+		],
+		"View.ShowSmartTag": [
+			"Global::Shift+Alt+F10",
+			"HTML Editor Design View::Shift+Alt+F10",
+			"CSS Editor::Ctrl+.",
+			"HTML Editor::Ctrl+."
+		],
+		"View.SolutionExplorer": [
+			"Global::Ctrl+Alt+L",
+			"Global::Alt+0"
+		],
+		"View.TaskList": [
+			"Global::Ctrl+\\, T",
+			"Global::Ctrl+\\, Ctrl+T"
+		],
+		"View.Toolbox": [
+			"Global::Ctrl+Alt+X"
+		],
+		"View.ViewCode": [
+			"Settings Designer::F7"
+		],
+		"View.ViewDesigner": [
+			"HTML Editor Source View::Shift+F7"
+		],
+		"View.ViewMarkup": [
+			"HTML Editor Design View::Shift+F7"
+		],
+		"View.ZoomIn": [
+			"Global::Ctrl+Shift+."
+		],
+		"View.ZoomOut": [
+			"Global::Ctrl+Shift+,"
+		],
+		"Window.ActivateDocumentWindow": [
+			"Global::Esc"
+		],
+		"Window.ActivateQuickLaunchPreviousCategory": [
+			"Global::Ctrl+Shift+Q"
+		],
+		"Window.ActivateSolutionExplorerSearch": [
+			"Global::Ctrl+;"
+		],
+		"Window.ActivateWindowSearch": [
+			"Global::Alt+`"
+		],
+		"Window.AddTabtoSelection": [
+			"Global::Ctrl+Shift+Alt+Space"
+		],
+		"Window.ApplyWindowLayout1": [
+			"Global::Ctrl+Alt+1"
+		],
+		"Window.ApplyWindowLayout10": [
+			"Global::Ctrl+Alt+0"
+		],
+		"Window.ApplyWindowLayout2": [
+			"Global::Ctrl+Alt+2"
+		],
+		"Window.ApplyWindowLayout3": [
+			"Global::Ctrl+Alt+3"
+		],
+		"Window.ApplyWindowLayout4": [
+			"Global::Ctrl+Alt+4"
+		],
+		"Window.ApplyWindowLayout5": [
+			"Global::Ctrl+Alt+5"
+		],
+		"Window.ApplyWindowLayout6": [
+			"Global::Ctrl+Alt+6"
+		],
+		"Window.ApplyWindowLayout7": [
+			"Global::Ctrl+Alt+7"
+		],
+		"Window.ApplyWindowLayout8": [
+			"Global::Ctrl+Alt+8"
+		],
+		"Window.ApplyWindowLayout9": [
+			"Global::Ctrl+Alt+9"
+		],
+		"Window.Close": [
+			"Global::Shift+Esc"
+		],
+		"Window.CloseDocumentWindow": [
+			"Global::Ctrl+F4"
+		],
+		"Window.KeepTabOpen": [
+			"Global::Ctrl+Alt+Home"
+		],
+		"Window.MovetoNavigationBar": [
+			"Global::Ctrl+F2"
+		],
+		"Window.NextDocumentWindow": [
+			"Global::Ctrl+F6",
+			"Global::Ctrl+Tab"
+		],
+		"Window.NextPane": [
+			"Global::Alt+F6",
+			"Global::F6"
+		],
+		"Window.NextTab": [
+			"Global::Ctrl+Alt+PgDn",
+			"Global::Ctrl+PgDn"
+		],
+		"Window.NextTabandAddtoSelection": [
+			"Global::Ctrl+Shift+Alt+PgDn"
+		],
+		"Window.NextToolWindowNav": [
+			"Global::Alt+F7"
+		],
+		"Window.PreviousDocumentWindow": [
+			"Global::Ctrl+Shift+F6",
+			"Global::Ctrl+Shift+Tab"
+		],
+		"Window.PreviousPane": [
+			"Global::Shift+Alt+F6",
+			"Global::Shift+F6"
+		],
+		"Window.PreviousTab": [
+			"Global::Ctrl+Alt+PgUp",
+			"Global::Ctrl+PgUp"
+		],
+		"Window.PreviousTabandAddtoSelection": [
+			"Global::Ctrl+Shift+Alt+PgUp"
+		],
+		"Window.PreviousToolWindowNav": [
+			"Global::Shift+Alt+F7"
+		],
+		"Window.QuickLaunch": [
+			"Global::Ctrl+Q"
+		],
+		"Window.ShowDockMenu": [
+			"Global::Alt+-"
+		],
+		"Window.ShowEzMDIFileList": [
+			"Global::Ctrl+Alt+Down Arrow"
+		]
+	}
+}

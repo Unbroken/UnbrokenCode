@@ -294,7 +294,7 @@ export class KeybindingResolver {
 			return null;
 		}
 		if (items.length === 1 && !enforceContextCheck) {
-			return items[0];
+			return KeybindingResolver._isDisabledBySetting(items[0].when, context) ? null : items[0];
 		}
 
 		for (let i = items.length - 1; i >= 0; i--) {
@@ -308,7 +308,35 @@ export class KeybindingResolver {
 			return null;
 		}
 
-		return items[items.length - 1];
+		for (let i = items.length - 1; i >= 0; i--) {
+			if (!KeybindingResolver._isDisabledBySetting(items[i].when, context)) {
+				return items[i];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Whether a when clause requires setting values (`config.` context keys) that the context does not have,
+	 * such as keybindings of a keyboard mapping scheme that is not selected. These keybindings cannot be
+	 * dispatched until the settings change, so they are not reported even when the context is not enforced.
+	 *
+	 * When clauses are normalized by distributing && over ||, so the setting terms can be in every || branch.
+	 */
+	private static _isDisabledBySetting(when: ContextKeyExpression | undefined, context: IContextKeyService): boolean {
+		if (!when) {
+			return false;
+		}
+		switch (when.type) {
+			case ContextKeyExprType.Or:
+				return when.expr.every(branch => KeybindingResolver._isDisabledBySetting(branch, context));
+			case ContextKeyExprType.And:
+				return when.expr.some(term => KeybindingResolver._isDisabledBySetting(term, context));
+			default: {
+				const keys = when.keys();
+				return keys.length > 0 && keys.every(key => key.startsWith('config.')) && !context.contextMatchesRules(when);
+			}
+		}
 	}
 
 	/**

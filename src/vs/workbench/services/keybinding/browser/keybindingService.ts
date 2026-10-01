@@ -603,19 +603,19 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 	private _handleKeybindingsExtensionPointUser(extensionId: ExtensionIdentifier, isBuiltin: boolean, keybindings: ContributedKeyBinding | ContributedKeyBinding[], collector: ExtensionMessageCollector, result: IExtensionKeybindingRule[]): void {
 		if (Array.isArray(keybindings)) {
 			for (let i = 0, len = keybindings.length; i < len; i++) {
-				this._handleKeybinding(extensionId, isBuiltin, i + 1, keybindings[i], collector, result);
+				this._handleKeybinding(extensionId, isBuiltin, i + 1, len, keybindings[i], collector, result);
 			}
 		} else {
-			this._handleKeybinding(extensionId, isBuiltin, 1, keybindings, collector, result);
+			this._handleKeybinding(extensionId, isBuiltin, 1, 1, keybindings, collector, result);
 		}
 	}
 
-	private _handleKeybinding(extensionId: ExtensionIdentifier, isBuiltin: boolean, idx: number, keybindings: ContributedKeyBinding, collector: ExtensionMessageCollector, result: IExtensionKeybindingRule[]): void {
+	private _handleKeybinding(extensionId: ExtensionIdentifier, isBuiltin: boolean, idx: number, count: number, keybindings: ContributedKeyBinding, collector: ExtensionMessageCollector, result: IExtensionKeybindingRule[]): void {
 
 		const rejects: string[] = [];
 
 		if (isValidContributedKeyBinding(keybindings, rejects)) {
-			const rule = this._asCommandRule(extensionId, isBuiltin, idx++, keybindings);
+			const rule = this._asCommandRule(extensionId, isBuiltin, idx++, count, keybindings);
 			if (rule) {
 				result.push(rule);
 			}
@@ -648,7 +648,7 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 		return key;
 	}
 
-	private _asCommandRule(extensionId: ExtensionIdentifier, isBuiltin: boolean, idx: number, binding: ContributedKeyBinding): IExtensionKeybindingRule | undefined {
+	private _asCommandRule(extensionId: ExtensionIdentifier, isBuiltin: boolean, idx: number, count: number, binding: ContributedKeyBinding): IExtensionKeybindingRule | undefined {
 
 		const { command, args, when, key, mac, linux, win } = binding;
 		const keybinding = WorkbenchKeybindingService.bindToCurrentPlatform(key, mac, linux, win);
@@ -656,11 +656,14 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 			return undefined;
 		}
 
+		// The keybindings of an extension with 100 or more, such as a keymap, are spread over the 100 weights of its tier,
+		// so the keybindings of a built-in extension stay below those of external extensions
+		const offset = count < 100 ? idx : idx * 99 / count;
 		let weight: number;
 		if (isBuiltin) {
-			weight = KeybindingWeight.BuiltinExtension + idx;
+			weight = KeybindingWeight.BuiltinExtension + offset;
 		} else {
-			weight = KeybindingWeight.ExternalExtension + idx;
+			weight = KeybindingWeight.ExternalExtension + offset;
 		}
 
 		const commandAction = MenuRegistry.getCommand(command);

@@ -1,0 +1,2381 @@
+{
+  "name": "visual-studio-keymap",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "10.0.0",
+  "publisher": "vscode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "*"
+  },
+  "categories": [
+    "Keymaps"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "unbroken.keyboardShortcuts.scheme": {
+          "type": "string",
+          "default": "vscode",
+          "enum": [
+            "vscode",
+            "visualStudio",
+            "visualCpp6",
+            "visualCSharp2005",
+            "visualBasic6",
+            "visualCpp2",
+            "visualStudio6"
+          ],
+          "enumItemLabels": [
+            "%scheme.vscode.label%",
+            "%scheme.visualStudio.label%",
+            "%scheme.visualCpp6.label%",
+            "%scheme.visualCSharp2005.label%",
+            "%scheme.visualBasic6.label%",
+            "%scheme.visualCpp2.label%",
+            "%scheme.visualStudio6.label%"
+          ],
+          "enumDescriptions": [
+            "%scheme.vscode.description%",
+            "%scheme.visualStudio.description%",
+            "%scheme.visualCpp6.description%",
+            "%scheme.visualCSharp2005.description%",
+            "%scheme.visualBasic6.description%",
+            "%scheme.visualCpp2.description%",
+            "%scheme.visualStudio6.description%"
+          ],
+          "markdownDescription": "%scheme.description%",
+          "scope": "application"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "command": "actions.find",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualStudio6)$/ && editorFocus"
+      },
+      {
+        "key": "alt+f3",
+        "command": "actions.find",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorFocus"
+      },
+      {
+        "key": "ctrl+f2",
+        "mac": "cmd+f2",
+        "command": "breadcrumbs.focusAndSelect",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualBasic6|visualCpp2|visualStudio6)$/ && breadcrumbsPossible && breadcrumbsVisible"
+      },
+      {
+        "key": "ctrl+f8",
+        "mac": "cmd+f8",
+        "command": "breadcrumbs.focusAndSelect",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && breadcrumbsPossible && breadcrumbsVisible"
+      },
+      {
+        "key": "ctrl+k g",
+        "mac": "cmd+k g",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+f11",
+        "mac": "cmd+f11",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+alt+d",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualCpp2)$/ && debugState == 'stopped' && !isMac"
+      },
+      {
+        "key": "ctrl+d ctrl+d",
+        "mac": "cmd+d cmd+d",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+d d",
+        "mac": "cmd+d d",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+f7",
+        "mac": "cmd+f7",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && debugState == 'stopped'"
+      },
+      {
+        "key": "alt+7",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && debugState == 'stopped'"
+      },
+      {
+        "key": "alt+8",
+        "command": "debug.action.openDisassemblyView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+f9",
+        "mac": "cmd+f9",
+        "command": "debug.enableOrDisableBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+f10",
+        "mac": "cmd+shift+f10",
+        "command": "debug.jumpToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+f7",
+        "mac": "cmd+shift+f7",
+        "command": "debug.jumpToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+f9",
+        "mac": "cmd+f9",
+        "command": "debug.jumpToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+l",
+        "command": "editor.action.clipboardCutAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && editorTextFocus && !editorReadonly && !editorHasSelection"
+      },
+      {
+        "key": "ctrl+r ctrl+m",
+        "command": "editor.action.codeAction",
+        "args": {
+          "kind": "refactor.extract.function"
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly && !isMac"
+      },
+      {
+        "key": "ctrl+r m",
+        "mac": "cmd+r m",
+        "command": "editor.action.codeAction",
+        "args": {
+          "kind": "refactor.extract.function"
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "alt+f8",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k ctrl+shift+t",
+        "mac": "cmd+k cmd+shift+t",
+        "command": "editor.action.goToTypeDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorHasTypeDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+x",
+        "mac": "cmd+k cmd+x",
+        "command": "editor.action.insertSnippet",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k x",
+        "mac": "cmd+k x",
+        "command": "editor.action.insertSnippet",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+f12",
+        "mac": "cmd+shift+f12",
+        "command": "editor.action.marker.nextInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualStudio6)$/"
+      },
+      {
+        "key": "f8",
+        "command": "editor.action.marker.nextInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualStudio6)$/"
+      },
+      {
+        "key": "f4",
+        "command": "editor.action.marker.nextInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp6|visualCpp2)$/"
+      },
+      {
+        "key": "f12",
+        "command": "editor.action.marker.nextInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "shift+f8",
+        "command": "editor.action.marker.prevInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualStudio6)$/"
+      },
+      {
+        "key": "shift+f4",
+        "command": "editor.action.marker.prevInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp6|visualCpp2)$/"
+      },
+      {
+        "key": "shift+f12",
+        "command": "editor.action.marker.prevInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "f3",
+        "command": "editor.action.nextMatchFindAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorFocus"
+      },
+      {
+        "key": "ctrl+f3",
+        "mac": "cmd+f3",
+        "command": "editor.action.nextSelectionMatchFindAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorFocus"
+      },
+      {
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "command": "editor.action.openLink",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+r g",
+        "mac": "cmd+r g",
+        "command": "editor.action.organizeImports",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+g",
+        "mac": "cmd+r cmd+g",
+        "command": "editor.action.organizeImports",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+f3",
+        "command": "editor.action.previousMatchFindAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorFocus"
+      },
+      {
+        "key": "ctrl+shift+f3",
+        "mac": "cmd+shift+f3",
+        "command": "editor.action.previousSelectionMatchFindAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorFocus"
+      },
+      {
+        "key": "ctrl+.",
+        "mac": "cmd+.",
+        "command": "editor.action.quickFix",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+alt+f10",
+        "command": "editor.action.quickFix",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+o",
+        "mac": "cmd+r cmd+o",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+v",
+        "mac": "cmd+r cmd+v",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+i",
+        "mac": "cmd+r cmd+i",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+e",
+        "mac": "cmd+r cmd+e",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r o",
+        "mac": "cmd+r o",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r v",
+        "mac": "cmd+r v",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r i",
+        "mac": "cmd+r i",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r e",
+        "mac": "cmd+r e",
+        "command": "editor.action.refactor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+alt+f12",
+        "command": "editor.action.referenceSearch.trigger",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+r ctrl+r",
+        "mac": "cmd+r cmd+r",
+        "command": "editor.action.rename",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasRenameProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r r",
+        "mac": "cmd+r r",
+        "command": "editor.action.rename",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasRenameProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+f12",
+        "mac": "cmd+f12",
+        "command": "editor.action.revealDeclaration",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualStudio6)$/ && editorHasDeclarationProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+alt+f12",
+        "mac": "cmd+alt+f12",
+        "command": "editor.action.revealDeclaration",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && editorHasDeclarationProvider && editorTextFocus"
+      },
+      {
+        "key": "f12",
+        "command": "editor.action.revealDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorHasDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "alt+f1",
+        "command": "editor.action.revealDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorHasDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "shift+f2",
+        "command": "editor.action.revealDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "f11",
+        "command": "editor.action.revealDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorHasDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+t",
+        "mac": "cmd+t",
+        "command": "editor.action.showHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+w",
+        "mac": "cmd+shift+w",
+        "command": "editor.action.smartSelect.expand",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCSharp2005|visualBasic6)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+h",
+        "command": "editor.action.startFindReplaceAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorFocus && !isMac"
+      },
+      {
+        "key": "ctrl+k ctrl+s",
+        "mac": "cmd+k cmd+s",
+        "command": "editor.action.surroundWithSnippet",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k s",
+        "mac": "cmd+k s",
+        "command": "editor.action.surroundWithSnippet",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+8",
+        "mac": "cmd+shift+8",
+        "command": "editor.action.toggleRenderWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp6|visualCpp2)$/ && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "alt+f9 c",
+        "command": "editor.debug.action.conditionalBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "alt+f9 q",
+        "command": "editor.debug.action.editBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+f10",
+        "mac": "cmd+f10",
+        "command": "editor.debug.action.runToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "f7",
+        "command": "editor.debug.action.runToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+f8",
+        "mac": "cmd+f8",
+        "command": "editor.debug.action.runToCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+alt+q",
+        "mac": "cmd+alt+q",
+        "command": "editor.debug.action.showDebugHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && inDebugMode && editorTextFocus"
+      },
+      {
+        "key": "shift+f9",
+        "command": "editor.debug.action.showDebugHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && inDebugMode && editorTextFocus"
+      },
+      {
+        "key": "ctrl+d ctrl+q",
+        "command": "editor.debug.action.showDebugHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+d q",
+        "mac": "cmd+d q",
+        "command": "editor.debug.action.showDebugHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+f11",
+        "command": "editor.debug.action.stepIntoTargets",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && debugState == 'stopped' && editorTextFocus"
+      },
+      {
+        "key": "f9",
+        "command": "editor.debug.action.toggleBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+f9",
+        "mac": "cmd+shift+f9",
+        "command": "editor.debug.action.toggleBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+f9 d",
+        "command": "editor.debug.action.triggerByBreakpoint",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "shift+f2",
+        "command": "explorer.newFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/"
+      },
+      {
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "command": "lldb.attach",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !inDebugMode"
+      },
+      {
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "command": "lldb.attach",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6' && !inDebugMode"
+      },
+      {
+        "key": "ctrl+alt+m 4",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode && debugType == 'lldb' && !isMac"
+      },
+      {
+        "key": "ctrl+alt+m 3",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode && debugType == 'lldb' && !isMac"
+      },
+      {
+        "key": "ctrl+alt+m 2",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode && debugType == 'lldb' && !isMac"
+      },
+      {
+        "key": "ctrl+alt+m 1",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode && debugType == 'lldb' && !isMac"
+      },
+      {
+        "key": "ctrl+d ctrl+y",
+        "mac": "cmd+d cmd+y",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode && debugType == 'lldb'"
+      },
+      {
+        "key": "alt+5",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && inDebugMode && debugType == 'lldb'"
+      },
+      {
+        "key": "alt+6",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && inDebugMode && debugType == 'lldb'"
+      },
+      {
+        "key": "ctrl+d y",
+        "mac": "cmd+d y",
+        "command": "lldb.viewMemory",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode && debugType == 'lldb'"
+      },
+      {
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualBasic6|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+w ctrl+u",
+        "mac": "cmd+w cmd+u",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+w u",
+        "mac": "cmd+w u",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+alt+d",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && !isMac"
+      },
+      {
+        "key": "ctrl+w ctrl+c",
+        "mac": "cmd+w cmd+c",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+w c",
+        "mac": "cmd+w c",
+        "command": "outline.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z",
+        "command": "redo",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "shift+alt+backspace",
+        "command": "redo",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+y",
+        "mac": "cmd+y",
+        "command": "redo",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+a",
+        "mac": "cmd+a",
+        "command": "redo",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "shift+f12",
+        "command": "references-view.findReferences",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+r",
+        "mac": "cmd+k cmd+r",
+        "command": "references-view.findReferences",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "key": "alt+f2",
+        "command": "references-view.findReferences",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k r",
+        "mac": "cmd+k r",
+        "command": "references-view.findReferences",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasReferenceProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k t",
+        "mac": "cmd+k t",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+t",
+        "mac": "cmd+k cmd+t",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6)$/ && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w ctrl+c",
+        "mac": "cmd+w cmd+c",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w ctrl+k",
+        "mac": "cmd+w cmd+k",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w c",
+        "mac": "cmd+w c",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w k",
+        "mac": "cmd+w k",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k e",
+        "mac": "cmd+k e",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+e",
+        "mac": "cmd+k cmd+e",
+        "command": "references-view.showCallHierarchy",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasCallHierarchyProvider && editorTextFocus"
+      },
+      {
+        "key": "f2",
+        "command": "renameFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualStudio6)$/ && filesExplorerFocus && foldersViewVisible && !explorerResourceIsRoot && !explorerResourceReadonly && !inputFocus"
+      },
+      {
+        "key": "ctrl+shift+1",
+        "mac": "cmd+shift+1",
+        "command": "search.action.focusNextSearchResult",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+numpad_add",
+        "mac": "cmd+numpad_add",
+        "command": "search.action.focusNextSearchResult",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+shift+2",
+        "mac": "cmd+shift+2",
+        "command": "search.action.focusPreviousSearchResult",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+numpad_subtract",
+        "mac": "cmd+numpad_subtract",
+        "command": "search.action.focusPreviousSearchResult",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+r ctrl+a",
+        "mac": "cmd+r cmd+a",
+        "command": "testing.debugAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/"
+      },
+      {
+        "key": "ctrl+r ctrl+t",
+        "mac": "cmd+r cmd+t",
+        "command": "testing.debugAtCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+r d",
+        "mac": "cmd+r d",
+        "command": "testing.debugLastRun",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+r l",
+        "mac": "cmd+r l",
+        "command": "testing.reRunLastRun",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+r a",
+        "mac": "cmd+r a",
+        "command": "testing.runAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/"
+      },
+      {
+        "key": "ctrl+r t",
+        "mac": "cmd+r t",
+        "command": "testing.runAtCursor",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+\\ ctrl+c",
+        "mac": "cmd+\\ cmd+c",
+        "command": "workbench.action.chat.open",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+\\ c",
+        "mac": "cmd+\\ c",
+        "command": "workbench.action.chat.open",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+f4",
+        "mac": "cmd+f4",
+        "command": "workbench.action.closeActiveEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "shift+escape",
+        "command": "workbench.action.closeAuxiliaryBar",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && auxiliaryBarFocus"
+      },
+      {
+        "key": "shift+escape",
+        "command": "workbench.action.closePanel",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && panelFocus"
+      },
+      {
+        "key": "shift+escape",
+        "command": "workbench.action.closeSidebar",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && sideBarFocus"
+      },
+      {
+        "key": "alt+numpad_multiply",
+        "command": "workbench.action.debug.callStackTop",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "f5",
+        "command": "workbench.action.debug.continue",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && debugState == 'stopped'"
+      },
+      {
+        "key": "shift+f5",
+        "command": "workbench.action.debug.disconnect",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualStudio6)$/ && inDebugMode && focusedSessionIsAttach"
+      },
+      {
+        "key": "alt+f5",
+        "command": "workbench.action.debug.disconnect",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && inDebugMode && focusedSessionIsAttach"
+      },
+      {
+        "key": "ctrl+alt+pausebreak",
+        "command": "workbench.action.debug.disconnect",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && inDebugMode && focusedSessionIsAttach && !isMac"
+      },
+      {
+        "key": "ctrl+alt+pausebreak",
+        "command": "workbench.action.debug.pause",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/ && debugState == 'running' && !isMac"
+      },
+      {
+        "key": "ctrl+pausebreak",
+        "command": "workbench.action.debug.pause",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualBasic6|visualStudio6)$/ && debugState == 'running' && !isMac"
+      },
+      {
+        "key": "ctrl+shift+f5",
+        "mac": "cmd+shift+f5",
+        "command": "workbench.action.debug.restart",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && inDebugMode"
+      },
+      {
+        "key": "shift+f5",
+        "command": "workbench.action.debug.restart",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualBasic6|visualCpp2)$/ && inDebugMode"
+      },
+      {
+        "key": "ctrl+r f5",
+        "mac": "cmd+r f5",
+        "command": "workbench.action.debug.reverseContinue",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "command": "workbench.action.debug.run",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !inDebugMode"
+      },
+      {
+        "key": "ctrl+alt+z",
+        "mac": "cmd+alt+z",
+        "command": "workbench.action.debug.selectDebugSession",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode"
+      },
+      {
+        "key": "ctrl+d ctrl+p",
+        "mac": "cmd+d cmd+p",
+        "command": "workbench.action.debug.selectDebugSession",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode"
+      },
+      {
+        "key": "ctrl+d p",
+        "mac": "cmd+d p",
+        "command": "workbench.action.debug.selectDebugSession",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode"
+      },
+      {
+        "key": "ctrl+shift+alt+p",
+        "mac": "cmd+shift+alt+p",
+        "command": "workbench.action.debug.selectDebugSession",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6' && inDebugMode"
+      },
+      {
+        "key": "ctrl+alt+u",
+        "mac": "cmd+alt+u",
+        "command": "workbench.action.debug.showLoadedScripts",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && inDebugMode"
+      },
+      {
+        "key": "ctrl+d ctrl+m",
+        "command": "workbench.action.debug.showLoadedScripts",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode && !isMac"
+      },
+      {
+        "key": "ctrl+d m",
+        "mac": "cmd+d m",
+        "command": "workbench.action.debug.showLoadedScripts",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && inDebugMode"
+      },
+      {
+        "key": "f5",
+        "command": "workbench.action.debug.start",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !inDebugMode"
+      },
+      {
+        "key": "ctrl+r f10",
+        "mac": "cmd+r f10",
+        "command": "workbench.action.debug.stepBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "f11",
+        "command": "workbench.action.debug.stepInto",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualStudio6)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "f8",
+        "command": "workbench.action.debug.stepInto",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualBasic6|visualCpp2)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "shift+f11",
+        "command": "workbench.action.debug.stepOut",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualStudio6)$/ && debugState == 'stopped'"
+      },
+      {
+        "key": "ctrl+shift+f8",
+        "mac": "cmd+shift+f8",
+        "command": "workbench.action.debug.stepOut",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && debugState == 'stopped'"
+      },
+      {
+        "key": "shift+f7",
+        "command": "workbench.action.debug.stepOut",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && debugState == 'stopped'"
+      },
+      {
+        "key": "f10",
+        "command": "workbench.action.debug.stepOver",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && debugState == 'stopped'"
+      },
+      {
+        "key": "shift+f8",
+        "command": "workbench.action.debug.stepOver",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && debugState == 'stopped'"
+      },
+      {
+        "key": "shift+f5",
+        "command": "workbench.action.debug.stop",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualStudio6)$/ && inDebugMode && !focusedSessionIsAttach"
+      },
+      {
+        "key": "alt+f5",
+        "command": "workbench.action.debug.stop",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && inDebugMode && !focusedSessionIsAttach"
+      },
+      {
+        "key": "ctrl+alt+pausebreak",
+        "command": "workbench.action.debug.stop",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && inDebugMode && !focusedSessionIsAttach && !isMac"
+      },
+      {
+        "key": "ctrl+n",
+        "mac": "cmd+n",
+        "command": "workbench.action.files.newUntitledFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n",
+        "command": "workbench.action.files.newUntitledFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "ctrl+o",
+        "mac": "cmd+o",
+        "command": "workbench.action.files.openFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+f12",
+        "mac": "cmd+f12",
+        "command": "workbench.action.files.openFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o",
+        "command": "workbench.action.files.openFile",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o",
+        "command": "workbench.action.files.openFolder",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+o",
+        "mac": "cmd+o",
+        "command": "workbench.action.files.openFolder",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualBasic6|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+shift+alt+o",
+        "mac": "cmd+shift+alt+o",
+        "command": "workbench.action.files.openFolder",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/"
+      },
+      {
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "command": "workbench.action.files.saveAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "command": "workbench.action.findInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/"
+      },
+      {
+        "key": "f6",
+        "command": "workbench.action.focusNextGroup",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualBasic6|visualStudio6)$/"
+      },
+      {
+        "key": "alt+f6",
+        "command": "workbench.action.focusNextPart",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "f6",
+        "command": "workbench.action.focusNextPart",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "shift+f6",
+        "command": "workbench.action.focusPreviousGroup",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualBasic6|visualStudio6)$/"
+      },
+      {
+        "key": "shift+alt+f6",
+        "command": "workbench.action.focusPreviousPart",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "shift+f6",
+        "command": "workbench.action.focusPreviousPart",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+g",
+        "mac": "cmd+g",
+        "command": "workbench.action.gotoLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+1 m",
+        "mac": "cmd+1 m",
+        "command": "workbench.action.gotoSymbol",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 ctrl+m",
+        "command": "workbench.action.gotoSymbol",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && !isMac"
+      },
+      {
+        "key": "alt+\\",
+        "command": "workbench.action.gotoSymbol",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+alt+home",
+        "command": "workbench.action.keepEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+-",
+        "mac": "cmd+-",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "alt+left",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+shift+8",
+        "mac": "cmd+shift+8",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualCpp2|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+numpad_multiply",
+        "mac": "cmd+numpad_multiply",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+shift+f2",
+        "mac": "cmd+shift+f2",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6'"
+      },
+      {
+        "key": "ctrl+shift+-",
+        "mac": "cmd+shift+-",
+        "command": "workbench.action.navigateForward",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+shift+7",
+        "mac": "cmd+shift+7",
+        "command": "workbench.action.navigateForward",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "alt+right",
+        "command": "workbench.action.navigateForward",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+shift+backspace",
+        "command": "workbench.action.navigateToLastEditLocation",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && !isMac"
+      },
+      {
+        "key": "ctrl+pagedown",
+        "command": "workbench.action.nextEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+alt+pagedown",
+        "command": "workbench.action.nextEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+f6",
+        "mac": "cmd+f6",
+        "command": "workbench.action.nextEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+tab",
+        "command": "workbench.action.nextEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp2|visualStudio6)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+1 r",
+        "mac": "cmd+1 r",
+        "command": "workbench.action.openRecent",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 ctrl+r",
+        "mac": "cmd+1 cmd+r",
+        "command": "workbench.action.openRecent",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "alt+f7",
+        "command": "workbench.action.openView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005|visualBasic6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o",
+        "command": "workbench.action.output.toggleOutput",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+w ctrl+o",
+        "mac": "cmd+w cmd+o",
+        "command": "workbench.action.output.toggleOutput",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+1",
+        "command": "workbench.action.output.toggleOutput",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "alt+2",
+        "command": "workbench.action.output.toggleOutput",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+w o",
+        "mac": "cmd+w o",
+        "command": "workbench.action.output.toggleOutput",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+pageup",
+        "command": "workbench.action.previousEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+alt+pageup",
+        "command": "workbench.action.previousEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+shift+f6",
+        "mac": "cmd+shift+f6",
+        "command": "workbench.action.previousEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+shift+tab",
+        "command": "workbench.action.previousEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp2|visualStudio6)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+,",
+        "command": "workbench.action.quickOpen",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && !isMac"
+      },
+      {
+        "key": "ctrl+t",
+        "mac": "cmd+t",
+        "command": "workbench.action.quickOpen",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 f",
+        "mac": "cmd+1 f",
+        "command": "workbench.action.quickOpen",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 ctrl+f",
+        "mac": "cmd+1 cmd+f",
+        "command": "workbench.action.quickOpen",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "command": "workbench.action.quickOpen",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "shift+alt+f",
+        "command": "workbench.action.quickTextSearch",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+k ctrl+z",
+        "mac": "cmd+k cmd+z",
+        "command": "workbench.action.reopenClosedEditor",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+shift+h",
+        "mac": "cmd+shift+h",
+        "command": "workbench.action.replaceInFiles",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+alt+down",
+        "command": "workbench.action.showAllEditors",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+1 t",
+        "mac": "cmd+1 t",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 ctrl+t",
+        "mac": "cmd+1 cmd+t",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 s",
+        "mac": "cmd+1 s",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+1 ctrl+s",
+        "mac": "cmd+1 cmd+s",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+f11",
+        "mac": "cmd+f11",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "alt+f12",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6'"
+      },
+      {
+        "key": "ctrl+alt+f11",
+        "mac": "cmd+alt+f11",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+shift+y",
+        "mac": "cmd+shift+y",
+        "command": "workbench.action.showAllSymbols",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "command": "workbench.action.showCommands",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+q",
+        "command": "workbench.action.showCommands",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+w ctrl+a",
+        "mac": "cmd+w cmd+a",
+        "command": "workbench.action.showCommands",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+w a",
+        "mac": "cmd+w a",
+        "command": "workbench.action.showCommands",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+shift+b",
+        "mac": "cmd+shift+b",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+b",
+        "mac": "cmd+b",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "f6",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "f7",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "shift+f8",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "shift+f6",
+        "command": "workbench.action.tasks.build",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+pausebreak",
+        "command": "workbench.action.tasks.terminate",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && !isMac"
+      },
+      {
+        "key": "ctrl+`",
+        "command": "workbench.action.terminal.toggleTerminal",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && !isMac"
+      },
+      {
+        "key": "shift+alt+enter",
+        "command": "workbench.action.toggleFullScreen",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+\\ ctrl+e",
+        "mac": "cmd+\\ cmd+e",
+        "command": "workbench.actions.view.problems",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+\\ e",
+        "mac": "cmd+\\ e",
+        "command": "workbench.actions.view.problems",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+w ctrl+e",
+        "mac": "cmd+w cmd+e",
+        "command": "workbench.actions.view.problems",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+w e",
+        "mac": "cmd+w e",
+        "command": "workbench.actions.view.problems",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+d ctrl+b",
+        "mac": "cmd+d cmd+b",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+f9",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+b",
+        "mac": "cmd+b",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+d b",
+        "mac": "cmd+d b",
+        "command": "workbench.debug.action.focusBreakpointsView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+alt+h",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && !isMac"
+      },
+      {
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+d ctrl+t",
+        "mac": "cmd+d cmd+t",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d t",
+        "mac": "cmd+d t",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+6",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+d ctrl+c",
+        "mac": "cmd+d cmd+c",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+7",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+d c",
+        "mac": "cmd+d c",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6'"
+      },
+      {
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "command": "workbench.debug.action.focusRepl",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+d ctrl+i",
+        "mac": "cmd+d cmd+i",
+        "command": "workbench.debug.action.focusRepl",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d i",
+        "mac": "cmd+d i",
+        "command": "workbench.debug.action.focusRepl",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+g",
+        "mac": "cmd+g",
+        "command": "workbench.debug.action.focusRepl",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6'"
+      },
+      {
+        "key": "ctrl+alt+v l",
+        "mac": "cmd+alt+v l",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+alt+v a",
+        "mac": "cmd+alt+v a",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/"
+      },
+      {
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/"
+      },
+      {
+        "key": "alt+4",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualCpp6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+d ctrl+r",
+        "mac": "cmd+d cmd+r",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+5",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp6'"
+      },
+      {
+        "key": "ctrl+d r",
+        "mac": "cmd+d r",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d ctrl+l",
+        "mac": "cmd+d cmd+l",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+3",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "ctrl+d l",
+        "mac": "cmd+d l",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d ctrl+a",
+        "mac": "cmd+d cmd+a",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d a",
+        "mac": "cmd+d a",
+        "command": "workbench.debug.action.focusVariablesView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+alt+w 4",
+        "mac": "cmd+alt+w 4",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+alt+w 3",
+        "mac": "cmd+alt+w 3",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+alt+w 2",
+        "mac": "cmd+alt+w 2",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+alt+w 1",
+        "mac": "cmd+alt+w 1",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+d ctrl+w",
+        "mac": "cmd+d cmd+w",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+d w",
+        "mac": "cmd+d w",
+        "command": "workbench.debug.action.focusWatchView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+k b",
+        "mac": "cmd+k b",
+        "command": "workbench.debug.viewlet.action.addFunctionBreakpointAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/"
+      },
+      {
+        "key": "ctrl+shift+f9",
+        "mac": "cmd+shift+f9",
+        "command": "workbench.debug.viewlet.action.removeAllBreakpoints",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualStudio6)$/"
+      },
+      {
+        "key": "ctrl+[ ctrl+s",
+        "mac": "cmd+[ cmd+s",
+        "command": "workbench.files.action.showActiveFileInExplorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+[ s",
+        "mac": "cmd+[ s",
+        "command": "workbench.files.action.showActiveFileInExplorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/"
+      },
+      {
+        "key": "ctrl+w ctrl+s",
+        "mac": "cmd+w cmd+s",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "alt+0",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2'"
+      },
+      {
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6'"
+      },
+      {
+        "key": "ctrl+w s",
+        "mac": "cmd+w s",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005'"
+      },
+      {
+        "key": "ctrl+alt+j",
+        "mac": "cmd+alt+j",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio6'"
+      },
+      {
+        "key": "ctrl+0 g",
+        "mac": "cmd+0 g",
+        "command": "workbench.view.scm",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+0 ctrl+g",
+        "mac": "cmd+0 cmd+g",
+        "command": "workbench.view.scm",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+e t",
+        "mac": "cmd+e t",
+        "command": "workbench.view.testing.focus",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio'"
+      },
+      {
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "command": "actions.find",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "alt+i",
+        "command": "actions.find",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+o",
+        "mac": "cmd+k cmd+o",
+        "command": "clangd.switchheadersource",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && (editorLangId == 'c' || editorLangId == 'cpp' || editorLangId == 'cuda-cpp' || editorLangId == 'objective-c' || editorLangId == 'objective-cpp')"
+      },
+      {
+        "key": "shift+alt+down",
+        "command": "cursorColumnSelectDown",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "shift+alt+left",
+        "command": "cursorColumnSelectLeft",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "shift+alt+right",
+        "command": "cursorColumnSelectRight",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "shift+alt+up",
+        "command": "cursorColumnSelectUp",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+shift+pageup",
+        "command": "cursorMove",
+        "args": {
+          "to": "viewPortTop",
+          "select": true
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+pageup",
+        "command": "cursorMove",
+        "args": {
+          "to": "viewPortTop"
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+shift+pagedown",
+        "command": "cursorMove",
+        "args": {
+          "to": "viewPortBottom",
+          "select": true
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+pagedown",
+        "command": "cursorMove",
+        "args": {
+          "to": "viewPortBottom"
+        },
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+alt+left",
+        "command": "cursorWordPartLeft",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+shift+alt+left",
+        "command": "cursorWordPartLeftSelect",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+alt+right",
+        "command": "cursorWordPartRight",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+shift+alt+right",
+        "command": "cursorWordPartRightSelect",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+right",
+        "command": "cursorWordStartRight",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+shift+right",
+        "command": "cursorWordStartRightSelect",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+delete",
+        "command": "deleteWordEndRight",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly && !isMac"
+      },
+      {
+        "key": "ctrl+backspace",
+        "command": "deleteWordStartLeft",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly && !isMac"
+      },
+      {
+        "key": "ctrl+k ctrl+c",
+        "mac": "cmd+k cmd+c",
+        "command": "editor.action.addCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e ctrl+c",
+        "mac": "cmd+e cmd+c",
+        "command": "editor.action.addCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e c",
+        "mac": "cmd+e c",
+        "command": "editor.action.addCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+alt+.",
+        "command": "editor.action.addSelectionToNextFindMatch",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+/",
+        "mac": "cmd+shift+/",
+        "command": "editor.action.blockComment",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "command": "editor.action.clipboardCutAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !editorReadonly && !editorHasSelection"
+      },
+      {
+        "key": "ctrl+y",
+        "mac": "cmd+y",
+        "command": "editor.action.clipboardCutAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly && !editorHasSelection"
+      },
+      {
+        "key": "ctrl+k ctrl+/",
+        "mac": "cmd+k cmd+/",
+        "command": "editor.action.commentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+/",
+        "mac": "cmd+/",
+        "command": "editor.action.commentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "command": "editor.action.deleteLines",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e ctrl+v",
+        "mac": "cmd+e cmd+v",
+        "command": "editor.action.duplicateSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e v",
+        "mac": "cmd+e v",
+        "command": "editor.action.duplicateSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+d",
+        "mac": "cmd+d",
+        "command": "editor.action.duplicateSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k ctrl+e",
+        "mac": "cmd+k cmd+e",
+        "command": "editor.action.fixAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k ctrl+d",
+        "mac": "cmd+k cmd+d",
+        "command": "editor.action.formatDocument",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e ctrl+d",
+        "mac": "cmd+e cmd+d",
+        "command": "editor.action.formatDocument",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e d",
+        "mac": "cmd+e d",
+        "command": "editor.action.formatDocument",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k ctrl+f",
+        "mac": "cmd+k cmd+f",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e ctrl+f",
+        "mac": "cmd+e cmd+f",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e f",
+        "mac": "cmd+e f",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "command": "editor.action.formatSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "alt+.",
+        "command": "editor.action.inlineSuggest.showNext",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && inlineSuggestionVisible && editorTextFocus"
+      },
+      {
+        "key": "alt+,",
+        "command": "editor.action.inlineSuggest.showPrevious",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && inlineSuggestionVisible && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "command": "editor.action.insertLineAfter",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "command": "editor.action.insertLineBefore",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+alt+l shift+alt+j",
+        "command": "editor.action.joinLines",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+]",
+        "mac": "cmd+]",
+        "command": "editor.action.jumpToBracket",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+m",
+        "command": "editor.action.jumpToBracket",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus && !isMac"
+      },
+      {
+        "key": "alt+pagedown",
+        "command": "editor.action.marker.next",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus && !isMac"
+      },
+      {
+        "key": "alt+pageup",
+        "command": "editor.action.marker.prev",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus && !isMac"
+      },
+      {
+        "key": "alt+down",
+        "command": "editor.action.moveLinesDownAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly && !isMac"
+      },
+      {
+        "key": "shift+alt+t",
+        "command": "editor.action.moveLinesDownAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "alt+up",
+        "command": "editor.action.moveLinesUpAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly && !isMac"
+      },
+      {
+        "key": "shift+alt+/",
+        "command": "editor.action.moveSelectionToNextFindMatch",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "ctrl+alt+f8",
+        "mac": "cmd+alt+f8",
+        "command": "editor.action.nextCommentThreadAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "alt+f12",
+        "command": "editor.action.peekDefinition",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasDefinitionProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+alt+f8",
+        "mac": "cmd+shift+alt+f8",
+        "command": "editor.action.previousCommentThreadAction",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "ctrl+\\ ctrl+.",
+        "mac": "cmd+\\ cmd+.",
+        "command": "editor.action.quickFix",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "alt+enter",
+        "command": "editor.action.quickFix",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^visual/ && editorHasCodeActionsProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+k ctrl+u",
+        "mac": "cmd+k cmd+u",
+        "command": "editor.action.removeCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e ctrl+u",
+        "mac": "cmd+e cmd+u",
+        "command": "editor.action.removeCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+e u",
+        "mac": "cmd+e u",
+        "command": "editor.action.removeCommentLine",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "f2",
+        "command": "editor.action.rename",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasRenameProvider && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "shift+alt+;",
+        "command": "editor.action.selectHighlights",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+]",
+        "mac": "cmd+shift+]",
+        "command": "editor.action.selectToBracket",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "command": "editor.action.selectToBracket",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+i",
+        "mac": "cmd+k cmd+i",
+        "command": "editor.action.showHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "command": "editor.action.showHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k i",
+        "mac": "cmd+k i",
+        "command": "editor.action.showHover",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w",
+        "mac": "cmd+w",
+        "command": "editor.action.smartSelect.expand",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+=",
+        "command": "editor.action.smartSelect.expand",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+-",
+        "command": "editor.action.smartSelect.shrink",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && editorTextFocus"
+      },
+      {
+        "key": "shift+alt+l shift+alt+s",
+        "command": "editor.action.sortLinesAscending",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "insert",
+        "command": "editor.action.toggleOvertypeInsertMode",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+r ctrl+w",
+        "mac": "cmd+r cmd+w",
+        "command": "editor.action.toggleRenderWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+e ctrl+s",
+        "mac": "cmd+e cmd+s",
+        "command": "editor.action.toggleRenderWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "command": "editor.action.toggleRenderWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+e s",
+        "mac": "cmd+e s",
+        "command": "editor.action.toggleRenderWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+e ctrl+w",
+        "mac": "cmd+e cmd+w",
+        "command": "editor.action.toggleWordWrap",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualCpp2)$/ && editorTextFocus"
+      },
+      {
+        "key": "ctrl+e w",
+        "mac": "cmd+e w",
+        "command": "editor.action.toggleWordWrap",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+u",
+        "mac": "cmd+u",
+        "command": "editor.action.transformToLowercase",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+u",
+        "mac": "cmd+shift+u",
+        "command": "editor.action.transformToUppercase",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && !editorReadonly"
+      },
+      {
+        "key": "ctrl+shift+space",
+        "mac": "cmd+shift+space",
+        "command": "editor.action.triggerParameterHints",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasSignatureHelpProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k ctrl+p",
+        "mac": "cmd+k cmd+p",
+        "command": "editor.action.triggerParameterHints",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasSignatureHelpProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k p",
+        "mac": "cmd+k p",
+        "command": "editor.action.triggerParameterHints",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasSignatureHelpProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "command": "editor.action.triggerParameterHints",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorHasSignatureHelpProvider && editorTextFocus"
+      },
+      {
+        "key": "ctrl+j",
+        "mac": "cmd+j",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "alt+right",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible && !isMac"
+      },
+      {
+        "key": "ctrl+space",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible && !isMac"
+      },
+      {
+        "key": "ctrl+k ctrl+l",
+        "mac": "cmd+k cmd+l",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "ctrl+k l",
+        "mac": "cmd+k l",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "ctrl+k ctrl+w",
+        "mac": "cmd+k cmd+w",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "ctrl+k w",
+        "mac": "cmd+k w",
+        "command": "editor.action.triggerSuggest",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorHasCompletionItemProvider && editorTextFocus && !editorReadonly && !suggestWidgetVisible"
+      },
+      {
+        "key": "ctrl+shift+down",
+        "command": "editor.action.wordHighlight.next",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && hasWordHighlights && !isMac"
+      },
+      {
+        "key": "ctrl+shift+up",
+        "command": "editor.action.wordHighlight.prev",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6|visualCpp2)$/ && editorTextFocus && hasWordHighlights && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+h",
+        "command": "editor.createFoldingRangeFromSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+s",
+        "command": "editor.fold",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+o",
+        "command": "editor.foldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+a",
+        "command": "editor.foldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m o",
+        "command": "editor.foldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "shift+alt+[",
+        "command": "editor.gotoParentFold",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus && foldingEnabled"
+      },
+      {
+        "key": "ctrl+m ctrl+u",
+        "command": "editor.removeManualFoldingRanges",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "alt+home",
+        "command": "editor.showSupertypes",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorHasTypeHierarchyProvider && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+m",
+        "command": "editor.toggleFold",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m m",
+        "command": "editor.toggleFold",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+e",
+        "command": "editor.unfold",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+l",
+        "command": "editor.unfoldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+p",
+        "command": "editor.unfoldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m ctrl+x",
+        "command": "editor.unfoldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCpp6|visualCSharp2005|visualBasic6)$/ && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m l",
+        "command": "editor.unfoldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "ctrl+m p",
+        "command": "editor.unfoldAll",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCSharp2005' && editorTextFocus && foldingEnabled && !isMac"
+      },
+      {
+        "key": "shift+alt+e",
+        "command": "expandLineSelection",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorTextFocus"
+      },
+      {
+        "key": "alt+/",
+        "command": "inlineChat.start",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && editorFocus && !editorReadonly && editorTextFocus"
+      },
+      {
+        "key": "ctrl+\\ ctrl+space",
+        "command": "toggle.diff.ignoreTrimWhitespace",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && isInDiffEditor && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+\\ ctrl+tab",
+        "command": "workbench.action.compareEditor.focusOtherSide",
+        "when": "config.unbroken.keyboardShortcuts.scheme =~ /^(visualStudio|visualCSharp2005)$/ && isInDiffEditor && editorTextFocus && !isMac"
+      },
+      {
+        "key": "ctrl+f8",
+        "mac": "cmd+f8",
+        "command": "workbench.action.compareEditor.nextChange",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && isInDiffEditor && editorTextFocus"
+      },
+      {
+        "key": "ctrl+shift+f8",
+        "mac": "cmd+shift+f8",
+        "command": "workbench.action.compareEditor.previousChange",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualStudio' && isInDiffEditor && editorTextFocus"
+      },
+      {
+        "key": "ctrl+numpad_multiply",
+        "mac": "cmd+numpad_multiply",
+        "command": "workbench.action.navigateBack",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+w ctrl+e",
+        "mac": "cmd+w cmd+e",
+        "command": "workbench.actions.view.problems",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "command": "workbench.debug.action.focusCallStackView",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualCpp2' && editorTextFocus"
+      },
+      {
+        "key": "ctrl+r",
+        "mac": "cmd+r",
+        "command": "workbench.view.explorer",
+        "when": "config.unbroken.keyboardShortcuts.scheme == 'visualBasic6' && editorTextFocus"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode.git"
+  }
+}

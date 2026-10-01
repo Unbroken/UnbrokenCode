@@ -4,7 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 /* Editor intrusive screen layout */
-.editor-intrusive-screen {
+.editor-intrusive-screen,
+.keyboard-shortcuts-screen {
 	display: flex;
 	flex-direction: column;
 	max-width: 1400px;
@@ -14,21 +15,24 @@
 }
 
 /* Side-by-side layout for options and preview */
-.editor-intrusive-content-split {
+.editor-intrusive-content-split,
+.keyboard-shortcuts-content-split {
 	display: flex;
 	gap: 24px;
 	flex: 1;
 	min-height: 0;
 }
 
-.editor-intrusive-options-column {
+.editor-intrusive-options-column,
+.keyboard-shortcuts-options-column {
 	flex: 1;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.editor-intrusive-preview-column {
+.editor-intrusive-preview-column,
+.keyboard-shortcuts-preview-column {
 	flex: 1;
 	min-width: 0;
 	display: flex;
@@ -42,19 +46,22 @@
 	gap: 12px;
 }
 
-.editor-intrusive-label {
+.editor-intrusive-label,
+.keyboard-shortcuts-label {
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--vscode-foreground);
 }
 
-.editor-intrusive-options {
+.editor-intrusive-options,
+.keyboard-shortcuts-options {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
 }
 
-.editor-intrusive-option {
+.editor-intrusive-option,
+.keyboard-shortcuts-option {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
@@ -67,17 +74,20 @@
 	position: relative;
 }
 
-.editor-intrusive-option:hover {
+.editor-intrusive-option:hover,
+.keyboard-shortcuts-option:hover {
 	background-color: var(--vscode-list-hoverBackground);
 	border-color: var(--vscode-focusBorder);
 }
 
-.editor-intrusive-option:has(input:checked) {
+.editor-intrusive-option:has(input:checked),
+.keyboard-shortcuts-option:has(input:checked) {
 	background-color: var(--vscode-list-activeSelectionBackground);
 	border-color: var(--vscode-focusBorder);
 }
 
-.editor-intrusive-radio {
+.editor-intrusive-radio,
+.keyboard-shortcuts-radio {
 	position: absolute;
 	opacity: 0;
 	width: 0;
@@ -85,21 +95,24 @@
 	margin: 0;
 }
 
-.editor-intrusive-option-text {
+.editor-intrusive-option-text,
+.keyboard-shortcuts-option-text {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	width: 100%;
 }
 
-.editor-intrusive-option-label {
+.editor-intrusive-option-label,
+.keyboard-shortcuts-option-label {
 	font-size: 16px;
 	font-weight: 600;
 	color: var(--vscode-foreground);
 	user-select: none;
 }
 
-.editor-intrusive-option-description {
+.editor-intrusive-option-description,
+.keyboard-shortcuts-option-description {
 	font-size: 13px;
 	color: var(--vscode-descriptionForeground);
 	user-select: none;
@@ -156,7 +169,8 @@
 	height: 100%;
 }
 
-.editor-intrusive-preview-header {
+.editor-intrusive-preview-header,
+.keyboard-shortcuts-preview-header {
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--vscode-foreground);

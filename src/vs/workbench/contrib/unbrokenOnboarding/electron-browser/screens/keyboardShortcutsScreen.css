@@ -1,0 +1,100 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Layout, option and preview header styles are shared with the editor intrusive screen */
+
+.keyboard-shortcuts-options-column {
+	gap: 12px;
+	overflow-y: auto;
+}
+
+.keyboard-shortcuts-preview-column {
+	gap: 12px;
+	overflow-y: auto;
+}
+
+.keyboard-shortcuts-more-button {
+	align-self: flex-start;
+	padding: 4px 0;
+	border: none;
+	background: none;
+	color: var(--vscode-textLink-foreground);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.keyboard-shortcuts-more-button:hover {
+	color: var(--vscode-textLink-activeForeground);
+	text-decoration: underline;
+}
+
+.keyboard-shortcuts-more-button:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: 2px;
+}
+
+/* Preview table */
+.keyboard-shortcuts-preview-table {
+	width: 100%;
+	border-collapse: collapse;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 4px;
+	background-color: var(--vscode-editor-background);
+	font-size: 13px;
+}
+
+.keyboard-shortcuts-preview-table th,
+.keyboard-shortcuts-preview-table td {
+	padding: 6px 12px;
+	text-align: left;
+	border-bottom: 1px solid var(--vscode-editorWidget-border);
+}
+
+.keyboard-shortcuts-preview-table th {
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.keyboard-shortcuts-preview-table tr:last-child td {
+	border-bottom: none;
+}
+
+.keyboard-shortcuts-action {
+	color: var(--vscode-foreground);
+}
+
+.keyboard-shortcuts-key.changed {
+	background-color: var(--vscode-list-activeSelectionBackground);
+}
+
+.keyboard-shortcuts-unbound {
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+.keyboard-shortcuts-notes p {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--vscode-descriptionForeground);
+}
+
+/* Notice about the marketplace Visual Studio Keymap extension */
+.keyboard-shortcuts-notice {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding: 12px 16px;
+	border: 1px solid var(--vscode-inputValidation-warningBorder);
+	border-radius: 4px;
+	background-color: var(--vscode-inputValidation-warningBackground);
+}
+
+.keyboard-shortcuts-notice-message {
+	flex: 1;
+	font-size: 13px;
+	color: var(--vscode-foreground);
+}

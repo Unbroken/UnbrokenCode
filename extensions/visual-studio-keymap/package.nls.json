@@ -1,0 +1,20 @@
+{
+	"displayName": "Visual Studio Keymap",
+	"description": "Visual Studio keyboard mapping schemes, enabled with the unbroken.keyboardShortcuts.scheme setting.",
+	"configuration.title": "Keyboard Shortcuts",
+	"scheme.description": "Additional keyboard shortcuts to use on top of the VS Code defaults. The Visual Studio schemes match the keyboard mapping schemes in Visual Studio's **Tools > Options > Environment > Keyboard**. On macOS, Ctrl is replaced by Cmd, except for shortcuts that macOS reserves.",
+	"scheme.vscode.label": "VS Code",
+	"scheme.vscode.description": "VS Code default keyboard shortcuts.",
+	"scheme.visualStudio.label": "Visual Studio (General)",
+	"scheme.visualStudio.description": "Visual Studio Default scheme, used with the General development settings.",
+	"scheme.visualCpp6.label": "Visual Studio (C++)",
+	"scheme.visualCpp6.description": "Visual Studio Visual C++ 6 scheme, used with the Visual C++ development settings.",
+	"scheme.visualCSharp2005.label": "Visual Studio (C#)",
+	"scheme.visualCSharp2005.description": "Visual Studio Visual C# 2005 scheme, used with the Visual C# development settings.",
+	"scheme.visualBasic6.label": "Visual Studio (Visual Basic)",
+	"scheme.visualBasic6.description": "Visual Studio Visual Basic 6 scheme, used with the Visual Basic development settings.",
+	"scheme.visualCpp2.label": "Visual C++ 2",
+	"scheme.visualCpp2.description": "Visual Studio Visual C++ 2 scheme (legacy).",
+	"scheme.visualStudio6.label": "Visual Studio 6",
+	"scheme.visualStudio6.description": "Visual Studio Visual Studio 6 scheme (legacy)."
+}

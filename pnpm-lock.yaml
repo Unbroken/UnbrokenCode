@@ -1210,6 +1210,12 @@ importers:
         specifier: ^4.1.8
         version: 4.1.11(@types/node@24.13.2)(vite@8.0.16(@types/node@24.13.2)(tsx@4.22.4)(yaml@2.8.3))
 
+  extensions/cpptools-compat:
+    devDependencies:
+      '@types/node':
+        specifier: 24.x
+        version: 24.13.2
+
   extensions/css-language-features:
     dependencies:
       vscode-languageclient:

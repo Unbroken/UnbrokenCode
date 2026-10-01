@@ -55,6 +55,12 @@ importers:
         specifier: ^10.8.2
         version: 10.8.2
 
+  cpptools-compat:
+    devDependencies:
+      '@types/node':
+        specifier: 24.x
+        version: 24.12.4
+
   css-language-features:
     dependencies:
       vscode-languageclient:

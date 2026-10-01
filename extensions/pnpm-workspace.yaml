@@ -2,6 +2,7 @@
 # bundles them, so the layout of this root's node_modules doesn't ship (see build/lib/extensions.ts).
 packages:
   - configuration-editing
+  - cpptools-compat
   - css-language-features
   - css-language-features/server
   - debug-auto-launch

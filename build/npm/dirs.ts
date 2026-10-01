@@ -58,6 +58,7 @@ export const separateRootMembers: Readonly<Record<string, readonly string[]>> = 
 	'remote': ['remote/web'],
 	'extensions': [
 		'extensions/configuration-editing',
+		'extensions/cpptools-compat',
 		'extensions/css-language-features',
 		'extensions/css-language-features/server',
 		'extensions/debug-auto-launch',

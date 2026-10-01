@@ -1,0 +1,987 @@
+{
+  "name": "cpptools-compat",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "10.0.0",
+  "publisher": "vscode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onTaskType:cppbuild",
+    "onDebugResolve:cppdbg",
+    "onDebugResolve:cppvsdbg"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "main": "./out/extension",
+  "scripts": {
+    "compile": "gulp compile-extension:cpptools-compat",
+    "watch": "gulp watch-extension:cpptools-compat"
+  },
+  "devDependencies": {
+    "@types/node": "24.x"
+  },
+  "contributes": {
+    "taskDefinitions": [
+      {
+        "type": "cppbuild",
+        "required": [
+          "command",
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "%cppbuild.label.description%"
+          },
+          "command": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "value",
+                  "quoting"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "description": "%cppbuild.args.value.description%"
+                  },
+                  "quoting": {
+                    "type": "string",
+                    "enum": [
+                      "escape",
+                      "strong",
+                      "weak"
+                    ],
+                    "enumDescriptions": [
+                      "%cppbuild.args.quoting.escape.description%",
+                      "%cppbuild.args.quoting.strong.description%",
+                      "%cppbuild.args.quoting.weak.description%"
+                    ],
+                    "default": "strong",
+                    "description": "%cppbuild.args.quoting.description%"
+                  }
+                }
+              }
+            ],
+            "description": "%cppbuild.command.description%"
+          },
+          "args": {
+            "type": "array",
+            "description": "%cppbuild.args.description%",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "value",
+                    "quoting"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "description": "%cppbuild.args.value.description%"
+                    },
+                    "quoting": {
+                      "type": "string",
+                      "enum": [
+                        "escape",
+                        "strong",
+                        "weak"
+                      ],
+                      "enumDescriptions": [
+                        "%cppbuild.args.quoting.escape.description%",
+                        "%cppbuild.args.quoting.strong.description%",
+                        "%cppbuild.args.quoting.weak.description%"
+                      ],
+                      "default": "strong",
+                      "description": "%cppbuild.args.quoting.description%"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "options": {
+            "type": "object",
+            "description": "%cppbuild.options.description%",
+            "properties": {
+              "cwd": {
+                "type": "string",
+                "description": "%cppbuild.options.cwd.description%"
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "%cppbuild.options.env.description%"
+              },
+              "shell": {
+                "type": "string",
+                "description": "%cppbuild.options.shell.description%"
+              }
+            }
+          },
+          "problemMatcher": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "%cppbuild.problemMatcher.description%"
+          },
+          "detail": {
+            "type": "string",
+            "description": "%cppbuild.detail.description%"
+          },
+          "windows": {
+            "type": "object",
+            "description": "%cppbuild.windows.description%",
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "value",
+                      "quoting"
+                    ],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "description": "%cppbuild.args.value.description%"
+                      },
+                      "quoting": {
+                        "type": "string",
+                        "enum": [
+                          "escape",
+                          "strong",
+                          "weak"
+                        ],
+                        "enumDescriptions": [
+                          "%cppbuild.args.quoting.escape.description%",
+                          "%cppbuild.args.quoting.strong.description%",
+                          "%cppbuild.args.quoting.weak.description%"
+                        ],
+                        "default": "strong",
+                        "description": "%cppbuild.args.quoting.description%"
+                      }
+                    }
+                  }
+                ],
+                "description": "%cppbuild.command.description%"
+              },
+              "args": {
+                "type": "array",
+                "description": "%cppbuild.args.description%",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "value",
+                        "quoting"
+                      ],
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "description": "%cppbuild.args.value.description%"
+                        },
+                        "quoting": {
+                          "type": "string",
+                          "enum": [
+                            "escape",
+                            "strong",
+                            "weak"
+                          ],
+                          "enumDescriptions": [
+                            "%cppbuild.args.quoting.escape.description%",
+                            "%cppbuild.args.quoting.strong.description%",
+                            "%cppbuild.args.quoting.weak.description%"
+                          ],
+                          "default": "strong",
+                          "description": "%cppbuild.args.quoting.description%"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "options": {
+                "type": "object",
+                "description": "%cppbuild.options.description%",
+                "properties": {
+                  "cwd": {
+                    "type": "string",
+                    "description": "%cppbuild.options.cwd.description%"
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "%cppbuild.options.env.description%"
+                  },
+                  "shell": {
+                    "type": "string",
+                    "description": "%cppbuild.options.shell.description%"
+                  }
+                }
+              },
+              "problemMatcher": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "%cppbuild.problemMatcher.description%"
+              }
+            }
+          },
+          "linux": {
+            "type": "object",
+            "description": "%cppbuild.linux.description%",
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "value",
+                      "quoting"
+                    ],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "description": "%cppbuild.args.value.description%"
+                      },
+                      "quoting": {
+                        "type": "string",
+                        "enum": [
+                          "escape",
+                          "strong",
+                          "weak"
+                        ],
+                        "enumDescriptions": [
+                          "%cppbuild.args.quoting.escape.description%",
+                          "%cppbuild.args.quoting.strong.description%",
+                          "%cppbuild.args.quoting.weak.description%"
+                        ],
+                        "default": "strong",
+                        "description": "%cppbuild.args.quoting.description%"
+                      }
+                    }
+                  }
+                ],
+                "description": "%cppbuild.command.description%"
+              },
+              "args": {
+                "type": "array",
+                "description": "%cppbuild.args.description%",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "value",
+                        "quoting"
+                      ],
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "description": "%cppbuild.args.value.description%"
+                        },
+                        "quoting": {
+                          "type": "string",
+                          "enum": [
+                            "escape",
+                            "strong",
+                            "weak"
+                          ],
+                          "enumDescriptions": [
+                            "%cppbuild.args.quoting.escape.description%",
+                            "%cppbuild.args.quoting.strong.description%",
+                            "%cppbuild.args.quoting.weak.description%"
+                          ],
+                          "default": "strong",
+                          "description": "%cppbuild.args.quoting.description%"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "options": {
+                "type": "object",
+                "description": "%cppbuild.options.description%",
+                "properties": {
+                  "cwd": {
+                    "type": "string",
+                    "description": "%cppbuild.options.cwd.description%"
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "%cppbuild.options.env.description%"
+                  },
+                  "shell": {
+                    "type": "string",
+                    "description": "%cppbuild.options.shell.description%"
+                  }
+                }
+              },
+              "problemMatcher": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "%cppbuild.problemMatcher.description%"
+              }
+            }
+          },
+          "osx": {
+            "type": "object",
+            "description": "%cppbuild.osx.description%",
+            "properties": {
+              "command": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "value",
+                      "quoting"
+                    ],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "description": "%cppbuild.args.value.description%"
+                      },
+                      "quoting": {
+                        "type": "string",
+                        "enum": [
+                          "escape",
+                          "strong",
+                          "weak"
+                        ],
+                        "enumDescriptions": [
+                          "%cppbuild.args.quoting.escape.description%",
+                          "%cppbuild.args.quoting.strong.description%",
+                          "%cppbuild.args.quoting.weak.description%"
+                        ],
+                        "default": "strong",
+                        "description": "%cppbuild.args.quoting.description%"
+                      }
+                    }
+                  }
+                ],
+                "description": "%cppbuild.command.description%"
+              },
+              "args": {
+                "type": "array",
+                "description": "%cppbuild.args.description%",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "value",
+                        "quoting"
+                      ],
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "description": "%cppbuild.args.value.description%"
+                        },
+                        "quoting": {
+                          "type": "string",
+                          "enum": [
+                            "escape",
+                            "strong",
+                            "weak"
+                          ],
+                          "enumDescriptions": [
+                            "%cppbuild.args.quoting.escape.description%",
+                            "%cppbuild.args.quoting.strong.description%",
+                            "%cppbuild.args.quoting.weak.description%"
+                          ],
+                          "default": "strong",
+                          "description": "%cppbuild.args.quoting.description%"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "options": {
+                "type": "object",
+                "description": "%cppbuild.options.description%",
+                "properties": {
+                  "cwd": {
+                    "type": "string",
+                    "description": "%cppbuild.options.cwd.description%"
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "%cppbuild.options.env.description%"
+                  },
+                  "shell": {
+                    "type": "string",
+                    "description": "%cppbuild.options.shell.description%"
+                  }
+                }
+              },
+              "problemMatcher": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "%cppbuild.problemMatcher.description%"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "gcc",
+        "label": "%problemMatcher.gcc.label%",
+        "source": "gcc",
+        "owner": "cpptools",
+        "fileLocation": [
+          "autoDetect",
+          "${cwd}"
+        ],
+        "pattern": {
+          "regexp": "^(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      {
+        "name": "iar",
+        "label": "%problemMatcher.iar.label%",
+        "source": "iar",
+        "owner": "cpptools",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\"(.*?)\",(\\d+)\\s+(?:[Ff]atal\\s+)?([Ww]arning|[Ee]rror)\\[(\\w+\\d+)\\]:\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "code": 4,
+          "message": 5
+        }
+      },
+      {
+        "name": "armcc5",
+        "label": "%problemMatcher.armcc5.label%",
+        "source": "armcc5",
+        "owner": "cpptools",
+        "fileLocation": [
+          "autoDetect",
+          "${cwd}"
+        ],
+        "pattern": {
+          "regexp": "^\"(.*)?\",\\s+line\\s+(\\d+):\\s+([Ee]rror|[Ww]arning):\\s+#(.*?):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "code": 4,
+          "message": 5
+        }
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "cppdbg",
+        "hiddenWhen": "cpptoolsCompat.hideDebuggers",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "%cppdbg.program.description%"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "%cppdbg.args.description%"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "%cppdbg.cwd.description%"
+              },
+              "environment": {
+                "type": "array",
+                "description": "%cppdbg.environment.description%",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "envFile": {
+                "type": "string",
+                "description": "%cppdbg.envFile.description%"
+              },
+              "stopAtEntry": {
+                "type": "boolean",
+                "description": "%cppdbg.stopAtEntry.description%"
+              },
+              "externalConsole": {
+                "type": "boolean",
+                "description": "%cppdbg.externalConsole.description%"
+              },
+              "sourceFileMap": {
+                "type": "object",
+                "description": "%cppdbg.sourceFileMap.description%"
+              },
+              "setupCommands": {
+                "type": "array",
+                "description": "%cppdbg.setupCommands.description%",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "ignoreFailures": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "MIMode": {
+                "type": "string",
+                "enum": [
+                  "gdb",
+                  "lldb"
+                ],
+                "description": "%cppdbg.MIMode.description%"
+              },
+              "miDebuggerServerAddress": {
+                "type": "string",
+                "description": "%cppdbg.miDebuggerServerAddress.description%"
+              },
+              "coreDumpPath": {
+                "type": "string",
+                "description": "%cppdbg.coreDumpPath.description%"
+              },
+              "additionalSOLibSearchPath": {
+                "type": "string",
+                "description": "%cppdbg.additionalSOLibSearchPath.description%"
+              },
+              "targetArchitecture": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "postRemoteConnectCommands": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "customLaunchSetupCommands": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "launchCompleteCommand": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "visualizerFile": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "svdPath": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "showDisplayString": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "miDebuggerPath": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "miDebuggerArgs": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "useExtendedRemote": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "serverStarted": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "filterStdout": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "filterStderr": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "serverLaunchTimeout": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "avoidWindowsConsoleRedirection": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "logging": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "symbolLoadInfo": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "stopAtConnect": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "hardwareBreakpoints": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "unknownBreakpointHandling": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "debuginfod": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "variables": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "ignoreRunWithoutDebuggingWarnings": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "pipeTransport": {
+                "description": "%cppdbg.rejected.description%"
+              },
+              "debugServerPath": {
+                "description": "%cppdbg.rejected.description%"
+              },
+              "debugServerArgs": {
+                "description": "%cppdbg.rejected.description%"
+              },
+              "deploySteps": {
+                "description": "%cppdbg.rejected.description%"
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "%cppdbg.program.description%"
+              },
+              "processId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "default": "${command:pickProcess}",
+                "description": "%cppdbg.processId.description%"
+              },
+              "sourceFileMap": {
+                "type": "object",
+                "description": "%cppdbg.sourceFileMap.description%"
+              },
+              "setupCommands": {
+                "type": "array",
+                "description": "%cppdbg.setupCommands.description%",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "ignoreFailures": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "MIMode": {
+                "type": "string",
+                "enum": [
+                  "gdb",
+                  "lldb"
+                ],
+                "description": "%cppdbg.MIMode.description%"
+              },
+              "miDebuggerServerAddress": {
+                "type": "string",
+                "description": "%cppdbg.miDebuggerServerAddress.description%"
+              },
+              "additionalSOLibSearchPath": {
+                "type": "string",
+                "description": "%cppdbg.additionalSOLibSearchPath.description%"
+              },
+              "targetArchitecture": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "visualizerFile": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "showDisplayString": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "miDebuggerPath": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "miDebuggerArgs": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "useExtendedRemote": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "processFilter": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "filterStdout": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "filterStderr": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "debuginfod": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "logging": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "symbolLoadInfo": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "variables": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "pipeTransport": {
+                "description": "%cppdbg.rejected.description%"
+              },
+              "deploySteps": {
+                "description": "%cppdbg.rejected.description%"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "cppvsdbg",
+        "hiddenWhen": "cpptoolsCompat.hideDebuggers",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "%cppdbg.program.description%"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "%cppdbg.args.description%"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "%cppdbg.cwd.description%"
+              },
+              "environment": {
+                "type": "array",
+                "description": "%cppdbg.environment.description%",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "envFile": {
+                "type": "string",
+                "description": "%cppdbg.envFile.description%"
+              },
+              "stopAtEntry": {
+                "type": "boolean",
+                "description": "%cppdbg.stopAtEntry.description%"
+              },
+              "externalConsole": {
+                "type": "boolean",
+                "description": "%cppdbg.externalConsole.description%"
+              },
+              "console": {
+                "type": "string",
+                "enum": [
+                  "internalConsole",
+                  "integratedTerminal",
+                  "externalTerminal",
+                  "newExternalWindow"
+                ],
+                "description": "%cppvsdbg.console.description%"
+              },
+              "sourceFileMap": {
+                "type": "object",
+                "description": "%cppdbg.sourceFileMap.description%"
+              },
+              "dumpPath": {
+                "type": "string",
+                "description": "%cppvsdbg.dumpPath.description%"
+              },
+              "symbolSearchPath": {
+                "type": "string",
+                "description": "%cppvsdbg.symbolSearchPath.description%"
+              },
+              "visualizerFile": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "enableDebugHeap": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "logging": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "requireExactSource": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "symbolOptions": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "ignoreRunWithoutDebuggingWarnings": {
+                "description": "%cppdbg.ignored.description%"
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "%cppdbg.program.description%"
+              },
+              "processId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "default": "${command:pickProcess}",
+                "description": "%cppdbg.processId.description%"
+              },
+              "sourceFileMap": {
+                "type": "object",
+                "description": "%cppdbg.sourceFileMap.description%"
+              },
+              "symbolSearchPath": {
+                "type": "string",
+                "description": "%cppvsdbg.symbolSearchPath.description%"
+              },
+              "visualizerFile": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "logging": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "requireExactSource": {
+                "description": "%cppdbg.ignored.description%"
+              },
+              "symbolOptions": {
+                "description": "%cppdbg.ignored.description%"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode.git"
+  }
+}

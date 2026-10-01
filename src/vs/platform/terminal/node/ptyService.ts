@@ -12,6 +12,7 @@ import { IProcessEnvironment, isWindows, OperatingSystem, OS } from '../../../ba
 import { URI } from '../../../base/common/uri.js';
 import { getSystemShell } from '../../../base/node/shell.js';
 import { ILogService, LogLevel } from '../../log/common/log.js';
+import { ISerializableEnvironmentVariableCollections } from '../common/environmentVariable.js';
 import { RequestStore } from '../common/requestStore.js';
 import { IProcessDataEvent, IProcessReadyEvent, IPtyService, IRawTerminalInstanceLayoutInfo, IReconnectConstants, IShellLaunchConfig, ITerminalInstanceLayoutInfoById, ITerminalLaunchError, ITerminalsLayoutInfo, ITerminalTabLayoutInfoById, TerminalIcon, IProcessProperty, TitleEventSource, ProcessPropertyType, IProcessPropertyMap, IFixedTerminalDimensions, IPersistentTerminalProcessLaunchConfig, ICrossVersionSerializedTerminalState, ISerializedTerminalState, ITerminalProcessOptions, IPtyHostLatencyMeasurement, type IPtyServiceContribution, PosixShellType, ITerminalLaunchResult } from '../common/terminal.js';
 import { TerminalDataBufferer } from '../common/terminalDataBuffering.js';
@@ -51,6 +52,21 @@ function sanitizeArgsForLogging(fnName: string, args: unknown[]): unknown[] {
 		}
 		if (args[6] && typeof args[6] === 'object') {
 			sanitizedArgs[6] = sanitizeEnvForLogging(args[6] as IProcessEnvironment);
+		}
+		return sanitizedArgs;
+	}
+	// updateRevivedProcessEnvironment signature: id, env (index 1), environmentVariableCollections (index 2)
+	if (fnName === 'updateRevivedProcessEnvironment' && args.length > 1) {
+		const sanitizedArgs = [...args];
+		if (args[1] && typeof args[1] === 'object') {
+			sanitizedArgs[1] = sanitizeEnvForLogging(args[1] as IProcessEnvironment);
+		}
+		if (Array.isArray(args[2])) {
+			sanitizedArgs[2] = (args[2] as ISerializableEnvironmentVariableCollections).map(([extension, collection, descriptions]) => [
+				extension,
+				collection.map(([variable, mutator]) => [variable, { ...mutator, value: sanitizeEnvForLogging({ [mutator.variable]: mutator.value })?.[mutator.variable] }]),
+				descriptions
+			]);
 		}
 		return sanitizedArgs;
 	}
@@ -308,6 +324,16 @@ export class PtyService extends Disposable implements IPtyService {
 		const oldId = this._getRevivingProcessId(workspaceId, terminal.id);
 		this._revivedPtyIdMap.set(oldId, { newId, state: terminal });
 		this._logService.info(`Revived process, old id ${oldId} -> new id ${newId}`);
+	}
+
+	@traceRpc
+	async replayRevivedProcess(id: number): Promise<void> {
+		return this._throwIfNoPty(id).replayRevivedBuffer();
+	}
+
+	@traceRpc
+	async updateRevivedProcessEnvironment(id: number, env: IProcessEnvironment, environmentVariableCollections: ISerializableEnvironmentVariableCollections | undefined): Promise<void> {
+		this._throwIfNoPty(id).updateRevivedEnvironment(env, environmentVariableCollections);
 	}
 
 	@traceRpc
@@ -731,6 +757,7 @@ class PersistentTerminalProcess extends Disposable {
 	private _titleSource: TitleEventSource = TitleEventSource.Process;
 	private _serializer: ITerminalSerializer;
 	private _wasRevived: boolean;
+	private _hasReplayedRevivedBuffer = false;
 	private _fixedDimensions: IFixedTerminalDimensions | undefined;
 
 	get pid(): number { return this._pid; }
@@ -842,6 +869,10 @@ class PersistentTerminalProcess extends Disposable {
 	}
 
 	async detach(forcePersist?: boolean): Promise<void> {
+		// A replay of the revived buffer was for the detaching renderer only, the next renderer to
+		// attach needs its own replay when it starts the process
+		this._hasReplayedRevivedBuffer = false;
+
 		// Keep the process around if it was indicated to persist and it has had some iteraction or
 		// was replayed
 		if (this.shouldPersistTerminal && (this._interactionState.value !== InteractionState.None || forcePersist)) {
@@ -865,6 +896,32 @@ class PersistentTerminalProcess extends Disposable {
 		}
 	}
 
+	/**
+	 * Replays the restored buffer of a revived process that has not been started yet, see
+	 * {@link IPtyService.replayRevivedProcess}.
+	 */
+	async replayRevivedBuffer(): Promise<void> {
+		if (!this._wasRevived || this._isStarted || this._hasReplayedRevivedBuffer) {
+			return;
+		}
+		this._hasReplayedRevivedBuffer = true;
+		return this.triggerReplay();
+	}
+
+	/**
+	 * Replaces the environment of a revived process that has not been started yet, see
+	 * {@link IPtyService.updateRevivedProcessEnvironment}.
+	 */
+	updateRevivedEnvironment(env: IProcessEnvironment, environmentVariableCollections: ISerializableEnvironmentVariableCollections | undefined): void {
+		if (!this._wasRevived || this._isStarted) {
+			this._logService.warn(`Persistent process "${this._persistentProcessId}": Cannot update the environment of a process that is not a revived process waiting to start`);
+			return;
+		}
+		this._logService.info(`Persistent process "${this._persistentProcessId}": Updating environment before start`);
+		this.processLaunchOptions.env = env;
+		this._terminalProcess.updateEnvironment(env, environmentVariableCollections);
+	}
+
 	async start(): Promise<ITerminalLaunchError | ITerminalLaunchResult | undefined> {
 		if (!this._isStarted) {
 			const result = await this._terminalProcess.start();
@@ -880,7 +937,10 @@ class PersistentTerminalProcess extends Disposable {
 			// causes conhost to hang when no response is received from the terminal (which wouldn't
 			// be attached yet). https://github.com/microsoft/terminal/issues/11213
 			if (this._wasRevived) {
-				this.triggerReplay();
+				// The revived buffer may have been replayed already while the start was deferred
+				if (!this._hasReplayedRevivedBuffer) {
+					this.triggerReplay();
+				}
 			} else {
 				this._onPersistentProcessReady.fire();
 			}
@@ -1046,6 +1106,10 @@ export class XtermSerializer implements ITerminalSerializer {
 	private readonly _xterm: XtermTerminal;
 	private readonly _shellIntegrationAddon: ShellIntegrationAddon;
 	private _unicodeAddon?: XtermUnicode11Addon;
+	/**
+	 * Resolves when the revive buffer has been written, writes are processed asynchronously.
+	 */
+	private readonly _whenReviveBufferWritten: Promise<void>;
 
 	constructor(
 		cols: number,
@@ -1063,9 +1127,9 @@ export class XtermSerializer implements ITerminalSerializer {
 			scrollback,
 			allowProposedApi: true
 		});
-		if (reviveBufferWithRestoreMessage) {
-			this._xterm.writeln(reviveBufferWithRestoreMessage);
-		}
+		this._whenReviveBufferWritten = reviveBufferWithRestoreMessage
+			? new Promise<void>(resolve => this._xterm.writeln(reviveBufferWithRestoreMessage, resolve))
+			: Promise.resolve();
 		this.setUnicodeVersion(unicodeVersion);
 		this._shellIntegrationAddon = new ShellIntegrationAddon(shellIntegrationNonce, true, undefined, undefined, logService);
 		this._xterm.loadAddon(this._shellIntegrationAddon);
@@ -1093,6 +1157,7 @@ export class XtermSerializer implements ITerminalSerializer {
 	}
 
 	async generateReplayEvent(normalBufferOnly?: boolean, restoreToLastReviveBuffer?: boolean): Promise<IPtyHostProcessReplayEvent> {
+		await this._whenReviveBufferWritten;
 		const serialize = new (await this._getSerializeConstructor());
 		this._xterm.loadAddon(serialize);
 		const options: ISerializeOptions = {

@@ -176,6 +176,7 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 
 	private _keyboardMapper: IKeyboardMapper;
 	private _cachedResolver: KeybindingResolver | null;
+	private _settingContextKeys: { readonly resolver: KeybindingResolver; readonly keys: Set<string> } | undefined;
 	private userKeybindings: UserKeybindings;
 	private isComposingGlobalContextKey: IContextKey<boolean>;
 	private _keybindingHoldMode: DeferredPromise<void> | null;
@@ -238,6 +239,14 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 
 		this.updateKeybindingsJsonSchema();
 		this._register(extensionService.onDidRegisterExtensions(() => this.updateKeybindingsJsonSchema()));
+
+		// Keybindings that require settings values are only reported while the settings have those values
+		// (see KeybindingResolver.lookupPrimaryKeybinding), so consumers such as menus need to update
+		this._register(contextKeyService.onDidChangeContext(e => {
+			if (e.affectsSome(this._getSettingContextKeys())) {
+				this._onDidUpdateKeybindings.fire();
+			}
+		}));
 
 		this._register(Event.runAndSubscribe(dom.onDidRegisterWindow, ({ window, disposables }) => disposables.add(this._registerKeyListeners(window)), { window: mainWindow, disposables: this._store }));
 
@@ -432,6 +441,25 @@ export class WorkbenchKeybindingService extends AbstractKeybindingService {
 
 	public override customKeybindingsCount(): number {
 		return this.userKeybindings.keybindings.length;
+	}
+
+	/**
+	 * The `config.` context keys used in the when clauses of keybindings.
+	 */
+	private _getSettingContextKeys(): Set<string> {
+		const resolver = this._getResolver();
+		if (this._settingContextKeys?.resolver !== resolver) {
+			const keys = new Set<string>();
+			for (const item of resolver.getKeybindings()) {
+				for (const key of item.when?.keys() ?? []) {
+					if (key.startsWith('config.')) {
+						keys.add(key);
+					}
+				}
+			}
+			this._settingContextKeys = { resolver, keys };
+		}
+		return this._settingContextKeys.keys;
 	}
 
 	private updateResolver(): void {

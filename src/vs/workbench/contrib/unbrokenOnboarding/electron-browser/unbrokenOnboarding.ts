@@ -18,9 +18,11 @@ import { FontSizeScreen } from './screens/fontSizeScreen.js';
 import { ColorDesignScreen } from './screens/colorDesignScreen.js';
 import { ColorThemeScreen } from './screens/colorThemeScreen.js';
 import { EditorIntrusiveScreen } from './screens/editorIntrusiveScreen.js';
+import { KeyboardShortcutsScreen } from './screens/keyboardShortcutsScreen.js';
 import { ShellCommandScreen } from './screens/shellCommandScreen.js';
 import './unbrokenOnboarding.css';
 import './screens/editorIntrusiveScreen.css';
+import './screens/keyboardShortcutsScreen.css';
 import { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 import { IEditorOptions } from '../../../../platform/editor/common/editor.js';
 
@@ -61,6 +63,11 @@ export class UnbrokenOnboardingPage extends EditorPane {
 		const colorThemeScreen = this.instantiationService.createInstance(ColorThemeScreen);
 		this.screens.push(colorThemeScreen);
 		this._register(colorThemeScreen);
+
+		// Add keyboard shortcuts screen
+		const keyboardShortcutsScreen = this.instantiationService.createInstance(KeyboardShortcutsScreen);
+		this.screens.push(keyboardShortcutsScreen);
+		this._register(keyboardShortcutsScreen);
 
 		// Add editor intrusiveness screen
 		const editorIntrusiveScreen = this.instantiationService.createInstance(EditorIntrusiveScreen);

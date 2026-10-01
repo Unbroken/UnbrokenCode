@@ -1,0 +1,18 @@
+{
+	"registrations": [
+		{
+			"component": {
+				"type": "git",
+				"git": {
+					"name": "microsoft/vscode-vs-keybindings",
+					"repositoryUrl": "https://github.com/microsoft/vscode-vs-keybindings",
+					"commitHash": "725f558889474246568360eb1682420cc6fe01b8"
+				}
+			},
+			"license": "MIT",
+			"description": "Visual Studio to VS Code command mappings in build/commandMap.json are based on the Visual Studio Keymap extension.",
+			"version": "0.2.1"
+		}
+	],
+	"version": 1
+}

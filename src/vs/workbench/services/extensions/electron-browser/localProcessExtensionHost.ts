@@ -234,7 +234,7 @@ export class NativeLocalProcessExtensionHost extends Disposable implements IExte
 		const env = objects.mixin(processEnv, {
 			VSCODE_ESM_ENTRYPOINT: 'vs/workbench/api/node/extensionHostProcess',
 			VSCODE_HANDLES_UNCAUGHT_ERRORS: true,
-			VSCODE_EXT_CHILD_PROCESS_PRIORITY: this._configurationService.getValue<string>('extensions.childProcessPriority') || 'utility',
+			VSCODE_EXT_CHILD_PROCESS_PRIORITY: this._configurationService.getValue<string>('extensions.childProcessPriority') || 'default',
 			VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES: JSON.stringify(this._configurationService.getValue('extensions.childProcessPriorityRules') || []),
 		});
 

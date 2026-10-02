@@ -100,15 +100,13 @@ const args = minimist(process.argv.slice(2), {
 //   Windows: os.setPriority(pid, level) post-spawn (sets priority class)
 //   Linux:   os.setPriority(pid, level) post-spawn (sets nice value)
 (function () {
-	const defaultPriority = process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY'] || 'utility';
-	if (defaultPriority === 'default' && !process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES']) {
-		return; // nothing to do
-	}
-
+	const defaultPriority = process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY'] || 'default';
 	const priorityRules: { commandLine: string; priority: string }[] = (() => {
 		try { return JSON.parse(process.env['VSCODE_EXT_CHILD_PROCESS_PRIORITY_RULES'] || '[]'); }
 		catch { return []; }
 	})();
+	// The wrappers are installed also when everything runs at the default priority, as extensions can still ask for
+	// a lower one with __priority. Without one, a process is spawned unchanged.
 
 	const validPriorities = new Set(['default', 'utility', 'background']);
 

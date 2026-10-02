@@ -373,8 +373,8 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 					localize('extensions.childProcessPriority.utility', "Lower priority. macOS: QOS_CLASS_UTILITY (deprioritized, all cores). Windows: BELOW_NORMAL_PRIORITY_CLASS. Linux: nice 10."),
 					localize('extensions.childProcessPriority.background', "Lowest priority. macOS: QOS_CLASS_BACKGROUND (efficiency cores only on Apple Silicon). Windows: IDLE_PRIORITY_CLASS. Linux: nice 19."),
 				],
-				default: 'utility',
-				markdownDescription: localize('extensions.childProcessPriority', "CPU scheduling priority for child processes spawned by extensions (language servers, etc.). When set to `utility`, builds and other normal-priority work will be preferred by the scheduler."),
+				default: 'default',
+				markdownDescription: localize('extensions.childProcessPriority', "CPU scheduling priority for child processes spawned by extensions (language servers, etc.), and for everything they start in turn, such as programs launched for debugging. When set to `utility`, builds and other normal-priority work will be preferred by the scheduler."),
 				scope: ConfigurationScope.APPLICATION,
 			},
 			'extensions.childProcessPriorityRules': {

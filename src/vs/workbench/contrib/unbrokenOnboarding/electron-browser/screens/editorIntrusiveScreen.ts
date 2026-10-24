@@ -17,6 +17,9 @@ import { Checkbox } from '../../../../../base/browser/ui/toggle/toggle.js';
 import { asCssVariable } from '../../../../../platform/theme/common/colorRegistry.js';
 import { checkboxBackground, checkboxBorder, checkboxForeground } from '../../../../../platform/theme/common/colors/inputColors.js';
 
+/** Contributed by the GitHub Copilot extension, so it exists only while Copilot is enabled and allowed to run. */
+const COPILOT_ENABLE_SETTING = 'github.copilot.enable';
+
 type SettingPrimitive = string | boolean | number | undefined;
 type SettingValue = SettingPrimitive | Record<string, SettingPrimitive | Record<string, SettingPrimitive>>;
 
@@ -406,7 +409,7 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 
 		// Add Copilot setting if AI suggestions are disabled
 		if (!this.aiSuggestionsEnabled) {
-			filteredSettings['github.copilot.enable'] = {
+			filteredSettings[COPILOT_ENABLE_SETTING] = {
 				'*': false,
 				'plaintext': false,
 				'markdown': false,
@@ -441,23 +444,16 @@ export class EditorIntrusiveScreen extends BaseOnboardingScreen {
 			}
 		}
 
-		// Apply or clear Copilot setting based on checkbox state
-		if (!this.aiSuggestionsEnabled) {
-			// Disable Copilot for all file types
-			promises.push(
-				this.configurationService.updateValue('github.copilot.enable', {
-					'*': false,
-					'plaintext': false,
-					'markdown': false,
-					'scminput': false
-				}, ConfigurationTarget.USER)
-			);
-		} else {
-			// Clear the Copilot setting (remove it from user settings)
-			promises.push(
-				this.configurationService.updateValue('github.copilot.enable', undefined, ConfigurationTarget.USER)
-			);
-		}
+		// Disable Copilot for all file types, or clear the Copilot setting (remove it from user settings)
+		const copilotEnable = this.aiSuggestionsEnabled ? undefined : {
+			'*': false,
+			'plaintext': false,
+			'markdown': false,
+			'scminput': false
+		};
+		// Copilot registers the setting only while it is enabled and allowed to run, so write it regardless. It applies
+		// once Copilot runs.
+		promises.push(this.configurationService.updateValue(COPILOT_ENABLE_SETTING, copilotEnable, {}, ConfigurationTarget.USER, { allowUnregisteredKey: true }));
 
 		await Promise.all(promises);
 	}

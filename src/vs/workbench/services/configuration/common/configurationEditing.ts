@@ -170,13 +170,13 @@ export class ConfigurationEditing {
 				if (options.donotNotifyError) {
 					throw error;
 				}
-				await this.onError(error, operation, options.scopes);
+				await this.onError(error, operation, { scopes: options.scopes, allowUnregisteredKey: options.allowUnregisteredKey });
 			}
 		});
 	}
 
 	private async doWriteConfiguration(operation: IConfigurationEditOperation, options: IConfigurationEditingOptions): Promise<void> {
-		await this.validate(operation.target, operation, !options.handleDirtyFile, options.scopes || {});
+		await this.validate(operation.target, operation, !options.handleDirtyFile, options.scopes || {}, !!options.allowUnregisteredKey);
 		const resource: URI = operation.resource!;
 		const reference = await this.resolveModelReference(resource);
 		try {
@@ -261,16 +261,19 @@ export class ConfigurationEditing {
 		return { insertSpaces, tabSize, eol };
 	}
 
-	private async onError(error: ConfigurationEditingError, operation: IConfigurationEditOperation, scopes: IConfigurationUpdateOverrides | undefined): Promise<void> {
+	/**
+	 * @param retryOptions The options of the write that are kept when it's retried
+	 */
+	private async onError(error: ConfigurationEditingError, operation: IConfigurationEditOperation, retryOptions: Pick<IConfigurationEditingOptions, 'scopes' | 'allowUnregisteredKey'>): Promise<void> {
 		switch (error.code) {
 			case ConfigurationEditingErrorCode.ERROR_INVALID_CONFIGURATION:
 				this.onInvalidConfigurationError(error, operation);
 				break;
 			case ConfigurationEditingErrorCode.ERROR_CONFIGURATION_FILE_DIRTY:
-				this.onConfigurationFileDirtyError(error, operation, scopes);
+				this.onConfigurationFileDirtyError(error, operation, retryOptions);
 				break;
 			case ConfigurationEditingErrorCode.ERROR_CONFIGURATION_FILE_MODIFIED_SINCE:
-				return this.doWriteConfiguration(operation, { scopes, handleDirtyFile: 'revert' });
+				return this.doWriteConfiguration(operation, { ...retryOptions, handleDirtyFile: 'revert' });
 			default:
 				this.notificationService.error(error.message);
 		}
@@ -298,7 +301,7 @@ export class ConfigurationEditing {
 		}
 	}
 
-	private onConfigurationFileDirtyError(error: ConfigurationEditingError, operation: IConfigurationEditOperation, scopes: IConfigurationUpdateOverrides | undefined): void {
+	private onConfigurationFileDirtyError(error: ConfigurationEditingError, operation: IConfigurationEditOperation, retryOptions: Pick<IConfigurationEditingOptions, 'scopes' | 'allowUnregisteredKey'>): void {
 		const openStandAloneConfigurationActionLabel = operation.workspaceStandAloneConfigurationKey === TASKS_CONFIGURATION_KEY ? nls.localize('openTasksConfiguration', "Open Tasks Configuration")
 			: operation.workspaceStandAloneConfigurationKey === LAUNCH_CONFIGURATION_KEY ? nls.localize('openLaunchConfiguration', "Open Launch Configuration")
 				: null;
@@ -308,7 +311,7 @@ export class ConfigurationEditing {
 					label: nls.localize('saveAndRetry', "Save and Retry"),
 					run: () => {
 						const key = operation.key ? `${operation.workspaceStandAloneConfigurationKey}.${operation.key}` : operation.workspaceStandAloneConfigurationKey!;
-						this.writeConfiguration(operation.target, { key, value: operation.value }, { handleDirtyFile: 'save', scopes });
+						this.writeConfiguration(operation.target, { key, value: operation.value }, { ...retryOptions, handleDirtyFile: 'save' });
 					}
 				},
 				{
@@ -320,7 +323,7 @@ export class ConfigurationEditing {
 			this.notificationService.prompt(Severity.Error, error.message,
 				[{
 					label: nls.localize('saveAndRetry', "Save and Retry"),
-					run: () => this.writeConfiguration(operation.target, { key: operation.key, value: operation.value }, { handleDirtyFile: 'save', scopes })
+					run: () => this.writeConfiguration(operation.target, { key: operation.key, value: operation.value }, { ...retryOptions, handleDirtyFile: 'save' })
 				},
 				{
 					label: nls.localize('open', "Open Settings"),
@@ -507,7 +510,7 @@ export class ConfigurationEditing {
 		return parseErrors.length > 0;
 	}
 
-	private async validate(target: EditableConfigurationTarget, operation: IConfigurationEditOperation, checkDirty: boolean, overrides: IConfigurationUpdateOverrides): Promise<void> {
+	private async validate(target: EditableConfigurationTarget, operation: IConfigurationEditOperation, checkDirty: boolean, overrides: IConfigurationUpdateOverrides, allowUnregisteredKey: boolean): Promise<void> {
 
 		if (this.configurationService.inspect(operation.key).policyValue !== undefined) {
 			throw this.toConfigurationEditingError(ConfigurationEditingErrorCode.ERROR_POLICY_CONFIGURATION, target, operation);
@@ -521,8 +524,9 @@ export class ConfigurationEditing {
 		 * 	- the key is standalone configuration (eg: tasks, debug)
 		 * 	- the key is an override identifier
 		 * 	- the operation is to delete the key
+		 * 	- the caller allows unregistered keys
 		 */
-		if (!operation.workspaceStandAloneConfigurationKey) {
+		if (!operation.workspaceStandAloneConfigurationKey && !allowUnregisteredKey) {
 			const validKeys = this.configurationService.keys().default;
 			if (validKeys.indexOf(operation.key) < 0 && !OVERRIDE_PROPERTY_REGEX.test(operation.key) && operation.value !== undefined) {
 				throw this.toConfigurationEditingError(ConfigurationEditingErrorCode.ERROR_UNKNOWN_KEY, target, operation);

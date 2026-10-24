@@ -77,11 +77,11 @@ export class ColorDesignScreen extends BaseOnboardingScreen {
 			{
 				title: 'Visual Cues Accelerate Code Comprehension',
 				description: 'Color-coded naming conventions provide instant visual cues that help your brain parse code structure faster. Variables, functions, and types are ' +
-					'distinguished by consistent color patterns that reveal their scope, lifetime, and purpose at a glance..'
+					'distinguished by consistent color patterns that reveal their scope, lifetime, and purpose at a glance.'
 			},
 			{
 				title: 'Dark Background Enhances Color Discrimination',
-				description: 'The black background maximizes color contrast, allowing your brain to process subtle color distinctions more effectively. Against darkness, the spectrum' +
+				description: 'The black background maximizes color contrast, allowing your brain to process subtle color distinctions more effectively. Against darkness, the spectrum ' +
 					'from red (globals), through gold (members), to green (functions) and blue/purple (types) becomes instantly recognizable.'
 			},
 			{

@@ -347,8 +347,8 @@ if (import.meta.main) {
 					process.exit(1);
 				}
 
-				const some = out.split(/\r?\n/).filter((l) =>
-					!!l &&
+				const staged = out.split(/\r?\n/).filter((l) => !!l);
+				const some = staged.filter((l) =>
 					l !== 'extensions/malterlib' &&
 					l !== 'extensions/vscode-clangd' &&
 					l !== 'extensions/codelldb' &&
@@ -392,6 +392,9 @@ if (import.meta.main) {
 							console.error(err);
 							process.exit(1);
 						});
+				} else if (staged.length > 0) {
+					// Only submodules are staged, which have no files of their own here to check
+					console.log('Only submodules are staged, nothing to check.');
 				} else {
 					console.error('No staged files found. Pass file paths to check unstaged files.');
 					process.exit(1);

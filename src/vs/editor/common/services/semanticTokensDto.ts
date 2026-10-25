@@ -10,12 +10,14 @@ export interface IFullSemanticTokensDto {
 	id: number;
 	type: 'full';
 	data: Uint32Array;
+	approximate?: boolean;
 }
 
 export interface IDeltaSemanticTokensDto {
 	id: number;
 	type: 'delta';
 	deltas: { start: number; deleteCount: number; data?: Uint32Array }[];
+	approximate?: boolean;
 }
 
 export type ISemanticTokensDto = IFullSemanticTokensDto | IDeltaSemanticTokensDto;
@@ -23,6 +25,12 @@ export type ISemanticTokensDto = IFullSemanticTokensDto | IDeltaSemanticTokensDt
 const enum EncodedSemanticTokensType {
 	Full = 1,
 	Delta = 2
+}
+
+// Flags encoded with the type
+const enum EncodedSemanticTokensFlags {
+	TypeMask = 0xff,
+	Approximate = 0x100
 }
 
 function reverseEndianness(arr: Uint8Array): void {
@@ -68,12 +76,13 @@ export function encodeSemanticTokensDto(semanticTokens: ISemanticTokensDto): VSB
 	const dest = new Uint32Array(encodeSemanticTokensDtoSize(semanticTokens));
 	let offset = 0;
 	dest[offset++] = semanticTokens.id;
+	const flags = semanticTokens.approximate ? EncodedSemanticTokensFlags.Approximate : 0;
 	if (semanticTokens.type === 'full') {
-		dest[offset++] = EncodedSemanticTokensType.Full;
+		dest[offset++] = EncodedSemanticTokensType.Full | flags;
 		dest[offset++] = semanticTokens.data.length;
 		dest.set(semanticTokens.data, offset); offset += semanticTokens.data.length;
 	} else {
-		dest[offset++] = EncodedSemanticTokensType.Delta;
+		dest[offset++] = EncodedSemanticTokensType.Delta | flags;
 		dest[offset++] = semanticTokens.deltas.length;
 		for (const delta of semanticTokens.deltas) {
 			dest[offset++] = delta.start;
@@ -122,14 +131,17 @@ export function decodeSemanticTokensDto(_buff: VSBuffer): ISemanticTokensDto {
 	const src = fromLittleEndianBuffer(_buff);
 	let offset = 0;
 	const id = src[offset++];
-	const type: EncodedSemanticTokensType = src[offset++];
+	const typeAndFlags = src[offset++];
+	const type: EncodedSemanticTokensType = typeAndFlags & EncodedSemanticTokensFlags.TypeMask;
+	const approximate = (typeAndFlags & EncodedSemanticTokensFlags.Approximate) !== 0;
 	if (type === EncodedSemanticTokensType.Full) {
 		const length = src[offset++];
 		const data = src.subarray(offset, offset + length); offset += length;
 		return {
 			id: id,
 			type: 'full',
-			data: data
+			data: data,
+			approximate
 		};
 	}
 	const deltaCount = src[offset++];
@@ -147,6 +159,7 @@ export function decodeSemanticTokensDto(_buff: VSBuffer): ISemanticTokensDto {
 	return {
 		id: id,
 		type: 'delta',
-		deltas: deltas
+		deltas: deltas,
+		approximate
 	};
 }

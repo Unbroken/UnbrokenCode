@@ -2491,6 +2491,7 @@ export class SemanticTokensBuilder {
 export class SemanticTokens {
 	readonly resultId: string | undefined;
 	readonly data: Uint32Array;
+	approximate?: boolean;
 
 	constructor(data: Uint32Array, resultId?: string) {
 		this.resultId = resultId;
@@ -2513,6 +2514,7 @@ export class SemanticTokensEdit {
 export class SemanticTokensEdits {
 	readonly resultId: string | undefined;
 	readonly edits: SemanticTokensEdit[];
+	approximate?: boolean;
 
 	constructor(edits: SemanticTokensEdit[], resultId?: string) {
 		this.resultId = resultId;

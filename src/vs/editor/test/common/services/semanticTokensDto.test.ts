@@ -63,6 +63,16 @@ suite('SemanticTokensDto', () => {
 		}
 	}
 
+	test('approximate encoding', () => {
+		const approximate = (value: ISemanticTokensDto) => decodeSemanticTokensDto(encodeSemanticTokensDto(value)).approximate;
+		assert.deepStrictEqual([
+			approximate({ id: 1, type: 'full', data: new Uint32Array([1, 2, 3, 4, 5]), approximate: true }),
+			approximate({ id: 2, type: 'full', data: new Uint32Array([1, 2, 3, 4, 5]) }),
+			approximate({ id: 3, type: 'delta', deltas: [{ start: 0, deleteCount: 5 }], approximate: true }),
+			approximate({ id: 4, type: 'delta', deltas: [{ start: 0, deleteCount: 5 }] }),
+		], [true, false, true, false]);
+	});
+
 	test('full encoding', () => {
 		testRoundTrip({
 			id: 12,

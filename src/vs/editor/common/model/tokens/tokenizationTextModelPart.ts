@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { equals } from '../../../../base/common/arrays.js';
 import { CharCode } from '../../../../base/common/charCode.js';
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
@@ -30,6 +31,11 @@ import { derived, IObservable, ISettableObservable, observableValue } from '../.
 
 export class TokenizationTextModelPart extends TextModelPart implements ITokenizationTextModelPart {
 	private readonly _semanticTokens: SparseTokensStore;
+	// The layers of the providers that merge their tokens with the others', and the stores of those set in the order
+	// they merge
+	private readonly _mergedSemanticTokens = new Map<number, SparseTokensStore>();
+	private _mergedSemanticTokensOrder: readonly number[] = [];
+	private _orderedMergedSemanticTokens: SparseTokensStore[] = [];
 
 	private readonly _onDidChangeLanguage: Emitter<IModelLanguageChangedEvent>;
 	public readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent>;
@@ -133,6 +139,9 @@ export class TokenizationTextModelPart extends TextModelPart implements ITokeniz
 	public handleDidChangeContent(e: IModelContentChangedEvent): void {
 		if (e.isFlush) {
 			this._semanticTokens.flush();
+			for (const merged of this._mergedSemanticTokens.values()) {
+				merged.flush();
+			}
 		} else if (!e.isEolChange) { // We don't have to do anything on an EOL change
 			for (const c of e.changes) {
 				const [eolCount, firstLineLength, lastLineLength] = countEOL(c.text);
@@ -144,6 +153,9 @@ export class TokenizationTextModelPart extends TextModelPart implements ITokeniz
 					lastLineLength,
 					c.text.length > 0 ? c.text.charCodeAt(0) : CharCode.Null
 				);
+				for (const merged of this._mergedSemanticTokens.values()) {
+					merged.acceptEdit(c.range, eolCount, firstLineLength, lastLineLength, c.text.length > 0 ? c.text.charCodeAt(0) : CharCode.Null);
+				}
 			}
 		}
 
@@ -159,8 +171,12 @@ export class TokenizationTextModelPart extends TextModelPart implements ITokeniz
 	 */
 	public getLineTokens(lineNumber: number): LineTokens {
 		this.validateLineNumber(lineNumber);
-		const syntacticTokens = this.tokens.get().getLineTokens(lineNumber);
-		return this._semanticTokens.addSparseTokens(lineNumber, syntacticTokens);
+		let tokens = this.tokens.get().getLineTokens(lineNumber);
+		// Each layer only replaces the styles it sets, like the semantic tokens do over the syntactic ones
+		for (const merged of this._orderedMergedSemanticTokens) {
+			tokens = merged.addSparseTokens(lineNumber, tokens);
+		}
+		return this._semanticTokens.addSparseTokens(lineNumber, tokens);
 	}
 
 	private _emitModelTokensChangedEvent(e: IModelTokensChangedEvent): void {
@@ -227,6 +243,49 @@ export class TokenizationTextModelPart extends TextModelPart implements ITokeniz
 
 		this._emitModelTokensChangedEvent({
 			semanticTokensApplied: tokens !== null,
+			ranges: [{ fromLineNumber: 1, toLineNumber: this._textModel.getLineCount() }],
+		});
+	}
+
+	public setMergedSemanticTokens(layer: number, tokens: SparseMultilineTokens[] | null): void {
+		let merged = this._mergedSemanticTokens.get(layer);
+		if (tokens) {
+			if (!merged) {
+				merged = new SparseTokensStore(this._languageService.languageIdCodec);
+				this._mergedSemanticTokens.set(layer, merged);
+				this._updateOrderedMergedSemanticTokens();
+			}
+			merged.set(tokens, true, this._textModel);
+		} else if (merged) {
+			this._mergedSemanticTokens.delete(layer);
+			this._updateOrderedMergedSemanticTokens();
+		} else {
+			return;
+		}
+
+		this._emitAllSemanticTokensChangedEvent(tokens !== null);
+	}
+
+	public setMergedSemanticTokensOrder(layers: readonly number[]): void {
+		this._mergedSemanticTokensOrder = layers;
+		const previous = this._orderedMergedSemanticTokens;
+		this._updateOrderedMergedSemanticTokens();
+		if (!equals(previous, this._orderedMergedSemanticTokens)) {
+			this._emitAllSemanticTokensChangedEvent(true);
+		}
+	}
+
+	private _updateOrderedMergedSemanticTokens(): void {
+		const ordered = new Set(this._mergedSemanticTokensOrder.filter(layer => this._mergedSemanticTokens.has(layer)));
+		for (const layer of this._mergedSemanticTokens.keys()) {
+			ordered.add(layer);
+		}
+		this._orderedMergedSemanticTokens = [...ordered].map(layer => this._mergedSemanticTokens.get(layer)!);
+	}
+
+	private _emitAllSemanticTokensChangedEvent(semanticTokensApplied: boolean): void {
+		this._emitModelTokensChangedEvent({
+			semanticTokensApplied,
 			ranges: [{ fromLineNumber: 1, toLineNumber: this._textModel.getLineCount() }],
 		});
 	}

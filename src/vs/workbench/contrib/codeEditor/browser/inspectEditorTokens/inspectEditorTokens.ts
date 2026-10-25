@@ -29,6 +29,7 @@ import { ColorThemeData, TokenStyleDefinitions, TokenStyleDefinition, TextMateTh
 import { SemanticTokenRule, TokenStyleData, TokenStyle } from '../../../../../platform/theme/common/tokenClassificationRegistry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { SEMANTIC_HIGHLIGHTING_SETTING_ID, IEditorSemanticHighlightingOptions } from '../../../../../editor/contrib/semanticTokens/common/semanticTokensConfig.js';
+import { getMergedDocumentSemanticTokensProviders } from '../../../../../editor/contrib/semanticTokens/common/getSemanticTokens.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import type * as TreeSitter from '@vscode/tree-sitter-wasm';
@@ -273,9 +274,10 @@ class InspectEditorTokensWidget extends Disposable implements IContentWidget {
 		return this._themeService.getColorTheme().semanticHighlighting;
 	}
 
-	private _compute(grammar: IGrammar | null, semanticTokens: SemanticTokensResult | null, tree: TreeSitterTree | undefined, position: Position) {
+	private _compute(grammar: IGrammar | null, semanticTokens: SemanticTokensResult[] | null, tree: TreeSitterTree | undefined, position: Position) {
 		const textMateTokenInfo = grammar && this._getTokensAtPosition(grammar, position);
-		const semanticTokenInfo = semanticTokens && this._getSemanticTokenAtPosition(semanticTokens, position);
+		const semanticTokenInfos = (semanticTokens ?? []).map(layer => this._getSemanticTokenAtPosition(layer, position)).filter(info => info !== null);
+		const semanticTokenInfo = semanticTokenInfos.length ? this._mergeSemanticTokenInfos(semanticTokenInfos) : null;
 		const treeSitterTokenInfo = tree && this._getTreeSitterTokenAtPosition(tree, position);
 		if (!textMateTokenInfo && !semanticTokenInfo && !treeSitterTokenInfo) {
 			dom.reset(this._domNode, 'No grammar or semantic tokens available.');
@@ -572,19 +574,39 @@ class InspectEditorTokensWidget extends Disposable implements IContentWidget {
 		return token && token.data;
 	}
 
-	private async _computeSemanticTokens(position: Position): Promise<SemanticTokensResult | null> {
+	/**
+	 * The semantic tokens of the document, in layers from the top one down, like the editor merges them
+	 */
+	private async _computeSemanticTokens(position: Position): Promise<SemanticTokensResult[] | null> {
 		if (!this._isSemanticColoringEnabled()) {
 			return null;
 		}
 
 		const tokenProviders = this._languageFeaturesService.documentSemanticTokensProvider.ordered(this._model);
-		if (tokenProviders.length) {
-			const provider = tokenProviders[0];
+		// The layers of the providers that merge theirs with the others' are below the chosen provider's tokens, bottom
+		// first, and approximate tokens are below the others, so a layer only shows where the layers above have no token
+		const unmergedProvider = tokenProviders.find(provider => !provider.merge);
+		const mergedProviders = getMergedDocumentSemanticTokensProviders(this._languageFeaturesService.documentSemanticTokensProvider, this._model);
+		const candidates = [...mergedProviders, ...(unmergedProvider ? [unmergedProvider] : [])];
+		const results = await Promise.all(candidates.map(async provider => {
 			const tokens = await Promise.resolve(provider.provideDocumentSemanticTokens(this._model, null, this._currentRequestCancellationTokenSource.token));
-			if (this.isSemanticTokens(tokens)) {
-				return { tokens, legend: provider.getLegend() };
+			return this.isSemanticTokens(tokens) ? { tokens, legend: provider.getLegend() } : null;
+		}));
+		const layers = results.filter((result): result is SemanticTokensResult => result !== null);
+		const topFirst = [...layers.filter(layer => layer.tokens.approximate), ...layers.filter(layer => !layer.tokens.approximate)].reverse();
+		// The tokens of a range provider show on top while the chosen provider has no document tokens, or only
+		// approximate ones
+		const unmergedLayer = unmergedProvider ? results[results.length - 1] : null;
+		if (!unmergedLayer || unmergedLayer.tokens.approximate) {
+			const rangeLayer = await this._computeRangeSemanticTokens(position);
+			if (rangeLayer) {
+				topFirst.unshift(rangeLayer);
 			}
 		}
+		return topFirst.length ? topFirst : null;
+	}
+
+	private async _computeRangeSemanticTokens(position: Position): Promise<SemanticTokensResult | null> {
 		const rangeTokenProviders = this._languageFeaturesService.documentRangeSemanticTokensProvider.ordered(this._model);
 		if (rangeTokenProviders.length) {
 			const provider = rangeTokenProviders[0];
@@ -596,6 +618,44 @@ class InspectEditorTokensWidget extends Disposable implements IContentWidget {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The token of the topmost layer, with the styles of the tokens of the layers below that it doesn't set, like the
+	 * editor merges them
+	 */
+	private _mergeSemanticTokenInfos(topFirst: ISemanticTokenInfo[]): ISemanticTokenInfo {
+		const [top] = topFirst;
+		if (topFirst.length === 1) {
+			return top;
+		}
+		const styling = <K extends 'foreground' | 'bold' | 'italic' | 'underline' | 'strikethrough'>(property: K) =>
+			topFirst.find(info => info.metadata?.[property] !== undefined);
+		const foreground = styling('foreground');
+		const bold = styling('bold');
+		const italic = styling('italic');
+		const underline = styling('underline');
+		const strikethrough = styling('strikethrough');
+		return {
+			...top,
+			metadata: topFirst.some(info => info.metadata) ? {
+				languageId: undefined,
+				tokenType: StandardTokenType.Other,
+				foreground: foreground?.metadata?.foreground,
+				bold: bold?.metadata?.bold,
+				italic: italic?.metadata?.italic,
+				underline: underline?.metadata?.underline,
+				strikethrough: strikethrough?.metadata?.strikethrough,
+				background: undefined
+			} : undefined,
+			definitions: {
+				foreground: foreground?.definitions.foreground,
+				bold: bold?.definitions.bold,
+				italic: italic?.definitions.italic,
+				underline: underline?.definitions.underline,
+				strikethrough: strikethrough?.definitions.strikethrough
+			}
+		};
 	}
 
 	private _getSemanticTokenAtPosition(semanticTokens: SemanticTokensResult, pos: Position): ISemanticTokenInfo | null {

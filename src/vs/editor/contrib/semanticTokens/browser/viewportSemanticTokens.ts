@@ -73,10 +73,24 @@ export class ViewportSemanticTokensContribution extends Disposable implements IE
 			}
 		};
 
+		// The tokens of range providers show while the document tokens aren't complete, so the viewport is tokenized
+		// again when they stop being complete, such as when a provider's document tokens become approximate
+		const hasCompleteDocumentTokens = () => this._editor.getModel()?.tokenization.hasCompleteSemanticTokens() ?? false;
+		let hadCompleteDocumentTokens = hasCompleteDocumentTokens();
+		this._register(this._editor.onDidChangeModelTokens(() => {
+			const hasComplete = hasCompleteDocumentTokens();
+			if (hadCompleteDocumentTokens && !hasComplete) {
+				this._cancelAll();
+				scheduleTokenizeViewport();
+			}
+			hadCompleteDocumentTokens = hasComplete;
+		}));
+
 		this._register(this._editor.onDidScrollChange(() => {
 			scheduleTokenizeViewport();
 		}));
 		this._register(this._editor.onDidChangeModel(() => {
+			hadCompleteDocumentTokens = hasCompleteDocumentTokens();
 			bindRangeProvidersChangeListeners();
 			this._cancelAll();
 			scheduleTokenizeViewport();

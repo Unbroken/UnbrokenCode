@@ -33,17 +33,41 @@ export class DocumentSemanticTokensResult {
 	) { }
 }
 
-export function hasDocumentSemanticTokensProvider(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel): boolean {
-	return registry.has(model);
+/**
+ * Whether a provider that doesn't merge its tokens with the others' is registered for the model, or with
+ * `mergedProvider`, whether that one is
+ */
+export function hasDocumentSemanticTokensProvider(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel, mergedProvider?: DocumentSemanticTokensProvider): boolean {
+	return registry.all(model).some(provider => mergedProvider ? provider === mergedProvider : !provider.merge);
+}
+
+/**
+ * The providers that merge their tokens with the others' are requested on their own, so they don't take part in
+ * choosing the provider whose tokens show
+ */
+function getUnmergedProviderGroups(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel): DocumentSemanticTokensProvider[][] {
+	return registry.orderedGroups(model).map(group => group.filter(provider => !provider.merge)).filter(group => group.length > 0);
+}
+
+/**
+ * The providers that merge their tokens with the others', in the order their layers merge, bottom first: by priority,
+ * then by how well their selectors match the model and how recently they were registered, like the provider whose
+ * tokens show is chosen
+ */
+export function getMergedDocumentSemanticTokensProviders(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel): DocumentSemanticTokensProvider[] {
+	return registry.all(model)
+		.filter(provider => provider.merge)
+		.reverse()
+		.sort((a, b) => (a.merge!.priority ?? 0) - (b.merge!.priority ?? 0));
 }
 
 function getDocumentSemanticTokensProviders(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel): DocumentSemanticTokensProvider[] {
-	const groups = registry.orderedGroups(model);
+	const groups = getUnmergedProviderGroups(registry, model);
 	return (groups.length > 0 ? groups[0] : []);
 }
 
-export async function getDocumentSemanticTokens(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel, lastProvider: DocumentSemanticTokensProvider | null, lastResultId: string | null, token: CancellationToken): Promise<DocumentSemanticTokensResult | null> {
-	const providers = getDocumentSemanticTokensProviders(registry, model);
+export async function getDocumentSemanticTokens(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel, lastProvider: DocumentSemanticTokensProvider | null, lastResultId: string | null, token: CancellationToken, mergedProvider?: DocumentSemanticTokensProvider): Promise<DocumentSemanticTokensResult | null> {
+	const providers = mergedProvider ? [mergedProvider] : getDocumentSemanticTokensProviders(registry, model);
 
 	// Get tokens from all providers at the same time.
 	const results = await Promise.all(providers.map(async (provider) => {
@@ -83,7 +107,7 @@ export async function getDocumentSemanticTokens(registry: LanguageFeatureRegistr
 }
 
 function _getDocumentSemanticTokensProviderHighestGroup(registry: LanguageFeatureRegistry<DocumentSemanticTokensProvider>, model: ITextModel): DocumentSemanticTokensProvider[] | null {
-	const result = registry.orderedGroups(model);
+	const result = getUnmergedProviderGroups(registry, model);
 	return (result.length > 0 ? result[0] : null);
 }
 

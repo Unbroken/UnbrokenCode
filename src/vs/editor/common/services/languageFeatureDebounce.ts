@@ -127,10 +127,10 @@ export class LanguageFeatureDebounceService implements ILanguageFeatureDebounceS
 		this._isDev = envService.isExtensionDevelopment || !envService.isBuilt;
 	}
 
-	for(feature: LanguageFeatureRegistry<object>, name: string, config?: { min?: number; max?: number; key?: string }): IFeatureDebounceInformation {
+	for(feature: LanguageFeatureRegistry<object>, name: string, config?: { min?: number; max?: number; salt?: string }): IFeatureDebounceInformation {
 		const min = config?.min ?? 50;
 		const max = config?.max ?? min ** 2;
-		const extra = config?.key ?? undefined;
+		const extra = config?.salt ?? undefined;
 		const key = `${IdentityHash.of(feature)},${min}${extra ? ',' + extra : ''}`;
 		let info = this._data.get(key);
 		if (!info) {

@@ -27,6 +27,21 @@ export interface ITokenizationTextModelPart {
 	setPartialSemanticTokens(range: Range, tokens: SparseMultilineTokens[] | null): void;
 
 	/**
+	 * Replaces the semantic tokens of a merged layer: the tokens of a provider that merges its tokens with those of
+	 * the other providers. The layers merge below the tokens of `setSemanticTokens`, in the order of
+	 * `setMergedSemanticTokensOrder`.
+	 * @internal
+	 */
+	setMergedSemanticTokens(layer: number, tokens: SparseMultilineTokens[] | null): void;
+
+	/**
+	 * Sets the order the merged layers merge in, bottom first. Layers missing from it merge above those in it, in the
+	 * order they were first set.
+	 * @internal
+	 */
+	setMergedSemanticTokensOrder(layers: readonly number[]): void;
+
+	/**
 	 * @internal
 	 */
 	hasCompleteSemanticTokens(): boolean;

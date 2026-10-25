@@ -6,7 +6,7 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import * as errors from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, dispose } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, dispose } from '../../../../base/common/lifecycle.js';
 import { ResourceMap } from '../../../../base/common/map.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -19,9 +19,10 @@ import { IFeatureDebounceInformation, ILanguageFeatureDebounceService } from '..
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { IModelService } from '../../../common/services/model.js';
 import { SemanticTokensProviderStyling, toMultilineTokens2 } from '../../../common/services/semanticTokensProviderStyling.js';
+import { SparseMultilineTokens } from '../../../common/tokens/sparseMultilineTokens.js';
 import { ISemanticTokensStylingService } from '../../../common/services/semanticTokensStyling.js';
 import { IModelContentChangedEvent } from '../../../common/textModelEvents.js';
-import { getDocumentSemanticTokens, hasDocumentSemanticTokensProvider, isSemanticTokens, isSemanticTokensEdits } from '../common/getSemanticTokens.js';
+import { getDocumentSemanticTokens, getMergedDocumentSemanticTokensProviders, hasDocumentSemanticTokensProvider, isSemanticTokens, isSemanticTokensEdits } from '../common/getSemanticTokens.js';
 import { SEMANTIC_HIGHLIGHTING_SETTING_ID, isSemanticColoringEnabled } from '../common/semanticTokensConfig.js';
 
 export class DocumentSemanticTokensFeature extends Disposable {
@@ -43,7 +44,7 @@ export class DocumentSemanticTokensFeature extends Disposable {
 
 		const register = (model: ITextModel) => {
 			this._watchers.get(model.uri)?.dispose();
-			this._watchers.set(model.uri, new ModelSemanticColoring(model, semanticTokensStylingService, themeService, languageFeatureDebounceService, languageFeaturesService));
+			this._watchers.set(model.uri, new ModelSemanticColoring(model, undefined, undefined, semanticTokensStylingService, themeService, languageFeatureDebounceService, languageFeaturesService));
 		};
 		const deregister = (model: ITextModel, modelSemanticColoring: ModelSemanticColoring) => {
 			modelSemanticColoring.dispose();
@@ -116,6 +117,29 @@ export class DocumentSemanticTokensFeature extends Disposable {
 	}
 }
 
+// The layer in the model of each provider that merges its tokens with the others'
+const mergedLayers = new WeakMap<DocumentSemanticTokensProvider, number>();
+let nextMergedLayer = 0;
+
+// The layer of approximate tokens of the provider chosen among those that don't merge, which are merged below the
+// tokens that aren't approximate
+const approximateLayer = -1;
+
+function getMergedLayer(provider: DocumentSemanticTokensProvider): number {
+	let layer = mergedLayers.get(provider);
+	if (layer === undefined) {
+		layer = nextMergedLayer++;
+		mergedLayers.set(provider, layer);
+	}
+	return layer;
+}
+
+/**
+ * The semantic tokens of a model: of the provider chosen among those that don't merge their tokens with the others',
+ * or with a `mergedProvider`, of that provider, which are set as a layer below. The coloring of the chosen provider
+ * owns a coloring for each provider that merges, and orders the layers: approximate tokens below the others, and
+ * otherwise in the order of the providers.
+ */
 class ModelSemanticColoring extends Disposable {
 
 	public static REQUEST_MIN_DELAY = 300;
@@ -124,6 +148,11 @@ class ModelSemanticColoring extends Disposable {
 	private _isDisposed: boolean;
 	private readonly _model: ITextModel;
 	private readonly _provider: LanguageFeatureRegistry<DocumentSemanticTokensProvider>;
+	private readonly _mergedLayer: number | undefined;
+	private readonly _mergedColorings = this._register(new DisposableMap<DocumentSemanticTokensProvider, ModelSemanticColoring>());
+	private _mergedProviders: DocumentSemanticTokensProvider[] = [];
+	// Whether the tokens set last are approximate
+	private _approximate = false;
 	private readonly _debounceInformation: IFeatureDebounceInformation;
 	private readonly _fetchDocumentSemanticTokens: RunOnceScheduler;
 	private _currentDocumentResponse: SemanticTokensResponse | null;
@@ -133,17 +162,22 @@ class ModelSemanticColoring extends Disposable {
 
 	constructor(
 		model: ITextModel,
+		private readonly _mergedProvider: DocumentSemanticTokensProvider | undefined,
+		private readonly _onDidChangeApproximate: (() => void) | undefined,
 		@ISemanticTokensStylingService private readonly _semanticTokensStylingService: ISemanticTokensStylingService,
-		@IThemeService themeService: IThemeService,
-		@ILanguageFeatureDebounceService languageFeatureDebounceService: ILanguageFeatureDebounceService,
-		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
+		@IThemeService private readonly _themeService: IThemeService,
+		@ILanguageFeatureDebounceService private readonly _languageFeatureDebounceService: ILanguageFeatureDebounceService,
+		@ILanguageFeaturesService private readonly _languageFeaturesService: ILanguageFeaturesService,
 	) {
 		super();
 
 		this._isDisposed = false;
 		this._model = model;
-		this._provider = languageFeaturesService.documentSemanticTokensProvider;
-		this._debounceInformation = languageFeatureDebounceService.for(this._provider, 'DocumentSemanticTokens', { min: ModelSemanticColoring.REQUEST_MIN_DELAY, max: ModelSemanticColoring.REQUEST_MAX_DELAY });
+		this._provider = _languageFeaturesService.documentSemanticTokensProvider;
+		this._mergedLayer = _mergedProvider ? getMergedLayer(_mergedProvider) : undefined;
+		// A provider that merges is usually faster than the others, so it keeps its own average
+		const debounceSalt = this._mergedLayer !== undefined ? `merged${this._mergedLayer}` : undefined;
+		this._debounceInformation = _languageFeatureDebounceService.for(this._provider, 'DocumentSemanticTokens', { min: ModelSemanticColoring.REQUEST_MIN_DELAY, max: ModelSemanticColoring.REQUEST_MAX_DELAY, salt: debounceSalt });
 		this._fetchDocumentSemanticTokens = this._register(new RunOnceScheduler(() => this._fetchDocumentSemanticTokensNow(), ModelSemanticColoring.REQUEST_MIN_DELAY));
 		this._currentDocumentResponse = null;
 		this._currentDocumentRequestCancellationTokenSource = null;
@@ -175,7 +209,7 @@ class ModelSemanticColoring extends Disposable {
 			this._fetchDocumentSemanticTokens.schedule(0);
 		}));
 
-		this._register(themeService.onDidColorThemeChange(_ => {
+		this._register(_themeService.onDidColorThemeChange(_ => {
 			// clear out existing tokens
 			this._setDocumentSemanticTokens(null, null, null, []);
 			this._fetchDocumentSemanticTokens.schedule(this._debounceInformation.get(this._model));
@@ -185,11 +219,18 @@ class ModelSemanticColoring extends Disposable {
 	}
 
 	public handleRegistryChange(): void {
+		// Before the colorings of new providers are created, which fetch their tokens right away
+		for (const coloring of this._mergedColorings.values()) {
+			coloring.handleRegistryChange();
+		}
 		this._updateRelevantProviders();
 		this._fetchDocumentSemanticTokens.schedule(this._debounceInformation.get(this._model));
 	}
 
 	public handleProviderDidChange(provider: DocumentSemanticTokensProvider): void {
+		for (const coloring of this._mergedColorings.values()) {
+			coloring.handleProviderDidChange(provider);
+		}
 		if (!this._relevantProviders.has(provider)) {
 			return;
 		}
@@ -202,7 +243,54 @@ class ModelSemanticColoring extends Disposable {
 	}
 
 	private _updateRelevantProviders(): void {
-		this._relevantProviders = new Set(this._provider.all(this._model));
+		const providers = this._provider.all(this._model);
+		if (this._mergedProvider) {
+			this._relevantProviders = new Set(providers.filter(provider => provider === this._mergedProvider));
+			return;
+		}
+		this._relevantProviders = new Set(providers.filter(provider => !provider.merge));
+
+		this._mergedProviders = getMergedDocumentSemanticTokensProviders(this._provider, this._model);
+		for (const provider of [...this._mergedColorings.keys()]) {
+			if (!this._mergedProviders.includes(provider)) {
+				this._mergedColorings.deleteAndDispose(provider);
+			}
+		}
+		this._updateMergedSemanticTokensOrder();
+		for (const provider of this._mergedProviders) {
+			if (!this._mergedColorings.has(provider)) {
+				this._mergedColorings.set(provider, new ModelSemanticColoring(this._model, provider, () => this._updateMergedSemanticTokensOrder(), this._semanticTokensStylingService, this._themeService, this._languageFeatureDebounceService, this._languageFeaturesService));
+			}
+		}
+	}
+
+	private _updateMergedSemanticTokensOrder(): void {
+		const isApproximate = (provider: DocumentSemanticTokensProvider) => this._mergedColorings.get(provider)?._approximate ?? false;
+		this._model.tokenization.setMergedSemanticTokensOrder([
+			...this._mergedProviders.filter(provider => isApproximate(provider)).map(getMergedLayer),
+			approximateLayer,
+			...this._mergedProviders.filter(provider => !isApproximate(provider)).map(getMergedLayer),
+		]);
+	}
+
+	private _setModelSemanticTokens(tokens: SparseMultilineTokens[] | null, isComplete: boolean, approximate: boolean = false): void {
+		const approximateChanged = approximate !== this._approximate;
+		this._approximate = approximate;
+		if (this._mergedLayer !== undefined) {
+			if (approximateChanged) {
+				this._onDidChangeApproximate?.();
+			}
+			this._model.tokenization.setMergedSemanticTokens(this._mergedLayer, tokens);
+		} else if (approximate) {
+			this._model.tokenization.setMergedSemanticTokens(approximateLayer, tokens);
+			// Only accurate document tokens are replaced; accurate tokens of a range provider stay above
+			if (this._model.tokenization.hasCompleteSemanticTokens()) {
+				this._model.tokenization.setSemanticTokens(null, false);
+			}
+		} else {
+			this._model.tokenization.setMergedSemanticTokens(approximateLayer, null);
+			this._model.tokenization.setSemanticTokens(tokens, isComplete);
+		}
 	}
 
 	public override dispose(): void {
@@ -226,11 +314,11 @@ class ModelSemanticColoring extends Disposable {
 			return;
 		}
 
-		if (!hasDocumentSemanticTokensProvider(this._provider, this._model)) {
+		if (!hasDocumentSemanticTokensProvider(this._provider, this._model, this._mergedProvider)) {
 			// there is no provider
 			if (this._currentDocumentResponse) {
 				// there are semantic tokens set
-				this._model.tokenization.setSemanticTokens(null, false);
+				this._setModelSemanticTokens(null, false);
 			}
 			return;
 		}
@@ -243,7 +331,7 @@ class ModelSemanticColoring extends Disposable {
 		const cancellationTokenSource = new CancellationTokenSource();
 		const lastProvider = this._currentDocumentResponse ? this._currentDocumentResponse.provider : null;
 		const lastResultId = this._currentDocumentResponse ? this._currentDocumentResponse.resultId || null : null;
-		const request = getDocumentSemanticTokens(this._provider, this._model, lastProvider, lastResultId, cancellationTokenSource.token);
+		const request = getDocumentSemanticTokens(this._provider, this._model, lastProvider, lastResultId, cancellationTokenSource.token, this._mergedProvider);
 		this._currentDocumentRequestCancellationTokenSource = cancellationTokenSource;
 		this._providersChangedDuringRequest = false;
 
@@ -295,6 +383,7 @@ class ModelSemanticColoring extends Disposable {
 
 	private _setDocumentSemanticTokens(provider: DocumentSemanticTokensProvider | null, tokens: SemanticTokens | SemanticTokensEdits | null, styling: SemanticTokensProviderStyling | null, pendingChanges: IModelContentChangedEvent[]): void {
 		const currentResponse = this._currentDocumentResponse;
+		const approximate = tokens?.approximate === true;
 		const rescheduleIfNeeded = () => {
 			if ((pendingChanges.length > 0 || this._providersChangedDuringRequest) && !this._fetchDocumentSemanticTokens.isScheduled()) {
 				this._fetchDocumentSemanticTokens.schedule(this._debounceInformation.get(this._model));
@@ -313,11 +402,11 @@ class ModelSemanticColoring extends Disposable {
 			return;
 		}
 		if (!provider || !styling) {
-			this._model.tokenization.setSemanticTokens(null, false);
+			this._setModelSemanticTokens(null, false);
 			return;
 		}
 		if (!tokens) {
-			this._model.tokenization.setSemanticTokens(null, true);
+			this._setModelSemanticTokens(null, true);
 			rescheduleIfNeeded();
 			return;
 		}
@@ -325,7 +414,7 @@ class ModelSemanticColoring extends Disposable {
 		if (isSemanticTokensEdits(tokens)) {
 			if (!currentResponse) {
 				// not possible!
-				this._model.tokenization.setSemanticTokens(null, true);
+				this._setModelSemanticTokens(null, true);
 				return;
 			}
 			if (tokens.edits.length === 0) {
@@ -351,7 +440,7 @@ class ModelSemanticColoring extends Disposable {
 					if (edit.start > srcData.length) {
 						styling.warnInvalidEditStart(currentResponse.resultId, tokens.resultId, i, edit.start, srcData.length);
 						// The edits are invalid and there's no way to recover
-						this._model.tokenization.setSemanticTokens(null, true);
+						this._setModelSemanticTokens(null, true);
 						return;
 					}
 
@@ -401,9 +490,9 @@ class ModelSemanticColoring extends Disposable {
 				}
 			}
 
-			this._model.tokenization.setSemanticTokens(result, true);
+			this._setModelSemanticTokens(result, true, approximate);
 		} else {
-			this._model.tokenization.setSemanticTokens(null, true);
+			this._setModelSemanticTokens(null, true);
 		}
 
 		rescheduleIfNeeded();

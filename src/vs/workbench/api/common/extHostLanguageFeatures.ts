@@ -1011,8 +1011,10 @@ class DocumentSemanticTokensAdapter {
 		if (!value) {
 			return null;
 		}
+		// The fixed and converted results are new objects
+		const approximate = value.approximate === true;
 		value = DocumentSemanticTokensAdapter._fixProvidedSemanticTokens(value);
-		return this._send(DocumentSemanticTokensAdapter._convertToEdits(previousResult, value), value);
+		return this._send(DocumentSemanticTokensAdapter._convertToEdits(previousResult, value), value, approximate);
 	}
 
 	async releaseDocumentSemanticColoring(semanticColoringResultId: number): Promise<void> {
@@ -1091,14 +1093,15 @@ class DocumentSemanticTokensAdapter {
 		}], newResult.resultId);
 	}
 
-	private _send(value: vscode.SemanticTokens | vscode.SemanticTokensEdits, original: vscode.SemanticTokens | vscode.SemanticTokensEdits): VSBuffer | null {
+	private _send(value: vscode.SemanticTokens | vscode.SemanticTokensEdits, original: vscode.SemanticTokens | vscode.SemanticTokensEdits, approximate: boolean): VSBuffer | null {
 		if (DocumentSemanticTokensAdapter._isSemanticTokens(value)) {
 			const myId = this._nextResultId++;
 			this._previousResults.set(myId, new SemanticTokensPreviousResult(value.resultId, value.data));
 			return encodeSemanticTokensDto({
 				id: myId,
 				type: 'full',
-				data: value.data
+				data: value.data,
+				approximate
 			});
 		}
 
@@ -1113,7 +1116,8 @@ class DocumentSemanticTokensAdapter {
 			return encodeSemanticTokensDto({
 				id: myId,
 				type: 'delta',
-				deltas: (value.edits || []).map(edit => ({ start: edit.start, deleteCount: edit.deleteCount, data: edit.data }))
+				deltas: (value.edits || []).map(edit => ({ start: edit.start, deleteCount: edit.deleteCount, data: edit.data })),
+				approximate
 			});
 		}
 
@@ -2574,10 +2578,10 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 
 	//#region semantic coloring
 
-	registerDocumentSemanticTokensProvider(extension: IExtensionDescription, selector: vscode.DocumentSelector, provider: vscode.DocumentSemanticTokensProvider, legend: vscode.SemanticTokensLegend): vscode.Disposable {
+	registerDocumentSemanticTokensProvider(extension: IExtensionDescription, selector: vscode.DocumentSelector, provider: vscode.DocumentSemanticTokensProvider, legend: vscode.SemanticTokensLegend, merge?: { priority: number }): vscode.Disposable {
 		const handle = this._addNewAdapter(new DocumentSemanticTokensAdapter(this._documents, provider), extension);
 		const eventHandle = (typeof provider.onDidChangeSemanticTokens === 'function' ? this._nextHandle() : undefined);
-		this._proxy.$registerDocumentSemanticTokensProvider(handle, this._transformDocumentSelector(selector, extension), legend, eventHandle);
+		this._proxy.$registerDocumentSemanticTokensProvider(handle, this._transformDocumentSelector(selector, extension), legend, eventHandle, merge);
 		let result = this._createDisposable(handle);
 
 		if (eventHandle) {

@@ -532,14 +532,14 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 
 	// --- semantic tokens
 
-	$registerDocumentSemanticTokensProvider(handle: number, selector: IDocumentFilterDto[], legend: languages.SemanticTokensLegend, eventHandle: number | undefined): void {
+	$registerDocumentSemanticTokensProvider(handle: number, selector: IDocumentFilterDto[], legend: languages.SemanticTokensLegend, eventHandle: number | undefined, merge: { priority: number } | undefined): void {
 		let event: Event<void> | undefined = undefined;
 		if (typeof eventHandle === 'number') {
 			const emitter = new Emitter<void>();
 			this._registrations.set(eventHandle, emitter);
 			event = emitter.event;
 		}
-		this._registrations.set(handle, this._languageFeaturesService.documentSemanticTokensProvider.register(selector, new MainThreadDocumentSemanticTokensProvider(this._proxy, handle, legend, event)));
+		this._registrations.set(handle, this._languageFeaturesService.documentSemanticTokensProvider.register(selector, new MainThreadDocumentSemanticTokensProvider(this._proxy, handle, legend, event, merge)));
 	}
 
 	$emitDocumentSemanticTokensEvent(eventHandle: number): void {
@@ -1236,6 +1236,7 @@ export class MainThreadDocumentSemanticTokensProvider implements languages.Docum
 		private readonly _handle: number,
 		private readonly _legend: languages.SemanticTokensLegend,
 		public readonly onDidChange: Event<void> | undefined,
+		public readonly merge: { readonly priority: number } | undefined = undefined,
 	) {
 	}
 
@@ -1262,12 +1263,14 @@ export class MainThreadDocumentSemanticTokensProvider implements languages.Docum
 		if (dto.type === 'full') {
 			return {
 				resultId: String(dto.id),
-				data: dto.data
+				data: dto.data,
+				approximate: dto.approximate
 			};
 		}
 		return {
 			resultId: String(dto.id),
-			edits: dto.deltas
+			edits: dto.deltas,
+			approximate: dto.approximate
 		};
 	}
 }

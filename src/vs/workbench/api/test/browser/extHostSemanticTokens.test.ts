@@ -167,8 +167,8 @@ suite('Extension host semantic tokens cache', () => {
 				await deliver(mainThreadMessages, toMainThread);
 
 				const expectedResult = useEdits
-					? { resultId: String(resultId), edits: [] }
-					: { resultId: String(resultId), data: new Uint32Array([0, 0, 2, 0, 0]) };
+					? { resultId: String(resultId), edits: [], approximate: false }
+					: { resultId: String(resultId), data: new Uint32Array([0, 0, 2, 0, 0]), approximate: false };
 				assert.deepStrictEqual(result, cancel ? null : expectedResult);
 				assert.deepStrictEqual(release.args, cancel ? [[handle, resultId]] : []);
 				deferResult = false;

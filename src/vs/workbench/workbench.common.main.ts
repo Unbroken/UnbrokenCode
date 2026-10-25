@@ -402,6 +402,9 @@ import './contrib/welcomeViews/common/newFile.contribution.js';
 // Unbroken Code Migration (applicationName change)
 import './contrib/unbrokenMigration/browser/unbrokenMigration.contribution.js';
 
+// Unbroken Code defaults of the settings of built-in extensions
+import './contrib/unbrokenDefaults/common/unbrokenDefaults.contribution.js';
+
 // Welcome Onboarding
 import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
 

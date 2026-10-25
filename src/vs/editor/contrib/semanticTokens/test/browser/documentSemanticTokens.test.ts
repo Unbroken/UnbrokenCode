@@ -41,6 +41,37 @@ import { TestColorTheme, TestThemeService } from '../../../../../platform/theme/
 import { UndoRedoService } from '../../../../../platform/undoRedo/common/undoRedoService.js';
 import { ITreeSitterLibraryService } from '../../../../common/services/treeSitter/treeSitterLibraryService.js';
 import { TestTreeSitterLibraryService } from '../../../../test/common/services/testTreeSitterLibraryService.js';
+import { FontStyle, MetadataConsts, TokenMetadata } from '../../../../common/encodedTokenAttributes.js';
+import { SparseMultilineTokens } from '../../../../common/tokens/sparseMultilineTokens.js';
+
+// The styles of the token types of the tests of merged tokens, which only set some of the styles
+const testTokenStyles: { [type: string]: Partial<ITokenStyle> } = {
+	fast: { foreground: 5 },
+	refinedColor: { foreground: 7 },
+	refinedBold: { bold: true },
+	colorBold: { foreground: 9, bold: true },
+};
+
+/**
+ * The foreground and whether it's bold of each token of the first line
+ */
+function getLineStyles(textModel: ITextModel): [string, number, boolean][] {
+	const lineTokens = textModel.tokenization.getLineTokens(1);
+	const styles: [string, number, boolean][] = [];
+	for (let i = 0; i < lineTokens.getCount(); i++) {
+		const metadata = lineTokens.getMetadata(i);
+		const text = textModel.getLineContent(1).substring(lineTokens.getStartOffset(i), lineTokens.getEndOffset(i));
+		styles.push([text, TokenMetadata.getForeground(metadata), (TokenMetadata.getFontStyle(metadata) & FontStyle.Bold) !== 0]);
+	}
+	return styles;
+}
+
+class TestStyledColorTheme extends TestColorTheme {
+	override getTokenStyleMetadata(type: string): ITokenStyle | undefined {
+		const style = testTokenStyles[type];
+		return style && { foreground: undefined, bold: undefined, underline: undefined, strikethrough: undefined, italic: undefined, ...style };
+	}
+}
 
 class TestThemeChangeEmitter extends Emitter<IColorTheme> {
 	get listenerCount(): number {
@@ -62,7 +93,7 @@ suite('ModelSemanticColoring', () => {
 		themeService = new TestThemeService();
 		themeChangeEmitter = disposables.add(new TestThemeChangeEmitter());
 		themeService._onThemeChange = themeChangeEmitter;
-		themeService.setTheme(new TestColorTheme({}, ColorScheme.DARK, true));
+		themeService.setTheme(new TestStyledColorTheme({}, ColorScheme.DARK, true));
 		const logService = new NullLogService();
 		languageFeaturesService = new LanguageFeaturesService();
 		languageService = disposables.add(new LanguageService(false));
@@ -492,6 +523,173 @@ suite('ModelSemanticColoring', () => {
 
 			await timeout(5000);
 			assert.deepStrictEqual(requestCount, 2);
+		});
+	});
+
+	test('Tokens of a provider that merges show as they arrive, below the tokens of the other providers', async () => {
+		await runWithFakedTimers({}, async () => {
+
+			disposables.add(languageService.registerLanguage({ id: 'testMode3' }));
+
+			const provideRefined = new Barrier();
+			disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode3', new class implements DocumentSemanticTokensProvider {
+				getLegend(): SemanticTokensLegend {
+					return { tokenTypes: ['refinedColor', 'refinedBold'], tokenModifiers: [] };
+				}
+				async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+					await provideRefined.wait();
+					// `Hello` only bold, `world` colored
+					return { data: new Uint32Array([0, 0, 5, 1, 0, 0, 6, 5, 0, 0]) };
+				}
+				releaseDocumentSemanticTokens(): void {
+				}
+			}));
+			// Registered last, which would make it the provider whose tokens show if it didn't merge
+			disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode3', new class implements DocumentSemanticTokensProvider {
+				readonly merge = {};
+				getLegend(): SemanticTokensLegend {
+					return { tokenTypes: ['fast'], tokenModifiers: [] };
+				}
+				async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+					// `Hello` and `world`
+					return { data: new Uint32Array([0, 0, 5, 0, 0, 0, 6, 5, 0, 0]) };
+				}
+				releaseDocumentSemanticTokens(): void {
+				}
+			}));
+
+			const textModel = disposables.add(modelService.createModel('Hello world', languageService.createById('testMode3')));
+			const mergedTokensSet = Event.toPromise(textModel.onDidChangeTokens);
+			// pretend the text model is attached to an editor (so that semantic tokens are computed)
+			textModel.onBeforeAttached();
+
+			// The other provider is still waiting to provide its tokens
+			await mergedTokensSet;
+			const merged = getLineStyles(textModel);
+
+			provideRefined.open();
+			await Event.toPromise(textModel.onDidChangeTokens);
+
+			assert.deepStrictEqual({ merged, refined: getLineStyles(textModel) }, {
+				merged: [['Hello', 5, false], [' ', 1, false], ['world', 5, false]],
+				refined: [['Hello', 5, true], [' ', 1, false], ['world', 7, false]],
+			});
+		});
+	});
+
+	test('Layers of providers that merge are ordered by priority, then by score and registration', async () => {
+		await runWithFakedTimers({}, async () => {
+
+			disposables.add(languageService.registerLanguage({ id: 'testMode4' }));
+
+			const registerMerged = (tokenType: string, priority: number | undefined, data: number[]) => {
+				disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode4', new class implements DocumentSemanticTokensProvider {
+					readonly merge = { priority };
+					getLegend(): SemanticTokensLegend {
+						return { tokenTypes: [tokenType], tokenModifiers: [] };
+					}
+					async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+						return { data: new Uint32Array(data) };
+					}
+					releaseDocumentSemanticTokens(): void {
+					}
+				}));
+			};
+			// `Hello`: a higher priority is on top, though registered first, and keeps the boldness of the layer below
+			registerMerged('fast', 1, [0, 0, 5, 0, 0]);
+			// `world`: of the same priority, the provider registered last is on top
+			registerMerged('colorBold', undefined, [0, 0, 5, 0, 0, 0, 6, 5, 0, 0]);
+			registerMerged('refinedColor', 0, [0, 6, 5, 0, 0]);
+
+			const textModel = disposables.add(modelService.createModel('Hello world', languageService.createById('testMode4')));
+			// pretend the text model is attached to an editor (so that semantic tokens are computed)
+			textModel.onBeforeAttached();
+			await timeout(1000);
+
+			assert.deepStrictEqual(getLineStyles(textModel), [['Hello', 5, true], [' ', 1, false], ['world', 7, true]]);
+		});
+	});
+
+	test('Approximate tokens are merged below the tokens of providers that merge', async () => {
+		await runWithFakedTimers({}, async () => {
+
+			disposables.add(languageService.registerLanguage({ id: 'testMode5' }));
+
+			const emitter = disposables.add(new Emitter<void>());
+			let approximate = true;
+			disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode5', new class implements DocumentSemanticTokensProvider {
+				readonly onDidChange = emitter.event;
+				getLegend(): SemanticTokensLegend {
+					return { tokenTypes: ['refinedColor', 'colorBold'], tokenModifiers: [] };
+				}
+				async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+					// `Hello` colored, `world` colored and bold
+					return { data: new Uint32Array([0, 0, 5, 0, 0, 0, 6, 5, 1, 0]), approximate };
+				}
+				releaseDocumentSemanticTokens(): void {
+				}
+			}));
+			disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode5', new class implements DocumentSemanticTokensProvider {
+				readonly merge = {};
+				getLegend(): SemanticTokensLegend {
+					return { tokenTypes: ['fast'], tokenModifiers: [] };
+				}
+				async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+					// `Hello`
+					return { data: new Uint32Array([0, 0, 5, 0, 0]) };
+				}
+				releaseDocumentSemanticTokens(): void {
+				}
+			}));
+
+			const textModel = disposables.add(modelService.createModel('Hello world', languageService.createById('testMode5')));
+			// pretend the text model is attached to an editor (so that semantic tokens are computed)
+			textModel.onBeforeAttached();
+			await timeout(1000);
+			const whileApproximate = getLineStyles(textModel);
+
+			approximate = false;
+			emitter.fire();
+			await timeout(1000);
+
+			assert.deepStrictEqual({ whileApproximate, accurate: getLineStyles(textModel) }, {
+				whileApproximate: [['Hello', 5, false], [' ', 1, false], ['world', 9, true]],
+				accurate: [['Hello', 7, false], [' ', 1, false], ['world', 9, true]],
+			});
+		});
+	});
+
+	test('Approximate tokens keep the tokens of a range provider', async () => {
+		await runWithFakedTimers({}, async () => {
+
+			disposables.add(languageService.registerLanguage({ id: 'testMode6' }));
+
+			const emitter = disposables.add(new Emitter<void>());
+			disposables.add(languageFeaturesService.documentSemanticTokensProvider.register('testMode6', new class implements DocumentSemanticTokensProvider {
+				readonly onDidChange = emitter.event;
+				getLegend(): SemanticTokensLegend {
+					return { tokenTypes: ['refinedColor'], tokenModifiers: [] };
+				}
+				async provideDocumentSemanticTokens(): Promise<SemanticTokens | SemanticTokensEdits | null> {
+					// `Hello`
+					return { data: new Uint32Array([0, 0, 5, 0, 0]), approximate: true };
+				}
+				releaseDocumentSemanticTokens(): void {
+				}
+			}));
+
+			const textModel = disposables.add(modelService.createModel('Hello world', languageService.createById('testMode6')));
+			// pretend the text model is attached to an editor (so that semantic tokens are computed)
+			textModel.onBeforeAttached();
+			await timeout(1000);
+
+			// Like a range provider's tokens for `world`
+			const rangeMetadata = (5 << MetadataConsts.FOREGROUND_OFFSET | MetadataConsts.SEMANTIC_USE_FOREGROUND) >>> 0;
+			textModel.tokenization.setPartialSemanticTokens(new Range(1, 1, 1, 12), [SparseMultilineTokens.create(1, new Uint32Array([0, 6, 11, rangeMetadata]))]);
+			emitter.fire();
+			await timeout(1000);
+
+			assert.deepStrictEqual(getLineStyles(textModel), [['Hello', 7, false], [' ', 1, false], ['world', 5, false]]);
 		});
 	});
 

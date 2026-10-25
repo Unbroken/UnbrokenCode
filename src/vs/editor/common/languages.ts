@@ -2472,6 +2472,11 @@ export interface SemanticTokensLegend {
 export interface SemanticTokens {
 	readonly resultId?: string;
 	readonly data: Uint32Array;
+	/**
+	 * Whether the tokens are approximate, like those of a language server that hasn't fully analyzed the document
+	 * yet. They're merged below the tokens that aren't, including those of the providers that merge theirs.
+	 */
+	readonly approximate?: boolean;
 }
 
 export interface SemanticTokensEdit {
@@ -2483,10 +2488,23 @@ export interface SemanticTokensEdit {
 export interface SemanticTokensEdits {
 	readonly resultId?: string;
 	readonly edits: SemanticTokensEdit[];
+	/**
+	 * Whether the tokens are approximate, like those of a language server that hasn't fully analyzed the document
+	 * yet. They're merged below the tokens that aren't, including those of the providers that merge theirs.
+	 */
+	readonly approximate?: boolean;
 }
 
 export interface DocumentSemanticTokensProvider {
 	readonly onDidChange?: Event<void>;
+	/**
+	 * When set, the tokens of this provider are merged with the tokens of the other providers of the document instead
+	 * of being replaced by them. They're requested on their own, so they show as soon as they arrive, and form a
+	 * layer below the tokens of the provider chosen among those that don't merge. A layer keeps the styles of the
+	 * layers below that it doesn't set. The layers are ordered by `priority`, higher on top, then by how well the
+	 * providers' selectors match the document and how recently they were registered, the best and newest on top.
+	 */
+	readonly merge?: { readonly priority?: number };
 	getLegend(): SemanticTokensLegend;
 	provideDocumentSemanticTokens(model: model.ITextModel, lastResultId: string | null, token: CancellationToken): ProviderResult<SemanticTokens | SemanticTokensEdits>;
 	releaseDocumentSemanticTokens(resultId: string | undefined): void;

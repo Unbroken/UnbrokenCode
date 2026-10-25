@@ -4325,6 +4325,13 @@ declare module 'vscode' {
 		 * @see {@link DocumentSemanticTokensProvider.provideDocumentSemanticTokens provideDocumentSemanticTokens} for an explanation of the format.
 		 */
 		readonly data: Uint32Array;
+		/**
+		 * Whether the tokens are approximate, like those of a language server that hasn't fully analyzed the document
+		 * yet. Approximate tokens of a document are merged below the tokens that aren't, including those of the
+		 * providers registered with {@link languages.registerMergedDocumentSemanticTokensProvider}, so they only
+		 * show where those have none. Editors other than Unbroken Code ignore it.
+		 */
+		approximate?: boolean;
 
 		/**
 		 * Create new semantic tokens.
@@ -4351,6 +4358,13 @@ declare module 'vscode' {
 		 * All edits refer to the initial data state.
 		 */
 		readonly edits: SemanticTokensEdit[];
+		/**
+		 * Whether the tokens after the edits are approximate, like those of a language server that hasn't fully analyzed the document
+		 * yet. Approximate tokens of a document are merged below the tokens that aren't, including those of the
+		 * providers registered with {@link languages.registerMergedDocumentSemanticTokensProvider}, so they only
+		 * show where those have none. Editors other than Unbroken Code ignore it.
+		 */
+		approximate?: boolean;
 
 		/**
 		 * Create new semantic tokens edits.
@@ -4490,6 +4504,19 @@ declare module 'vscode' {
 		 * *NOTE*: All edits in `SemanticTokensEdits` contain indices in the old integers array, so they all refer to the previous result state.
 		 */
 		provideDocumentSemanticTokensEdits?(document: TextDocument, previousResultId: string, token: CancellationToken): ProviderResult<SemanticTokens | SemanticTokensEdits>;
+	}
+
+	/**
+	 * Metadata about a semantic tokens provider whose tokens are merged with the tokens of the other providers, see
+	 * {@link languages.registerMergedDocumentSemanticTokensProvider}.
+	 */
+	export interface MergedDocumentSemanticTokensProviderMetadata {
+		/**
+		 * Where the layer of the provider's tokens goes among the layers of the other providers that merge theirs:
+		 * layers with a higher priority are merged on top of those with a lower one. Providers that cooperate can
+		 * agree on priorities to order their layers. Defaults to `0`.
+		 */
+		readonly priority?: number;
 	}
 
 	/**
@@ -15094,6 +15121,30 @@ declare module 'vscode' {
 		 * @returns A {@link Disposable} that unregisters this provider when being disposed.
 		 */
 		export function registerDocumentSemanticTokensProvider(selector: DocumentSelector, provider: DocumentSemanticTokensProvider, legend: SemanticTokensLegend): Disposable;
+
+		/**
+		 * Register a semantic tokens provider for a whole document whose tokens are merged with the tokens of the other
+		 * providers of the document, instead of the best-matching provider's replacing them.
+		 *
+		 * The tokens of this provider are requested on their own and show as soon as they arrive. They form a layer
+		 * below the tokens of the provider chosen among those registered with
+		 * {@link languages.registerDocumentSemanticTokensProvider}. Where layers overlap, the styles of the upper one
+		 * win, and the styles it doesn't set come from the layers below. This suits a fast provider of approximate
+		 * tokens, which a slower, more precise one refines.
+		 *
+		 * The layers of the providers that merge are ordered by their
+		 * {@link MergedDocumentSemanticTokensProviderMetadata.priority priority}, then by their
+		 * {@link languages.match score} and how recently they were registered, the best and newest on top.
+		 *
+		 * Check that the function exists before calling it, as editors other than Unbroken Code don't have it.
+		 *
+		 * @param selector A selector that defines the documents this provider is applicable to.
+		 * @param provider A document semantic tokens provider.
+		 * @param legend The legend of the token types and modifiers the provider returns.
+		 * @param metadata Metadata about the provider.
+		 * @returns A {@link Disposable} that unregisters this provider when being disposed.
+		 */
+		export function registerMergedDocumentSemanticTokensProvider(selector: DocumentSelector, provider: DocumentSemanticTokensProvider, legend: SemanticTokensLegend, metadata?: MergedDocumentSemanticTokensProviderMetadata): Disposable;
 
 		/**
 		 * Register a semantic tokens provider for a document range.

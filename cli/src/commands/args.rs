@@ -525,6 +525,9 @@ impl ExtensionSubcommand {
 				if args.pre_release {
 					target.push("--pre-release".to_string());
 				}
+				if args.include_quarantined {
+					target.push("--include-quarantined".to_string());
+				}
 				if args.donot_include_pack_and_dependencies {
 					target.push("do-not-include-pack-dependencies".to_string());
 				}
@@ -567,6 +570,12 @@ pub struct InstallExtensionArgs {
 	/// Installs the pre-release version of the extension
 	#[clap(long)]
 	pub pre_release: bool,
+
+	/// Installs the newest version of an extension also when it was published
+	/// within the quarantine of new versions, set by 'extensions.quarantineDays',
+	/// when no version is given
+	#[clap(long)]
+	pub include_quarantined: bool,
 
 	/// Don't include installing pack and dependencies of the extension
 	#[clap(long)]

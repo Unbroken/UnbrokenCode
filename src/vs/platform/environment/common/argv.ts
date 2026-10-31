@@ -100,6 +100,7 @@ export interface NativeParsedArgs {
 	'category'?: string;
 	'install-extension'?: string[]; // undefined or array of 1 or more
 	'pre-release'?: boolean;
+	'include-quarantined'?: boolean;
 	'install-builtin-extension'?: string[]; // undefined or array of 1 or more
 	'uninstall-extension'?: string[]; // undefined or array of 1 or more
 	'update-extensions'?: boolean;

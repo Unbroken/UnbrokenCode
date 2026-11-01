@@ -508,7 +508,13 @@ suite('AHP windowed TCP', function () {
 	});
 
 	test('enforces 256 transport and 512 host socket limits and reuses released capacity', async () => {
-		const h = await harness(() => { });
+		let accepted = 0;
+		let batchAccepted = new DeferredPromise<void>();
+		const h = await harness(() => {
+			if (++accepted % 16 === 0) {
+				batchAccepted.complete();
+			}
+		});
 		const second = h.newListenerTransport();
 		const third = h.newTransport();
 		for (const [index, wire] of [second, third].entries()) {
@@ -519,12 +525,17 @@ suite('AHP windowed TCP', function () {
 				channel: `ahp-tcp:/quota-${index}`, host: '127.0.0.1', port: h.port,
 			}
 		});
+		const createBatch = async (wire: Wire, start: number) => {
+			// Connecting doesn't wait for the destination to accept, and the listen backlog can be as small as 128 connections, after which new ones get reset
+			batchAccepted = new DeferredPromise<void>();
+			await Promise.all([batchAccepted.p, ...Array.from({ length: 16 }, (_, offset) => create(wire, start + offset))]);
+		};
 		for (let i = 0; i < 256; i += 16) {
-			await Promise.all(Array.from({ length: 16 }, (_, offset) => create(h.wire, i + offset)));
+			await createBatch(h.wire, i);
 		}
 		await assert.rejects(create(h.wire, 256), /capacity/);
 		for (let i = 256; i < 512; i += 16) {
-			await Promise.all(Array.from({ length: 16 }, (_, offset) => create(second, i + offset)));
+			await createBatch(second, i);
 		}
 		await assert.rejects(create(third, 512), /capacity/);
 		h.wire.send({ jsonrpc: '2.0', method: 'unsubscribe', params: { channel: 'ahp-tcp:/quota-0' } });

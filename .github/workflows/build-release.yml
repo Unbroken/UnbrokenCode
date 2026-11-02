@@ -90,8 +90,12 @@ jobs:
           echo "No finalized release found for $TAG_NAME, proceeding."
 
   macos:
-    name: Build macOS
+    name: Build macOS ${{ matrix.arch }}
     needs: authorize
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
     runs-on: macos-26
     environment: Build Deploy
     permissions:
@@ -170,7 +174,7 @@ jobs:
         run: |
           set -euo pipefail
           ./setup.sh
-          ./build-unbroken-code.sh --macos --release
+          ./build-unbroken-code.sh --macos-arch=${{ matrix.arch }} --release
         shell: bash
 
       - name: Remove temporary keychain

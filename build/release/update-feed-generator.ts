@@ -376,6 +376,9 @@ async function uploadFeedAsset(octokit: Octokit, feed: UpdateFeed, streams: stri
 		console.log(`\nGenerating feeds for stream: ${stream} (prefix: ${prefix})`);
 
 		// 1. Squirrel.Mac feeds (for macOS)
+		// Releases no longer have a Universal build, so its feed stays on the last release that had one.
+		// Installs older than that release read this feed, and update through it to the build for their
+		// architecture, so the feed and that release have to be kept.
 		const darwinPlatforms = ['darwin-arm64', 'darwin-x64', 'darwin-universal'];
 		for (const platform of darwinPlatforms) {
 			if (feed.latest[platform]) {
@@ -519,7 +522,7 @@ export async function generatePlatformFeed(octokit: Octokit, platform: string, q
 
 	// Map platform names to our asset names
 	const platformMap: { [key: string]: string } = {
-		'darwin': 'darwin-universal',
+		'darwin': 'darwin-x64',
 		'darwin-arm64': 'darwin-arm64',
 		'darwin-x64': 'darwin-x64',
 		'darwin-universal': 'darwin-universal'
@@ -587,7 +590,7 @@ async function main() {
 		case 'platform':
 			// Used for testing platform-specific queries
 			{
-				const platform = args[1] || 'darwin-universal';
+				const platform = args[1] || 'darwin-arm64';
 				const quality = args[2] || 'stable';
 				console.log(`Fetching update for platform: ${platform}, quality: ${quality}`);
 

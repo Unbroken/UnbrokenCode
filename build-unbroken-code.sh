@@ -751,7 +751,7 @@ for arg in "$@"; do
 			echo "  --release        Create/update GitHub release (draft) after building"
 			echo "  --publish        Publish the GitHub release (make it public)"
 			echo "  --skip-build     Skip the build process (only for release-related operations)"
-			echo "  --skip-gulp-build Skip gulp build, only create installers/universal binary"
+			echo "  --skip-gulp-build Skip gulp build, only create installers"
 			echo "  --skip-extensions Skip building and packaging extensions (malterlib, vscode-clangd, codelldb)"
 			echo "  --extensions-only Build only extensions, skip main application build"
 			echo "  --regenerate-dmg Force regeneration of DMG files even if they exist"
@@ -759,7 +759,7 @@ for arg in "$@"; do
 			echo "  --show-release-notes  Show the \"What's New\" release notes without creating a release"
 			echo "  --windows        Build Windows binaries (x64 and arm64)"
 			echo "  --windows-arch=<arch>  Build only the specified Windows architecture (x64 or arm64)"
-			echo "  --macos          Build macOS binaries (arm64, x64, universal)"
+			echo "  --macos          Build macOS binaries (arm64 and x64)"
 			echo "  --macos-arch=<arch>    Build only the specified macOS architecture (x64 or arm64)"
 			echo "  --linux          Build Linux binaries (x64, arm64, deb, rpm, tar.gz, CLI)"
 			echo "  --all-platforms  Build for all platforms (macOS, Windows, and Linux)"
@@ -1509,7 +1509,7 @@ function Build_macOS()
 	DO_NOTARIZE=${DO_NOTARIZE:-$DO_SIGN}
 
 	if $SKIP_GULP_BUILD; then
-		echo "Skipping gulp build, only creating universal binary..."
+		echo "Skipping gulp build..."
 		DO_BUILD=false
 	else
 		echo "Building macOS binaries..."
@@ -1544,7 +1544,7 @@ function Build_macOS()
 		(cd cli && cargo build --release --target aarch64-apple-darwin)
 	fi
 
-	# Build both architectures with the same date
+	# Build the requested architectures
 	if $DO_BUILD; then
 		# Set environment variable to build directly to .dist directory
 		export VSCODE_BUILD_OUTPUT_DIR="$DIST_DIR"
@@ -1569,11 +1569,6 @@ function Build_macOS()
 			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/extensions/copilot/dist/test-"*
 			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/extensions/copilot/dist/sanity-test-"*
 			rm -rf "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/app/node_modules/@parcel/watcher-darwin-x64"
-		fi
-
-		# Only copy files between architectures if both are being built
-		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
-			cp -r "$DIST_DIR/VSCode-darwin-arm64/Unbroken Code.app/Contents/Resources/Assets.car" "$DIST_DIR/VSCode-darwin-x64/Unbroken Code.app/Contents/Resources/"
 		fi
 	fi
 
@@ -1667,36 +1662,6 @@ function Build_macOS()
 		fi
 	fi
 
-	# Create universal binary (even when skipping gulp build) - only if both architectures are built
-	if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
-		VSCODE_ARCH=universal node build/darwin/create-universal-app.ts "$DIST_DIR"
-
-		# Create universal CLI binary if both architectures exist
-		echo "Creating universal CLI binary..."
-		lipo -create \
-			"cli/target/x86_64-apple-darwin/release/code" \
-			"cli/target/aarch64-apple-darwin/release/code" \
-			-output "$DIST_DIR/unbroken-code-cli-darwin-universal"
-		echo "Created universal CLI binary"
-
-		# Create universal CLI binary package
-		CLI_TEMP_DIR="$DIST_DIR/temp_cli_darwin_universal"
-		mkdir -p "$CLI_TEMP_DIR"
-
-		# Copy universal CLI binary with Unbroken Code name
-		cp "$DIST_DIR/unbroken-code-cli-darwin-universal" "$CLI_TEMP_DIR/unbroken-code"
-		chmod +x "$CLI_TEMP_DIR/unbroken-code"
-
-		# Create zip package (remove existing to avoid appending)
-		rm -f "$DIST_DIR/unbroken_code_cli_darwin_universal_cli.zip"
-		(cd "$CLI_TEMP_DIR" && zip -r "$DIST_DIR/unbroken_code_cli_darwin_universal_cli.zip" .)
-
-		# Cleanup temp directory
-		rm -rf "$CLI_TEMP_DIR"
-
-		echo "Created unbroken_code_cli_darwin_universal_cli.zip"
-	fi
-
 	export AGENT_TEMPDIRECTORY=`mktemp -d`
 	echo "AGENT_TEMPDIRECTORY: $AGENT_TEMPDIRECTORY"
 
@@ -1713,9 +1678,6 @@ function Build_macOS()
 		if $BUILD_MACOS_X64; then
 			VSCODE_ARCH=x64 node build/darwin/sign.ts "$DIST_DIR" &
 		fi
-		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
-			VSCODE_ARCH=universal node build/darwin/sign.ts "$DIST_DIR" &
-		fi
 		WaitWithErrorPropagation "signing macOS architectures"
 	fi
 
@@ -1727,9 +1689,6 @@ function Build_macOS()
 		fi
 		if $BUILD_MACOS_X64; then
 			VSCODE_ARCH=x64 node build/darwin/notarize.ts "$DIST_DIR" &
-		fi
-		if $BUILD_MACOS_ARM64 && $BUILD_MACOS_X64; then
-			VSCODE_ARCH=universal node build/darwin/notarize.ts "$DIST_DIR" &
 		fi
 		WaitWithErrorPropagation "notarizing macOS architectures"
 	fi

@@ -32,7 +32,7 @@ Generates and maintains update feeds for automatic updates.
 node build/release/update-feed-generator.js generate
 
 # Test platform-specific feed
-node build/release/update-feed-generator.js platform darwin-universal stable
+node build/release/update-feed-generator.js platform darwin-arm64 stable
 ```
 
 **Generated Files:**

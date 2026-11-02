@@ -34,7 +34,6 @@
 	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
 	"updateUrl": "https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed",
 	"downloadUrl": "https://github.com/Unbroken/UnbrokenCode/releases/latest",
-	"darwinUniversalAssetId": "darwin-universal",
 	"nodejsArtifactFeed": "",
 	"electronArtifactFeed": "",
 	"electronRepository": "Unbroken/electron",

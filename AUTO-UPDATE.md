@@ -10,7 +10,7 @@ The auto-update infrastructure has been successfully modified to work with stati
 
 ### 1. Release Creation
 - Automated release creation with `./build-unbroken-code.sh --release`
-- Creates DMG and ZIP files for all architectures (arm64, x64, universal)
+- Creates DMG and ZIP files for all architectures (arm64, x64)
 - Generates update manifest with version info and SHA256 hashes
 
 ### 2. Update Feed Generation
@@ -22,7 +22,9 @@ The auto-update infrastructure has been successfully modified to work with stati
 The feed generator creates platform-specific feeds:
 
 #### macOS (Squirrel.Mac format)
-Files: `latest-darwin-{arm64|x64|universal}.json`
+Files: `latest-darwin-{arm64|x64}.json`
+
+Universal builds are deprecated. `latest-darwin-universal.json` stays frozen on `1.144.66`, the last Universal release, which must be kept. Older installs read that feed, update to `1.144.66`, and from there to the build for their architecture.
 ```json
 {
   "currentRelease": "1.104.1",
@@ -34,7 +36,7 @@ Files: `latest-darwin-{arm64|x64|universal}.json`
         "name": "1.104.1",
         "notes": "Update to Unbroken Code 1.104.1",
         "pub_date": "2025-01-15T12:00:00Z",
-        "url": "https://github.com/.../UnbrokenCode-darwin-universal-1.104.1.zip"
+        "url": "https://github.com/.../UnbrokenCode-darwin-arm64-1.104.1.zip"
       }
     }
   ]
@@ -61,18 +63,17 @@ Files: `latest-{linux-x64|linux-arm64|win32-x64|win32-arm64}.json`
 ### Update URL Configuration
 The `product.json` contains:
 ```json
-"updateUrl": "https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed",
-"darwinUniversalAssetId": "darwin-universal"
+"updateUrl": "https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed"
 ```
 
-The updater reads the platform-specific manifests (for example `latest-darwin-universal.json`, `latest-linux-x64.json`) hosted in the `update-feed` release.
+The updater reads the platform-specific manifests (for example `latest-darwin-arm64.json`, `latest-linux-x64.json`) hosted in the `update-feed` release.
 
 ### Modified Update Service
 We've modified VS Code's `createUpdateURL` function in `abstractUpdateService.ts` to generate correct URLs for our static feeds:
 
 #### All Platforms
 - URL pattern: `https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/latest-{platform}.json`
-- macOS: `latest-darwin-{arm64|x64|universal}.json` (Squirrel.Mac format)
+- macOS: `latest-darwin-{arm64|x64}.json` (Squirrel.Mac format)
 - Linux: `latest-linux-{x64|arm64|armhf}.json` (IUpdate format)
 - Windows: `latest-win32-{x64|arm64}.json` (IUpdate format)
 - Format: VS Code IUpdate JSON (with version, url, sha256hash, etc.)
@@ -151,7 +152,7 @@ Users can also manually check: **Help → Check for Updates**
 ## Troubleshooting
 
 ### If Updates Aren't Detected
-1. Verify the feed exists: https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/latest-darwin-universal.json
+1. Verify the feed exists: https://github.com/Unbroken/UnbrokenCode/releases/download/update-feed/latest-darwin-arm64.json
 2. Check update settings: Preferences → Settings → Update Mode
 3. Look for errors in: Help → Toggle Developer Tools → Console
 

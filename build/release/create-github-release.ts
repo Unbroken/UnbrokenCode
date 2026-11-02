@@ -37,7 +37,7 @@ interface ExtendedRelease extends GitHubRelease {
 	existingAssets?: GitHubAsset[];
 }
 
-type PlatformKey = 'windows-x64' | 'windows-arm64' | 'linux-x64' | 'linux-arm64' | 'macos-x64' | 'macos-arm64' | 'macos-universal';
+type PlatformKey = 'windows-x64' | 'windows-arm64' | 'linux-x64' | 'linux-arm64' | 'macos-x64' | 'macos-arm64';
 
 const PLATFORM_MANIFEST_FILENAMES: Record<PlatformKey, string> = {
 	'windows-x64': 'manifest-windows-x64.json',
@@ -45,8 +45,7 @@ const PLATFORM_MANIFEST_FILENAMES: Record<PlatformKey, string> = {
 	'linux-x64': 'manifest-linux-x64.json',
 	'linux-arm64': 'manifest-linux-arm64.json',
 	'macos-x64': 'manifest-macos-x64.json',
-	'macos-arm64': 'manifest-macos-arm64.json',
-	'macos-universal': 'manifest-macos-universal.json'
+	'macos-arm64': 'manifest-macos-arm64.json'
 };
 
 interface ManifestAsset {
@@ -58,7 +57,7 @@ interface ManifestAsset {
 
 interface PlatformManifest {
 	platform: 'windows' | 'linux' | 'macos';
-	arch: 'x64' | 'arm64' | 'universal';
+	arch: 'x64' | 'arm64';
 	version: string;
 	productVersion: string;
 	commit: string;
@@ -76,8 +75,7 @@ const PLATFORM_FROM_KEY: Record<PlatformKey, PlatformManifest['platform']> = {
 	'linux-x64': 'linux',
 	'linux-arm64': 'linux',
 	'macos-x64': 'macos',
-	'macos-arm64': 'macos',
-	'macos-universal': 'macos'
+	'macos-arm64': 'macos'
 };
 
 const ARCH_FROM_KEY: Record<PlatformKey, PlatformManifest['arch']> = {
@@ -86,8 +84,7 @@ const ARCH_FROM_KEY: Record<PlatformKey, PlatformManifest['arch']> = {
 	'linux-x64': 'x64',
 	'linux-arm64': 'arm64',
 	'macos-x64': 'x64',
-	'macos-arm64': 'arm64',
-	'macos-universal': 'universal'
+	'macos-arm64': 'arm64'
 };
 
 function getProductInfo(): any {
@@ -104,7 +101,7 @@ function getPackageInfo(): any {
 function getBuiltCommit(): string {
 	// Get commit from all built product.json files and ensure they match
 	const distDir = path.join(__dirname, '../../.dist');
-	const architectures = ['arm64', 'x64', 'universal'];
+	const architectures = ['arm64', 'x64'];
 	const commits: { arch: string; commit: string }[] = [];
 
 	for (const arch of architectures) {
@@ -117,23 +114,21 @@ function getBuiltCommit(): string {
 			}
 		}
 
-		// Check Windows builds (skip universal for Windows)
-		if (arch !== 'universal') {
-			const windowsProductPath = path.join(distDir, `VSCode-win32-${arch}`, 'resources', 'app', 'product.json');
-			if (fs.existsSync(windowsProductPath)) {
-				const product = JSON.parse(fs.readFileSync(windowsProductPath, 'utf8'));
-				if (product.commit) {
-					commits.push({ arch: `win32-${arch}`, commit: product.commit });
-				}
+		// Check Windows builds
+		const windowsProductPath = path.join(distDir, `VSCode-win32-${arch}`, 'resources', 'app', 'product.json');
+		if (fs.existsSync(windowsProductPath)) {
+			const product = JSON.parse(fs.readFileSync(windowsProductPath, 'utf8'));
+			if (product.commit) {
+				commits.push({ arch: `win32-${arch}`, commit: product.commit });
 			}
+		}
 
-			// Check Linux builds (skip universal for Linux)
-			const linuxProductPath = path.join(distDir, `VSCode-linux-${arch}`, 'resources', 'app', 'product.json');
-			if (fs.existsSync(linuxProductPath)) {
-				const product = JSON.parse(fs.readFileSync(linuxProductPath, 'utf8'));
-				if (product.commit) {
-					commits.push({ arch: `linux-${arch}`, commit: product.commit });
-				}
+		// Check Linux builds
+		const linuxProductPath = path.join(distDir, `VSCode-linux-${arch}`, 'resources', 'app', 'product.json');
+		if (fs.existsSync(linuxProductPath)) {
+			const product = JSON.parse(fs.readFileSync(linuxProductPath, 'utf8'));
+			if (product.commit) {
+				commits.push({ arch: `linux-${arch}`, commit: product.commit });
 			}
 		}
 	}
@@ -794,7 +789,6 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 	};
 	const manifestFor = (platform: PlatformManifest['platform'], arch: PlatformManifest['arch']) => manifestMap.get(manifestKeyFromPlatform(platform, arch));
 
-	const macUniversal = manifestFor('macos', 'universal');
 	const macX64 = manifestFor('macos', 'x64');
 	const macArm64 = manifestFor('macos', 'arm64');
 	const winX64 = manifestFor('windows', 'x64');
@@ -802,13 +796,10 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 	const linuxX64 = manifestFor('linux', 'x64');
 	const linuxArm64 = manifestFor('linux', 'arm64');
 
-	const macosAppUniversalDmg = getAssetFilenameFromManifest(macUniversal, 'app-dmg');
-	const macosAppUniversalZip = getAssetFilenameFromManifest(macUniversal, 'app-zip');
 	const macosAppX64Dmg = getAssetFilenameFromManifest(macX64, 'app-dmg');
 	const macosAppX64Zip = getAssetFilenameFromManifest(macX64, 'app-zip');
 	const macosAppArm64Dmg = getAssetFilenameFromManifest(macArm64, 'app-dmg');
 	const macosAppArm64Zip = getAssetFilenameFromManifest(macArm64, 'app-zip');
-	const macosCliUniversal = getAssetFilenameFromManifest(macUniversal, 'cli');
 	const macosCliX64 = getAssetFilenameFromManifest(macX64, 'cli');
 	const macosCliArm64 = getAssetFilenameFromManifest(macArm64, 'cli');
 
@@ -830,18 +821,18 @@ function buildReleaseBody(manifestMap: ManifestMap, tagName: string, commit: str
 	const linuxAppArm64Rpm = getAssetFilenameFromManifest(linuxArm64, 'rpm');
 	const linuxCliArm64 = getAssetFilenameFromManifest(linuxArm64, 'cli');
 
-	const tableHeader = '| Platform | Universal | x64 | arm64 | CLI Universal | CLI x64 | CLI arm64 |';
-	const tableDivider = '|----------|-----------|-----|-------|---------------|---------|-----------|';
+	const tableHeader = '| Platform | x64 | arm64 | CLI x64 | CLI arm64 |';
+	const tableDivider = '|----------|-----|-------|---------|-----------|';
 
 	const rows: string[] = [tableHeader, tableDivider];
-	if (macosAppUniversalDmg || macosAppUniversalZip || macosAppX64Dmg || macosAppX64Zip || macosAppArm64Dmg || macosAppArm64Zip || macosCliUniversal || macosCliX64 || macosCliArm64) {
-		rows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppUniversalDmg, macosAppUniversalZip])} | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliUniversal)} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
+	if (macosAppX64Dmg || macosAppX64Zip || macosAppArm64Dmg || macosAppArm64Zip || macosCliX64 || macosCliArm64) {
+		rows.push(`| **🖥️ macOS** | ${createMultiDownloadCell([macosAppX64Dmg, macosAppX64Zip])} | ${createMultiDownloadCell([macosAppArm64Dmg, macosAppArm64Zip])} | ${createDownloadCell(macosCliX64)} | ${createDownloadCell(macosCliArm64)} |`);
 	}
 	if (winAppX64Zip || winAppX64User || winAppX64System || winAppArm64Zip || winAppArm64User || winAppArm64System || winCliX64 || winCliArm64) {
-		rows.push(`| **💻 Windows** | | ${createMultiDownloadCell([{ filename: winAppX64User, label: 'user' }, { filename: winAppX64System, label: 'system' }, { filename: winAppX64Zip, label: 'zip' }])} | ${createMultiDownloadCell([{ filename: winAppArm64User, label: 'user' }, { filename: winAppArm64System, label: 'system' }, { filename: winAppArm64Zip, label: 'zip' }])} | | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
+		rows.push(`| **💻 Windows** | ${createMultiDownloadCell([{ filename: winAppX64User, label: 'user' }, { filename: winAppX64System, label: 'system' }, { filename: winAppX64Zip, label: 'zip' }])} | ${createMultiDownloadCell([{ filename: winAppArm64User, label: 'user' }, { filename: winAppArm64System, label: 'system' }, { filename: winAppArm64Zip, label: 'zip' }])} | ${createDownloadCell(winCliX64)} | ${createDownloadCell(winCliArm64)} |`);
 	}
 	if (linuxAppX64Tar || linuxAppX64Deb || linuxAppX64Rpm || linuxAppArm64Tar || linuxAppArm64Deb || linuxAppArm64Rpm || linuxCliX64 || linuxCliArm64) {
-		rows.push(`| **🐧 Linux** | | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
+		rows.push(`| **🐧 Linux** | ${createMultiDownloadCell([linuxAppX64Deb, linuxAppX64Rpm, linuxAppX64Tar])} | ${createMultiDownloadCell([linuxAppArm64Deb, linuxAppArm64Rpm, linuxAppArm64Tar])} | ${createDownloadCell(linuxCliX64)} | ${createDownloadCell(linuxCliArm64)} |`);
 	}
 
 	releaseBodyParts.push('', '---', '## Downloads', '', ...rows);
@@ -1395,7 +1386,7 @@ async function main() {
 	}
 
 	// Get version from built product.json - this ensures we're releasing what was actually built
-	const architectures = ['arm64', 'x64', 'universal'];
+	const architectures = ['arm64', 'x64'];
 	const foundVersions: { arch: string; version: string }[] = [];
 	const productMetadata: Record<string, any> = {};
 
@@ -1416,35 +1407,33 @@ async function main() {
 			}
 		}
 
-		// Check Windows builds (skip universal for Windows)
-		if (arch !== 'universal') {
-			const windowsProductPath = path.join(distDir, `VSCode-win32-${arch}`, 'resources', 'app', 'product.json');
-			if (fs.existsSync(windowsProductPath)) {
-				try {
-					const builtProduct = JSON.parse(fs.readFileSync(windowsProductPath, 'utf8'));
-					const archVersion = builtProduct.version;
-					console.log(`Found version ${archVersion} in win32-${arch} build`);
-					foundVersions.push({ arch: `win32-${arch}`, version: archVersion });
-					productMetadata[`win32-${arch}`] = builtProduct;
-				} catch (error) {
-					console.error(`Failed to read version from ${windowsProductPath}:`, error);
-					process.exit(1);
-				}
+		// Check Windows builds
+		const windowsProductPath = path.join(distDir, `VSCode-win32-${arch}`, 'resources', 'app', 'product.json');
+		if (fs.existsSync(windowsProductPath)) {
+			try {
+				const builtProduct = JSON.parse(fs.readFileSync(windowsProductPath, 'utf8'));
+				const archVersion = builtProduct.version;
+				console.log(`Found version ${archVersion} in win32-${arch} build`);
+				foundVersions.push({ arch: `win32-${arch}`, version: archVersion });
+				productMetadata[`win32-${arch}`] = builtProduct;
+			} catch (error) {
+				console.error(`Failed to read version from ${windowsProductPath}:`, error);
+				process.exit(1);
 			}
+		}
 
-			// Check Linux builds (skip universal for Linux)
-			const linuxProductPath = path.join(distDir, `VSCode-linux-${arch}`, 'resources', 'app', 'product.json');
-			if (fs.existsSync(linuxProductPath)) {
-				try {
-					const builtProduct = JSON.parse(fs.readFileSync(linuxProductPath, 'utf8'));
-					const archVersion = builtProduct.version;
-					console.log(`Found version ${archVersion} in linux-${arch} build`);
-					foundVersions.push({ arch: `linux-${arch}`, version: archVersion });
-					productMetadata[`linux-${arch}`] = builtProduct;
-				} catch (error) {
-					console.error(`Failed to read version from ${linuxProductPath}:`, error);
-					process.exit(1);
-				}
+		// Check Linux builds
+		const linuxProductPath = path.join(distDir, `VSCode-linux-${arch}`, 'resources', 'app', 'product.json');
+		if (fs.existsSync(linuxProductPath)) {
+			try {
+				const builtProduct = JSON.parse(fs.readFileSync(linuxProductPath, 'utf8'));
+				const archVersion = builtProduct.version;
+				console.log(`Found version ${archVersion} in linux-${arch} build`);
+				foundVersions.push({ arch: `linux-${arch}`, version: archVersion });
+				productMetadata[`linux-${arch}`] = builtProduct;
+			} catch (error) {
+				console.error(`Failed to read version from ${linuxProductPath}:`, error);
+				process.exit(1);
 			}
 		}
 	}
@@ -1456,10 +1445,8 @@ async function main() {
 		console.error('Expected locations:');
 		for (const arch of architectures) {
 			console.error(`  - .dist/VSCode-darwin-${arch}/Unbroken Code.app/Contents/Resources/app/product.json`);
-			if (arch !== 'universal') {
-				console.error(`  - .dist/VSCode-win32-${arch}/resources/app/product.json`);
-				console.error(`  - .dist/VSCode-linux-${arch}/resources/app/product.json`);
-			}
+			console.error(`  - .dist/VSCode-win32-${arch}/resources/app/product.json`);
+			console.error(`  - .dist/VSCode-linux-${arch}/resources/app/product.json`);
 		}
 		process.exit(1);
 	}
@@ -1514,7 +1501,7 @@ async function main() {
 	};
 
 	// Check for macOS builds
-	const darwinArchitectures = ['arm64', 'x64', 'universal'];
+	const darwinArchitectures = ['arm64', 'x64'];
 	const hasDarwinBuilds = darwinArchitectures.some(arch => {
 		const appPath = path.join(distDir, `VSCode-darwin-${arch}`, 'Unbroken Code.app');
 		return fs.existsSync(appPath);

@@ -21,6 +21,95 @@ function getStderr(error: unknown): string {
 	return '';
 }
 
+/**
+ * Returns the device an image is attached as, if any.
+ */
+function getAttachedImageDevice(imagePath: string): string | undefined {
+	const realImagePath = fs.realpathSync(imagePath);
+	return execSync('hdiutil info', { encoding: 'utf8', stdio: 'pipe' })
+		.split(/^=+$/m)
+		.find(section => {
+			// hdiutil reports the path that the image was attached through, which can contain symlinks
+			const attachedPath = section.match(/^image-path\s*:\s*(?<path>.*)$/m)?.groups?.path;
+			return !!attachedPath && fs.existsSync(attachedPath) && fs.realpathSync(attachedPath) === realImagePath;
+		})
+		?.match(/^\/dev\/disk\d+/m)?.[0];
+}
+
+/**
+ * Makes sure an image is fully detached. A forced detach can be deferred, so the mount
+ * point can be gone while the image stays attached, possibly with unwritten data.
+ */
+function ensureImageDetached(imagePath: string, timeoutSeconds: number = 120): void {
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	for (let device = getAttachedImageDevice(imagePath); device; device = getAttachedImageDevice(imagePath)) {
+		if (Date.now() >= deadline) {
+			throw new Error(`${imagePath} is still attached as ${device} after ${timeoutSeconds}s`);
+		}
+		console.log(`${imagePath} is still attached as ${device}, detaching...`);
+		try {
+			execSync(`hdiutil detach ${device} -force`, { stdio: 'pipe' });
+		} catch (error) {
+			console.log(`Detaching ${device} failed: ${getStderr(error).trim()}`);
+		}
+		execSync('sleep 5');
+	}
+}
+
+/**
+ * Logs the processes holding a file open, to identify what keeps an image locked.
+ */
+function logFileHolders(filePath: string): void {
+	for (const command of [`sudo -n lsof "${filePath}"`, `lsof "${filePath}"`]) {
+		try {
+			console.log(execSync(command, { encoding: 'utf8', stdio: 'pipe' }));
+			return;
+		} catch (error) {
+			// lsof also fails when nothing holds the file
+		}
+	}
+	console.log(`No process found holding ${filePath}`);
+}
+
+/**
+ * Compresses a detached read-write image to its final compressed form.
+ *
+ * hdiutil fails with "Resource temporarily unavailable" while another process holds a lock
+ * on the image, which happens intermittently on CI runners. A lock belongs to the file and
+ * not to its contents, so a copy of the image can be compressed even if the lock isn't released.
+ */
+export function compressDMG(tempDmg: string, dmgPath: string): void {
+	ensureImageDetached(tempDmg);
+
+	const unlockedDmg = dmgPath.replace('.dmg', '.unlocked.dmg');
+	try {
+		for (let attempt = 1; attempt <= 5; attempt++) {
+			try {
+				execSync(`hdiutil convert "${attempt === 1 ? tempDmg : unlockedDmg}" -format UDZO -o "${dmgPath}" -ov`, {
+					stdio: 'pipe'
+				});
+				if (attempt > 1) {
+					execSync(`hdiutil verify "${dmgPath}"`, { stdio: 'pipe' });
+				}
+				return;
+			} catch (error) {
+				const stderr = getStderr(error);
+				if (attempt === 5 || !/Resource (?:temporarily unavailable|busy)/i.test(stderr)) {
+					throw error;
+				}
+				console.log(`hdiutil convert attempt ${attempt} failed (${stderr.trim()}), retrying in ${attempt * 3}s...`);
+				if (attempt === 1) {
+					logFileHolders(tempDmg);
+					fs.copyFileSync(tempDmg, unlockedDmg, fs.constants.COPYFILE_FICLONE);
+				}
+				execSync(`sleep ${attempt * 3}`);
+			}
+		}
+	} finally {
+		fs.rmSync(unlockedDmg, { force: true });
+	}
+}
+
 interface DMGOptions {
 	appPath: string;
 	dmgPath: string;
@@ -295,24 +384,8 @@ end tell
 			throw detachError;
 		}
 
-		// The image can remain briefly busy after detach completes on CI runners.
-		// Retry compression while preserving the customized source image.
 		console.log(`Compressing DMG...`);
-		for (let attempt = 1; attempt <= 5; attempt++) {
-			try {
-				execSync(`hdiutil convert "${tempDmg}" -format UDZO -o "${dmgPath}" -ov`, {
-					stdio: 'pipe'
-				});
-				break;
-			} catch (error) {
-				const stderr = getStderr(error);
-				if (attempt === 5 || !/Resource (?:temporarily unavailable|busy)/i.test(stderr)) {
-					throw error;
-				}
-				console.log(`hdiutil convert attempt ${attempt} failed (${stderr.trim()}), retrying in ${attempt * 3}s...`);
-				execSync(`sleep ${attempt * 3}`);
-			}
-		}
+		compressDMG(tempDmg, dmgPath);
 
 		console.log(`✓ Created enhanced DMG installer: ${dmgPath}`);
 

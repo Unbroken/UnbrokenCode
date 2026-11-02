@@ -45,13 +45,16 @@ export function createUpdateURL(baseUpdateUrl: string, platform: string, quality
 	// The feed generator creates platform-specific feeds with the appropriate format:
 	// - Squirrel.Mac format for darwin-* platforms
 	// - IUpdate format for linux-* and win32-* platforms
-
-	if (platform === 'darwin' || platform === 'darwin-universal') {
-		return `${baseUpdateUrl}/${prefix}-darwin-universal.json`;
-	}
-
-	// All other platforms use their platform identifier directly
 	return `${baseUpdateUrl}/${prefix}-${platform}.json`;
+}
+
+/**
+ * Returns the macOS update feed to use, based on the architecture of the machine rather than
+ * of the running build. This moves Universal builds to the build for their architecture, and
+ * x64 code translated by Rosetta to the native arm64 build.
+ */
+export function getDarwinUpdatePlatform(arch: string, runningUnderARM64Translation: boolean): string {
+	return arch === 'arm64' || runningUnderARM64Translation ? 'darwin-arm64' : 'darwin-x64';
 }
 
 /**

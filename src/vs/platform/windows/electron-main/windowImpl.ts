@@ -42,12 +42,14 @@ import { IPolicyService } from '../../policy/common/policy.js';
 import { IUserDataProfile } from '../../userDataProfile/common/userDataProfile.js';
 import { IFolderLocationsMainService } from './folderLocationsMainService.js';
 import { IStateService } from '../../state/node/state.js';
+import { equals } from '../../../base/common/objects.js';
 import { IUserDataProfilesMainService } from '../../userDataProfile/electron-main/userDataProfile.js';
 import { ILoggerMainService } from '../../log/electron-main/loggerService.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { errorHandler } from '../../../base/common/errors.js';
-import { FocusMode, IApplicationBadge } from '../../native/common/native.js';
+import { FocusMode, IApplicationBadge, IDisplayShape } from '../../native/common/native.js';
+import { IDisplayShapeMainService, NO_DISPLAY_SHAPE } from './displayShapeMainService.js';
 import { Color } from '../../../base/common/color.js';
 
 export interface IWindowCreationOptions {
@@ -175,6 +177,9 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 	private readonly _onDidChangeAlwaysOnTop = this._register(new Emitter<boolean>());
 	readonly onDidChangeAlwaysOnTop = this._onDidChangeAlwaysOnTop.event;
 
+	private readonly _onDidChangeDisplayShape = this._register(new Emitter<IDisplayShape>());
+	readonly onDidChangeDisplayShape = this._onDidChangeDisplayShape.event;
+
 	//#endregion
 
 	abstract readonly id: number;
@@ -190,6 +195,9 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 	protected maximized = false;
 
 	private hasWindowControlOverlay = false;
+
+	private _displayShape = NO_DISPLAY_SHAPE;
+	get displayShape(): IDisplayShape { return this._displayShape; }
 
 	protected _win: electron.BrowserWindow | null = null;
 	get win() { return this._win; }
@@ -236,6 +244,16 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		this._register(Event.fromNodeEventEmitter(this._win, 'enter-full-screen')(() => this._onDidEnterFullScreen.fire()));
 		this._register(Event.fromNodeEventEmitter(this._win, 'leave-full-screen')(() => this._onDidLeaveFullScreen.fire()));
 		this._register(Event.fromNodeEventEmitter(this._win, 'always-on-top-changed', (_, alwaysOnTop) => alwaysOnTop)(alwaysOnTop => this._onDidChangeAlwaysOnTop.fire(alwaysOnTop)));
+
+		// Display Shape: follow the window into and out of rounded display corners
+		this._register(Event.any<unknown>(
+			Event.fromNodeEventEmitter(win, 'move'),
+			Event.fromNodeEventEmitter(win, 'resize'),
+			this.onDidEnterFullScreen,
+			this.onDidLeaveFullScreen,
+			this.displayShapeMainService.onDidChange
+		)(() => this.updateDisplayShape()));
+		this.updateDisplayShape();
 
 		// Sheet Offsets
 		const useCustomTitleStyle = !hasNativeTitlebar(this.configurationService, options?.titleBarStyle === 'hidden' ? TitlebarStyle.CUSTOM : undefined /* unknown */);
@@ -300,6 +318,18 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		}
 	}
 
+	private updateDisplayShape(): void {
+		if (!this._win) {
+			return;
+		}
+
+		const shape = isMacintosh ? this.displayShapeMainService.getWindowDisplayShape(this._win) : NO_DISPLAY_SHAPE;
+		if (!equals(shape, this._displayShape)) {
+			this._displayShape = shape;
+			this._onDidChangeDisplayShape.fire(shape);
+		}
+	}
+
 	private onDisplayAdded(display: Display): void {
 		const state = this.maximizedWindowState;
 		if (state && this._win && WindowStateValidator.validateWindowStateOnDisplay(state, display)) {
@@ -313,7 +343,8 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		protected readonly configurationService: IConfigurationService,
 		protected readonly stateService: IStateService,
 		protected readonly environmentMainService: IEnvironmentMainService,
-		protected readonly logService: ILogService
+		protected readonly logService: ILogService,
+		private readonly displayShapeMainService: IDisplayShapeMainService
 	) {
 		super();
 
@@ -841,9 +872,10 @@ export class CodeWindow extends BaseWindow implements ICodeWindow {
 		@IWindowsMainService private readonly windowsMainService: IWindowsMainService,
 		@IFolderLocationsMainService private readonly folderLocationsMainService: IFolderLocationsMainService,
 		@IStateService stateService: IStateService,
-		@IInstantiationService instantiationService: IInstantiationService
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IDisplayShapeMainService displayShapeMainService: IDisplayShapeMainService
 	) {
-		super(configurationService, stateService, environmentMainService, logService);
+		super(configurationService, stateService, environmentMainService, logService, displayShapeMainService);
 
 		//#region create browser window
 		{

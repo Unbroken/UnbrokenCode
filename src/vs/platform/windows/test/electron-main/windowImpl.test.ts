@@ -6,6 +6,7 @@
 import assert from 'assert';
 import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron';
 import sinon from 'sinon';
+import { Event } from '../../../../base/common/event.js';
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import { upcastPartial } from '../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -25,6 +26,7 @@ import { FocusMode } from '../../../native/common/native.js';
 import { release } from 'os';
 import { BaseWindow } from '../../electron-main/windowImpl.js';
 import { defaultBrowserWindowOptions, getAuxiliaryWindowRestoreMode, getClaimedAuxiliaryWindowMode, isBackgroundThrottlingAllowed, isHiddenWindowMode } from '../../electron-main/windows.js';
+import { IDisplayShapeMainService, NO_DISPLAY_SHAPE } from '../../electron-main/displayShapeMainService.js';
 
 const displayBounds = { x: 0, y: 0, width: 1440, height: 900 };
 const workArea = { x: 0, y: 25, width: 1440, height: 875 };
@@ -88,7 +90,8 @@ suite('BaseWindow - window controls overlay', () => {
 			configurationService,
 			new InMemoryTestStateMainService(),
 			upcastPartial<IEnvironmentMainService>({ args: { _: [] } }),
-			store.add(new NullLogService())
+			store.add(new NullLogService()),
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE })
 		));
 		const setTitleBarOverlay = sinon.stub();
 		const setWindowButtonPosition = sinon.stub();
@@ -171,7 +174,8 @@ suite('BaseWindow - restoring a window state', () => {
 			configurationService,
 			new InMemoryTestStateMainService(),
 			upcastPartial<IEnvironmentMainService>({ args: { _: [] } }),
-			store.add(new NullLogService())
+			store.add(new NullLogService()),
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE, setCoversMenuBarInFullScreen: () => { }, windowLevelDidChange: () => { } })
 		));
 
 		const calls: string[] = [];
@@ -235,7 +239,8 @@ suite('BaseWindow - hidden window mode', () => {
 			configurationService,
 			new InMemoryTestStateMainService(),
 			environment({ 'hidden-window': hidden }, true),
-			store.add(new NullLogService())
+			store.add(new NullLogService()),
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE, setCoversMenuBarInFullScreen: () => { }, windowLevelDidChange: () => { } })
 		));
 		const on = sinon.stub();
 		const removeListener = sinon.stub();

@@ -19,7 +19,7 @@ import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { agentsPanelsCornerRadius, agentsPanelsSpacing, agentsToolsPanelCornerRadius, getSizeRegistry, panelsSpacing, primarySideBarCornerRadius, toolsPanelCornerRadius, editorAreaCornerRadius, agentsChatPanelsCornerRadius } from '../../../../../platform/theme/common/sizeRegistry.js';
 import { SIZE_CUSTOMIZATIONS_SETTING } from '../../../../../platform/theme/common/sizeService.js';
 import { TestColorTheme, TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
-import { PartOverlayCorners } from '../../../../browser/part.js';
+import { getPartOverlayCornerRadius, PartOverlayCorners } from '../../../../browser/part.js';
 import { WorkbenchSizeService } from '../../browser/workbenchSizeService.js';
 import { generateColorThemeCSS } from '../../browser/colorThemeCss.js';
 import { getFloatingEditorVerticalMargins, getFloatingPaneCompositeHorizontalMargins, getFloatingPanelOuterMargin, Parts, Position } from '../../../layout/browser/layoutService.js';
@@ -329,6 +329,16 @@ suite('WorkbenchSizeService', () => {
 		assert.deepStrictEqual({ initial, updated: targetWindow.getComputedStyle(root).getPropertyValue('--vscode-toolsPanel-cornerRadius').trim(), initialClipping, clipping: overlay.style.borderRadius }, {
 			initial: '3px', updated: '5px', initialClipping: '2px', clipping: '4px',
 		});
+	});
+
+	test('overlays keep both radii of an elliptical part corner, as at a rounded display corner', () => {
+		const root = append(document.body, $('.monaco-workbench.modern-ui.floating-panels'));
+		store.add(toDisposable(() => root.remove()));
+		const part = append(append(root, $('.monaco-grid-view')), $('.part.editor'));
+		part.style.cssText = 'position: relative; width: 200px; height: 200px; border: 1px solid transparent; border-bottom-left-radius: 20px 30px; border-bottom-right-radius: 8px;';
+		const anchor = append(part, $('.notebook-anchor'));
+		anchor.style.cssText = 'position: absolute; inset: 0;';
+		assert.strictEqual(getPartOverlayCornerRadius(anchor, part), '0px 0px 7px 19px / 0px 0px 7px 29px');
 	});
 
 	test('registry defaults remain independent of user customizations', () => {

@@ -19,7 +19,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { FuzzyScore } from '../../../../base/common/filters.js';
 import { HistoryNavigator } from '../../../../base/common/history.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { Disposable, IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { removeAnsiEscapeCodes } from '../../../../base/common/strings.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI as uri } from '../../../../base/common/uri.js';
@@ -110,6 +110,8 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 	private treeContainer!: HTMLElement;
 	private replInput!: CodeEditorWidget;
 	private replInputContainer!: HTMLElement;
+	/** The width of the input's prompt, which grows at a rounded corner of the window. */
+	private replInputChevronWidth = 30;
 	private bodyContentDimension: dom.Dimension | undefined;
 	private model: ITextModel | undefined;
 	private setHistoryNavigationEnablement!: (enabled: boolean) => void;
@@ -544,7 +546,7 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 		}
 		this.replInputContainer.style.height = `${replInputHeight}px`;
 
-		this.replInput.layout({ width: width - 30, height: replInputHeight });
+		this.replInput.layout({ width: width - this.replInputChevronWidth, height: replInputHeight });
 	}
 
 	collapseAll(): void {
@@ -735,7 +737,29 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 
 	private createReplInput(container: HTMLElement): void {
 		this.replInputContainer = dom.append(container, $('.repl-input-wrapper'));
-		dom.append(this.replInputContainer, $('.repl-input-chevron' + ThemeIcon.asCSSSelector(debugConsoleEvaluationPrompt)));
+		const replInputChevron = dom.append(this.replInputContainer, $('.repl-input-chevron' + ThemeIcon.asCSSSelector(debugConsoleEvaluationPrompt)));
+		const chevronRelayout = this._register(new MutableDisposable());
+		const chevronObserver = this._register(new dom.DisposableResizeObserver('repl.inputChevron', entries => {
+			const width = entries[entries.length - 1].borderBoxSize?.[0]?.inlineSize;
+			if (width && width !== this.replInputChevronWidth) {
+				this.replInputChevronWidth = width;
+				// Laid out in the next frame, since the layout resizes the prompt with the input's
+				// height, which would resize what this observer observes while it delivers
+				chevronRelayout.value = dom.scheduleAtNextAnimationFrame(dom.getWindow(this.replInputContainer), () => {
+					if (this.bodyContentDimension) {
+						// The new width can wrap the input to another number of lines, which only the
+						// layout measures, so lay it out again for that height
+						const contentHeight = this.replInput.getContentHeight();
+						this.layoutBodyContent(this.bodyContentDimension.height, this.bodyContentDimension.width);
+						if (this.replInput.getContentHeight() !== contentHeight) {
+							this.layoutBodyContent(this.bodyContentDimension.height, this.bodyContentDimension.width);
+						}
+					}
+				});
+			}
+		}, dom.getWindow(this.replInputContainer)));
+		// The prompt grows by its padding, which only changes its border box
+		this._register(chevronObserver.observe(replInputChevron, { box: 'border-box' }));
 
 		const { historyNavigationBackwardsEnablement, historyNavigationForwardsEnablement } = this._register(registerAndCreateHistoryNavigationContext(this.scopedContextKeyService, this));
 		this.setHistoryNavigationEnablement = enabled => {

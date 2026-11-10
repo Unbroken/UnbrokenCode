@@ -1,0 +1,15 @@
+{
+  "name": "@unbroken/display-shape",
+  "version": "1.0.0",
+  "description": "Fits windows to displays with rounded corners on macOS",
+  "main": "index.js",
+  "typings": "index.d.ts",
+  "license": "MIT",
+  "private": true,
+  "files": [
+    "src",
+    "binding.gyp",
+    "index.js",
+    "index.d.ts"
+  ]
+}

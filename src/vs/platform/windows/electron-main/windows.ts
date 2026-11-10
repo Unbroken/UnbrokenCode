@@ -19,6 +19,7 @@ import { IProductService } from '../../product/common/productService.js';
 import { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
 import { AgentsWindowOpenSource, IAgentsWindowDraft, IOpenEmptyWindowOptions, IWindowOpenable, IWindowSettings, TitlebarStyle, WindowMinimumSize, hasNativeTitlebar, useNativeFullScreen, useWindowControlsOverlay, zoomLevelToZoomFactor } from '../../window/common/window.js';
 import { ICodeWindow, IWindowState, WindowMode, defaultWindowState } from '../../window/electron-main/window.js';
+import { IDisplayShape } from '../../native/common/native.js';
 
 export const IWindowsMainService = createDecorator<IWindowsMainService>('windowsMainService');
 
@@ -33,6 +34,7 @@ export interface IWindowsMainService {
 	readonly onDidMaximizeWindow: Event<ICodeWindow>;
 	readonly onDidUnmaximizeWindow: Event<ICodeWindow>;
 	readonly onDidChangeFullScreen: Event<{ window: ICodeWindow; fullscreen: boolean }>;
+	readonly onDidChangeDisplayShape: Event<{ window: ICodeWindow; shape: IDisplayShape }>;
 	readonly onDidTriggerSystemContextMenu: Event<{ readonly window: ICodeWindow; readonly x: number; readonly y: number }>;
 	readonly onDidDestroyWindow: Event<ICodeWindow>;
 

@@ -246,7 +246,7 @@ async function main() {
 		return;
 	}
 
-	const _state = computeState();
+	const _state = computeState({ installedLocalPackages: true });
 
 	const nativeTasks: (() => Promise<void>)[] = [];
 	const parallelTasks: (() => Promise<void>)[] = [];

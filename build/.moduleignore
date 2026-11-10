@@ -99,6 +99,11 @@ windows-foreground-love/build/**
 windows-foreground-love/src/**
 !windows-foreground-love/**/*.node
 
+@unbroken/display-shape/binding.gyp
+@unbroken/display-shape/build/**
+@unbroken/display-shape/src/**
+!@unbroken/display-shape/build/Release/*.node
+
 kerberos/binding.gyp
 kerberos/build/**
 kerberos/src/**

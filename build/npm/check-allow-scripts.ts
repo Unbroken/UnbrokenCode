@@ -7,6 +7,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { dirs } from './dirs.ts';
+import { getLocalPackages } from './localPackages.ts';
 
 interface PendingScript {
 	package: string;
@@ -54,10 +55,22 @@ function checkDirectory(directory: string): CheckResult {
 	if (result.status !== 0) {
 		throw new Error(`npm approve-scripts failed in ${path.relative(root, directory) || '.'}:\n${result.stderr}`);
 	}
+	// Packages this repository depends on by a `file:` path are part of it, so their install
+	// scripts are reviewed with it. npm can only approve those by their absolute path, which
+	// differs on every machine, so they are not listed in allowScripts.
+	const localPackages = new Set(getLocalPackages(directory).map(localPackage => localPackage.name));
 	return {
 		directory,
-		pending: parsePendingScripts(result.stdout)
+		pending: parsePendingScripts(result.stdout).filter(pending => !localPackages.has(packageName(pending.package)))
 	};
+}
+
+/**
+ * Returns the name of a package from its `name@version`, whose name may start with a scope.
+ */
+function packageName(packageWithVersion: string): string {
+	const versionSeparator = packageWithVersion.lastIndexOf('@');
+	return versionSeparator > 0 ? packageWithVersion.slice(0, versionSeparator) : packageWithVersion;
 }
 
 function main(): void {

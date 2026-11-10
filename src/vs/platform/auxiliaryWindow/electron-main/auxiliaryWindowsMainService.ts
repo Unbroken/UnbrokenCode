@@ -14,6 +14,7 @@ import { IInstantiationService } from '../../instantiation/common/instantiation.
 import { ILogService } from '../../log/common/log.js';
 import { IWindowState, WindowMode, defaultAuxWindowState } from '../../window/electron-main/window.js';
 import { IDefaultBrowserWindowOptionsOverrides, WindowStateValidator, defaultBrowserWindowOptions, getLastFocused } from '../../windows/electron-main/windows.js';
+import { IDisplayShape } from '../../native/common/native.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
 
@@ -27,6 +28,9 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 
 	private readonly _onDidChangeFullScreen = this._register(new Emitter<{ window: IAuxiliaryWindow; fullscreen: boolean }>());
 	readonly onDidChangeFullScreen = this._onDidChangeFullScreen.event;
+
+	private readonly _onDidChangeDisplayShape = this._register(new Emitter<{ window: IAuxiliaryWindow; shape: IDisplayShape }>());
+	readonly onDidChangeDisplayShape = this._onDidChangeDisplayShape.event;
 
 	private readonly _onDidChangeAlwaysOnTop = this._register(new Emitter<{ window: IAuxiliaryWindow; alwaysOnTop: boolean }>());
 	readonly onDidChangeAlwaysOnTop = this._onDidChangeAlwaysOnTop.event;
@@ -178,6 +182,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		disposables.add(auxiliaryWindow.onDidUnmaximize(() => this._onDidUnmaximizeWindow.fire(auxiliaryWindow)));
 		disposables.add(auxiliaryWindow.onDidEnterFullScreen(() => this._onDidChangeFullScreen.fire({ window: auxiliaryWindow, fullscreen: true })));
 		disposables.add(auxiliaryWindow.onDidLeaveFullScreen(() => this._onDidChangeFullScreen.fire({ window: auxiliaryWindow, fullscreen: false })));
+		disposables.add(auxiliaryWindow.onDidChangeDisplayShape(shape => this._onDidChangeDisplayShape.fire({ window: auxiliaryWindow, shape })));
 		disposables.add(auxiliaryWindow.onDidChangeAlwaysOnTop(alwaysOnTop => this._onDidChangeAlwaysOnTop.fire({ window: auxiliaryWindow, alwaysOnTop })));
 		disposables.add(auxiliaryWindow.onDidTriggerSystemContextMenu(({ x, y }) => this._onDidTriggerSystemContextMenu.fire({ window: auxiliaryWindow, x, y })));
 

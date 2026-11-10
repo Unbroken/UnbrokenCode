@@ -18,7 +18,7 @@ import { toWorkspaceFolders } from '../../../workspaces/common/workspaces.js';
 import { IWorkspaceIdentifier } from '../../../workspace/common/workspace.js';
 import { FileAccess } from '../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { FocusMode, IApplicationBadge } from '../../../native/common/native.js';
+import { FocusMode, IApplicationBadge, IDisplayShape } from '../../../native/common/native.js';
 
 suite('WindowsFinder', () => {
 
@@ -43,6 +43,7 @@ suite('WindowsFinder', () => {
 			readonly onDidDestroy: Event<void> = Event.None;
 			readonly onDidEnterFullScreen: Event<void> = Event.None;
 			readonly onDidLeaveFullScreen: Event<void> = Event.None;
+			readonly onDidChangeDisplayShape: Event<IDisplayShape> = Event.None;
 			whenClosedOrLoaded: Promise<void> = Promise.resolve();
 			id: number = -1;
 			win: Electron.BrowserWindow = null!;
@@ -55,6 +56,7 @@ suite('WindowsFinder', () => {
 			isExtensionTestHost = false;
 			lastFocusTime = options.lastFocusTime;
 			isFullScreen = false;
+			displayShape: IDisplayShape = { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 } };
 			isReady = true;
 
 			ready(): Promise<ICodeWindow> { throw new Error('Method not implemented.'); }

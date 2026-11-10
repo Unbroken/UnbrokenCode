@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
 import { dirs } from './dirs.ts';
+import { getLocalPackageFiles, getLocalPackages } from './localPackages.ts';
 
 export const root = fs.realpathSync.native(path.dirname(path.dirname(import.meta.dirname)));
 export const stateFile = path.join(root, 'node_modules', '.postinstall-state');
@@ -15,6 +16,7 @@ export const forceInstallMessage = 'Run \x1b[36mnode build/npm/fast-install.ts -
 
 export function collectInputFiles(): string[] {
 	const files: string[] = [];
+	const localPackageFiles = collectLocalPackageFiles();
 
 	for (const dir of dirs) {
 		const base = dir === '' ? root : path.join(root, dir);
@@ -28,6 +30,24 @@ export function collectInputFiles(): string[] {
 
 	files.push(path.join(root, '.nvmrc'));
 
+	files.push(...localPackageFiles.keys());
+
+	return files;
+}
+
+/**
+ * Returns the files of local packages, which are copied into node_modules and built there,
+ * so their own files decide whether those copies are current. Maps each file to its copy in
+ * node_modules, for packages copied from a directory, rather than unpacked from a file.
+ */
+function collectLocalPackageFiles(): Map<string, string | undefined> {
+	const files = new Map<string, string | undefined>();
+	for (const localPackage of getLocalPackages(root)) {
+		for (const file of getLocalPackageFiles(root, localPackage)) {
+			const relativeToPackage = path.posix.relative(localPackage.dir, file);
+			files.set(path.join(root, file), relativeToPackage ? path.join(root, 'node_modules', localPackage.name, relativeToPackage) : undefined);
+		}
+	}
 	return files;
 }
 
@@ -81,18 +101,31 @@ function normalizeFileContent(filePath: string): string {
 	return raw;
 }
 
-function hashContent(content: string): string {
+function hashContent(content: string | Buffer): string {
 	const hash = crypto.createHash('sha256');
 	hash.update(content);
 	return hash.digest('hex');
 }
 
-export function computeState(options?: { ignoreNodeVersion?: boolean }): PostinstallState {
+/**
+ * Computes the state of the installation inputs. With `installedLocalPackages`, the files of
+ * local packages are those of their copies in node_modules, which is what an installation
+ * leaves, as npm does not copy a local package again unless it is missing there.
+ */
+export function computeState(options?: { ignoreNodeVersion?: boolean; installedLocalPackages?: boolean }): PostinstallState {
 	const fileHashes: Record<string, string> = {};
+	const localPackageFiles = collectLocalPackageFiles();
 	for (const filePath of collectInputFiles()) {
 		const key = path.relative(root, filePath);
 		try {
-			fileHashes[key] = hashContent(normalizeFileContent(filePath));
+			if (localPackageFiles.has(filePath)) {
+				// As is: every field of a local package's manifest matters, and packed packages are
+				// binary. A published file that npm did not copy leaves the copy stale.
+				const installedPath = options?.installedLocalPackages ? localPackageFiles.get(filePath) : undefined;
+				fileHashes[key] = installedPath && !fs.existsSync(installedPath) ? 'missing' : hashContent(fs.readFileSync(installedPath ?? filePath));
+			} else {
+				fileHashes[key] = hashContent(normalizeFileContent(filePath));
+			}
 		} catch {
 			// file may not be readable
 		}

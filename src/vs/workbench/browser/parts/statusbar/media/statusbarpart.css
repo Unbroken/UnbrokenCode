@@ -17,15 +17,35 @@
 	transition: background-color 0.15s ease-out;
 }
 
+/*
+ * Rounded corners to make the focus outline appear properly, following the
+ * window's corners, which grow to match rounded display corners the window nears.
+ */
+.monaco-workbench.mac .part.statusbar:focus {
+	border-bottom-right-radius: calc(1px * var(--window-screen-corner-bottom-right-radius, 0));
+	border-bottom-left-radius: calc(1px * var(--window-screen-corner-bottom-left-radius, 0));
+}
 .monaco-workbench.mac:not(.fullscreen) .part.statusbar:focus {
-	/* Rounded corners to make focus outline appear properly (unless fullscreen) */
-	border-bottom-right-radius: 10px;
-	border-bottom-left-radius: 10px;
+	border-bottom-right-radius: max(10px, calc(1px * var(--window-screen-corner-bottom-right-radius, 0)));
+	border-bottom-left-radius: max(10px, calc(1px * var(--window-screen-corner-bottom-left-radius, 0)));
 }
 .monaco-workbench.mac.macos-tahoe:not(.fullscreen) .part.statusbar:focus {
 	/* macOS Tahoe increased rounded corners size */
-	border-bottom-right-radius: 16px;
-	border-bottom-left-radius: 16px;
+	border-bottom-right-radius: max(16px, calc(1px * var(--window-screen-corner-bottom-right-radius, 0)));
+	border-bottom-left-radius: max(16px, calc(1px * var(--window-screen-corner-bottom-left-radius, 0)));
+}
+
+/*
+ * How much further in from the window's side edges the status bar's content has to start
+ * where macOS grew the window's corner to match a rounded display corner: as much further
+ * as the grown corner's arc reaches in beyond the window's normal corner, so the content
+ * keeps the clearance it was designed with. The arc is measured 4px above the window's
+ * bottom edge, where the lowest content sits: the bottom corners of the item backgrounds,
+ * which are inset 2px from the bottom and pull in further with their own rounding.
+ */
+.monaco-workbench {
+	--statusbar-screen-corner-bottom-left-inset: calc(1px * max(0, (var(--window-screen-corner-bottom-left-radius, 0) - sqrt(max(0, pow(var(--window-screen-corner-bottom-left-radius, 0), 2) - pow(max(0, var(--window-screen-corner-bottom-left-radius, 0) - 4), 2)))) - (var(--window-screen-corner-bottom-left-base-radius, 0) - sqrt(max(0, pow(var(--window-screen-corner-bottom-left-base-radius, 0), 2) - pow(max(0, var(--window-screen-corner-bottom-left-base-radius, 0) - 4), 2))))));
+	--statusbar-screen-corner-bottom-right-inset: calc(1px * max(0, (var(--window-screen-corner-bottom-right-radius, 0) - sqrt(max(0, pow(var(--window-screen-corner-bottom-right-radius, 0), 2) - pow(max(0, var(--window-screen-corner-bottom-right-radius, 0) - 4), 2)))) - (var(--window-screen-corner-bottom-right-base-radius, 0) - sqrt(max(0, pow(var(--window-screen-corner-bottom-right-base-radius, 0), 2) - pow(max(0, var(--window-screen-corner-bottom-right-base-radius, 0) - 4), 2))))));
 }
 
 .monaco-workbench .part.statusbar:not(:focus).status-border-top::after {
@@ -142,6 +162,19 @@
 .monaco-workbench .part.statusbar > .items-container > .statusbar-item.compact-right.has-background-color > .statusbar-item-label {
 	padding-left: 10px;
 	padding-right: 3px;
+}
+
+/*
+ * Rounded display corners: keep the label of the outermost items clear of the
+ * corner's curve, while their background still fills the corner. Floating panels
+ * inset the whole row instead, because their edge items are pills whose
+ * backgrounds must clear the curve too.
+ */
+.monaco-workbench[data-screen-corner-bottom-left]:not(.floating-panels) .part.statusbar > .items-container > .statusbar-item.left.first-visible-item > .statusbar-item-label {
+	padding-left: calc(8px + var(--statusbar-screen-corner-bottom-left-inset));
+}
+.monaco-workbench[data-screen-corner-bottom-right]:not(.floating-panels) .part.statusbar > .items-container > .statusbar-item.right.last-visible-item > .statusbar-item-label {
+	padding-right: calc(8px + var(--statusbar-screen-corner-bottom-right-inset));
 }
 
 .monaco-workbench .part.statusbar > .items-container > .statusbar-item > a:hover:not(.disabled) {

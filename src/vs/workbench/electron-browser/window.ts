@@ -7,7 +7,7 @@ import './media/window.css';
 import { localize } from '../../nls.js';
 import { URI } from '../../base/common/uri.js';
 import { equals } from '../../base/common/objects.js';
-import { EventType, EventHelper, addDisposableListener, ModifierKeyEmitter, getActiveElement, hasWindow, getWindowById, getWindows, $ } from '../../base/browser/dom.js';
+import { EventType, EventHelper, addDisposableListener, ModifierKeyEmitter, getActiveElement, hasWindow, getWindowById, getWindows, $, onDidRegisterWindow, onDidUnregisterWindow } from '../../base/browser/dom.js';
 import { Action, Separator, WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../base/common/actions.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { EditorResourceAccessor, IUntitledTextResourceEditorInput, SideBySideEditor, pathsToEditors, IResourceDiffEditorInput, IUntypedEditorInput, IEditorPane, isResourceEditorInput, IResourceMergeEditorInput } from '../common/editor.js';
@@ -42,7 +42,7 @@ import { ConfigurationTarget, IConfigurationService } from '../../platform/confi
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { IOpenerService, IResolvedExternalUri, OpenOptions } from '../../platform/opener/common/opener.js';
 import { Schemas } from '../../base/common/network.js';
-import { INativeHostService } from '../../platform/native/common/native.js';
+import { INativeHostService, IScreenCorners } from '../../platform/native/common/native.js';
 import { posix } from '../../base/common/path.js';
 import { ITunnelService, RemoteTunnel, extractLocalHostUriMetaDataForPortMapping, extractQueryLocalHostUriMetaDataForPortMapping } from '../../platform/tunnel/common/tunnel.js';
 import { IWorkbenchLayoutService, positionFromString, Position } from '../services/layout/browser/layoutService.js';
@@ -69,7 +69,7 @@ import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdenti
 import { IPreferencesService } from '../services/preferences/common/preferences.js';
 import { IUtilityProcessWorkerWorkbenchService } from '../services/utilityProcess/electron-browser/utilityProcessWorkerWorkbenchService.js';
 import { registerWindowDriver } from '../services/driver/browser/driver.js';
-import { mainWindow } from '../../base/browser/window.js';
+import { CodeWindow, mainWindow } from '../../base/browser/window.js';
 import { BaseWindow } from '../browser/window.js';
 import { IHostService } from '../services/host/browser/host.js';
 import { IStatusbarService, ShowTooltipCommand, StatusbarAlignment } from '../services/statusbar/browser/statusbar.js';
@@ -428,6 +428,9 @@ export class NativeWindow extends BaseWindow {
 		)(e => this.layoutService.updateWindowMaximizedState(getWindowById(e.windowId)!.window, e.maximized)));
 		this.layoutService.updateWindowMaximizedState(mainWindow, this.nativeEnvironmentService.window.maximized ?? false);
 
+		// Keep content clear of rounded display corners
+		this.registerScreenCornersListeners();
+
 		// Detect panel position to determine minimum width
 		this._register(this.layoutService.onDidChangePanelPosition(pos => this.onDidChangePanelPosition(positionFromString(pos))));
 		this.onDidChangePanelPosition(this.layoutService.getPanelPosition());
@@ -441,6 +444,56 @@ export class NativeWindow extends BaseWindow {
 		this._register(this.lifecycleService.onBeforeShutdown(e => this.onBeforeShutdown(e)));
 		this._register(this.lifecycleService.onBeforeShutdownError(e => this.onBeforeShutdownError(e)));
 		this._register(this.lifecycleService.onWillShutdown(e => this.onWillShutdown(e)));
+	}
+
+	/**
+	 * Tells each window's styles, through CSS variables, about the window's bottom
+	 * corners as macOS rounds them, and whether macOS has grown them to match
+	 * rounded display corners, such as in full screen on displays with physically
+	 * rounded corners. They go on the window's workbench container rather than its
+	 * root element, because auxiliary windows mirror the main window's root
+	 * element attributes.
+	 */
+	private registerScreenCornersListeners(): void {
+		const screenCorners = new Map<number /* window ID */, IScreenCorners>();
+
+		const applyScreenCorners = (targetWindow: CodeWindow) => {
+			const corners = screenCorners.get(targetWindow.vscodeWindowId);
+			const zoomFactor = getZoomFactor(targetWindow); // corners come in screen points, CSS pixels scale with zoom
+			const container = this.layoutService.getContainer(targetWindow);
+			for (const [side, corner] of [['left', corners?.bottomLeft], ['right', corners?.bottomRight]] as const) {
+
+				container.toggleAttribute(`data-window-corner-bottom-${side}`, !!corner?.radius);
+				container.toggleAttribute(`data-screen-corner-bottom-${side}`, !!corner && corner.radius > corner.baseRadius);
+
+				// Unitless, so that styles can evaluate the corner's curve at their own height
+				container.style.setProperty(`--window-screen-corner-bottom-${side}-radius`, `${(corner?.radius ?? 0) / zoomFactor}`);
+				container.style.setProperty(`--window-screen-corner-bottom-${side}-reach`, `${(corner?.reach ?? 0) / zoomFactor}`);
+				container.style.setProperty(`--window-screen-corner-bottom-${side}-base-radius`, `${(corner?.baseRadius ?? 0) / zoomFactor}`);
+			}
+		};
+
+		this._register(Event.filter(this.nativeHostService.onDidChangeWindowDisplayShape, e => hasWindow(e.windowId))(({ windowId, shape }) => {
+			screenCorners.set(windowId, shape);
+			applyScreenCorners(getWindowById(windowId)!.window);
+		}));
+
+		this._register(onDidChangeZoomLevel(targetWindowId => {
+			const targetWindow = getWindowById(targetWindowId);
+			if (targetWindow) {
+				applyScreenCorners(targetWindow.window);
+			}
+		}));
+
+		this._register(Event.runAndSubscribe(onDidRegisterWindow, async ({ window: targetWindow }) => {
+			const corners = await this.nativeHostService.getWindowDisplayShape({ targetWindowId: targetWindow.vscodeWindowId });
+			if (hasWindow(targetWindow.vscodeWindowId) && !screenCorners.has(targetWindow.vscodeWindowId)) { // a change event may have arrived meanwhile
+				screenCorners.set(targetWindow.vscodeWindowId, corners);
+				applyScreenCorners(targetWindow);
+			}
+		}, { window: mainWindow, disposables: this._store }));
+
+		this._register(onDidUnregisterWindow(targetWindow => screenCorners.delete(targetWindow.vscodeWindowId)));
 	}
 
 	private handleRepresentedFilename(part: IEditorPart): void {

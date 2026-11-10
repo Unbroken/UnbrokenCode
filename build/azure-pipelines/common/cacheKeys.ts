@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { dirs } from '../../npm/dirs.ts';
+import { getLocalPackageFiles, getLocalPackages } from '../../npm/localPackages.ts';
 import { getCurrentExtensionTarget } from '../../lib/extensionTarget.ts';
 
 const ROOT = path.join(import.meta.dirname, '../../../');
@@ -22,7 +23,8 @@ function readRepositoryFile(relativePath: string): Buffer {
 
 /**
  * Computes the node_modules cache key from the npm configuration, the dependency sections of
- * every `package.json`, every `package-lock.json` and the given arguments.
+ * every `package.json`, every `package-lock.json`, the files of local packages and the given
+ * arguments.
  */
 export function computeNodeModulesCacheKey(args: readonly string[], readFile: ReadRepositoryFile = readRepositoryFile): string {
 	const shasum = crypto.createHash('sha256');
@@ -45,6 +47,14 @@ export function computeNodeModulesCacheKey(args: readonly string[], readFile: Re
 		shasum.update(JSON.stringify(relevantPackageJsonSections));
 
 		shasum.update(readFile(path.posix.join(dir, 'package-lock.json')));
+	}
+
+	// Add the files of local packages, which are built from source into node_modules
+	for (const localPackage of getLocalPackages(ROOT)) {
+		for (const file of getLocalPackageFiles(ROOT, localPackage)) {
+			shasum.update(file);
+			shasum.update(readFile(file));
+		}
 	}
 
 	for (const arg of args) {

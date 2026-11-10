@@ -183,6 +183,45 @@ export interface INativeHostOptions {
 	readonly targetWindowId?: number;
 }
 
+/**
+ * A bottom corner of a window as macOS rounds it, in screen points. A radius
+ * beyond the base radius means macOS has grown the corner to match a rounded
+ * display corner the window nears. A radius of zero means the corner is square.
+ */
+export interface IScreenCorner {
+
+	/**
+	 * The radius of the circular arc in the middle of the corner's curve.
+	 */
+	readonly radius: number;
+
+	/**
+	 * How far from the window's corner, along each edge, the curve starts to
+	 * bend. macOS uses continuous curves, which reach further than the arc.
+	 */
+	readonly reach: number;
+
+	/**
+	 * The radius the window's corners normally have, which the workbench is
+	 * designed for. Zero in full screen.
+	 */
+	readonly baseRadius: number;
+}
+
+/**
+ * The bottom corners of a window as macOS rounds them, which it grows to match
+ * rounded display corners the window nears.
+ */
+export interface IScreenCorners {
+	readonly bottomLeft: IScreenCorner;
+	readonly bottomRight: IScreenCorner;
+}
+
+/**
+ * How the shape of the display a window is on reaches into the window.
+ */
+export interface IDisplayShape extends IScreenCorners { }
+
 export interface IStartTracingOptions {
 
 	/**
@@ -266,6 +305,7 @@ export interface ICommonNativeHostService {
 
 	readonly onDidChangeWindowFullScreen: Event<{ windowId: number; fullscreen: boolean }>;
 	readonly onDidChangeWindowAlwaysOnTop: Event<{ windowId: number; alwaysOnTop: boolean }>;
+	readonly onDidChangeWindowDisplayShape: Event<{ windowId: number; shape: IDisplayShape }>;
 
 	readonly onDidFocusMainOrAuxiliaryWindow: Event<number>;
 	readonly onDidBlurMainOrAuxiliaryWindow: Event<number>;
@@ -318,6 +358,12 @@ export interface ICommonNativeHostService {
 
 	isFullScreen(options?: INativeHostOptions): Promise<boolean>;
 	toggleFullScreen(options?: INativeHostOptions): Promise<void>;
+
+	/**
+	 * Returns the rounded display corners that the window's bottom corners
+	 * currently reach into.
+	 */
+	getWindowDisplayShape(options?: INativeHostOptions): Promise<IDisplayShape>;
 
 	getCursorScreenPoint(): Promise<{ readonly point: IPoint; readonly display: IRectangle }>;
 

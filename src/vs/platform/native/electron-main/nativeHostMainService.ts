@@ -27,7 +27,7 @@ import { IEnvironmentMainService } from '../../environment/electron-main/environ
 import { createDecorator, IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILifecycleMainService, IRelaunchOptions } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { ILogService } from '../../log/common/log.js';
-import { FocusMode, IApplicationBadge, ICommonNativeHostService, INativeHostOptions, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, INativeZipFile, INativeZipOptions, INativeZipProgress, INativeZipResult, IOpenAgentsWindowOptions, IOSProperties, IOSProxy, IOSProxyConfig, IOSStatistics, IStartTracingOptions, IToastOptions, IToastResult, PowerSaveBlockerType, SystemIdleState, ThermalState, IDisplayNativeResolution } from '../common/native.js';
+import { FocusMode, IApplicationBadge, ICommonNativeHostService, INativeHostOptions, IDisplayShape, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, INativeZipFile, INativeZipOptions, INativeZipProgress, INativeZipResult, IOpenAgentsWindowOptions, IOSProperties, IOSProxy, IOSProxyConfig, IOSStatistics, IStartTracingOptions, IToastOptions, IToastResult, PowerSaveBlockerType, SystemIdleState, ThermalState, IDisplayNativeResolution } from '../common/native.js';
 import { IGlobalKeybindingsMainService } from '../../globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { IGPUProcessMainService } from '../../gpu/electron-main/gpuProcessMainService.js';
 import { IProductService } from '../../product/common/productService.js';
@@ -54,6 +54,7 @@ import { CancellationToken, CancellationTokenSource } from '../../../base/common
 import { GPUCompositingState } from './gpuCompositingState.js';
 import { AgentHostEditorUpdate, AgentsWindowInvitationState, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
+import { NO_DISPLAY_SHAPE } from '../../windows/electron-main/displayShapeMainService.js';
 
 export interface INativeHostMainService extends AddFirstParameterToFunctions<ICommonNativeHostService, Promise<unknown> /* only methods, not events */, number | undefined /* window ID */> { }
 
@@ -112,6 +113,11 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 			this.onDidChangeWindowFullScreen = Event.any(
 				Event.map(this.windowsMainService.onDidChangeFullScreen, e => ({ windowId: e.window.id, fullscreen: e.fullscreen })),
 				Event.map(this.auxiliaryWindowsMainService.onDidChangeFullScreen, e => ({ windowId: e.window.id, fullscreen: e.fullscreen }))
+			);
+
+			this.onDidChangeWindowDisplayShape = Event.any(
+				Event.map(this.windowsMainService.onDidChangeDisplayShape, e => ({ windowId: e.window.id, shape: e.shape })),
+				Event.map(this.auxiliaryWindowsMainService.onDidChangeDisplayShape, e => ({ windowId: e.window.id, shape: e.shape }))
 			);
 
 			this.onDidChangeWindowAlwaysOnTop = Event.any(
@@ -197,6 +203,7 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 	readonly onDidUnmaximizeWindow: Event<number>;
 
 	readonly onDidChangeWindowFullScreen: Event<{ readonly windowId: number; readonly fullscreen: boolean }>;
+	readonly onDidChangeWindowDisplayShape: Event<{ readonly windowId: number; readonly shape: IDisplayShape }>;
 
 	readonly onDidBlurMainWindow: Event<number>;
 	readonly onDidFocusMainWindow: Event<number>;
@@ -399,6 +406,11 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 	async toggleFullScreen(windowId: number | undefined, options?: INativeHostOptions): Promise<void> {
 		const window = this.windowById(options?.targetWindowId, windowId);
 		window?.toggleFullScreen();
+	}
+
+	async getWindowDisplayShape(windowId: number | undefined, options?: INativeHostOptions): Promise<IDisplayShape> {
+		const window = this.windowById(options?.targetWindowId, windowId);
+		return window?.displayShape ?? NO_DISPLAY_SHAPE;
 	}
 
 	async getCursorScreenPoint(windowId: number | undefined): Promise<{ readonly point: IPoint; readonly display: IRectangle }> {

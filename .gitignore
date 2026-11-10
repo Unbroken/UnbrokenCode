@@ -57,3 +57,4 @@ dist
 # Local agent validation evidence
 .agent-validation/
 /.claude/*.local.json
+packages/display-shape/build/

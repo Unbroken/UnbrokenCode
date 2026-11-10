@@ -5,6 +5,7 @@
 
 import * as dom from '../../../../base/browser/dom.js';
 import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
+import { onDidChangeDisplayCutout } from '../../../../base/browser/browser.js';
 import { PixelRatio } from '../../../../base/browser/pixelRatio.js';
 import { ActionBar, ActionsOrientation, IActionViewItem } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { IBaseActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -14,6 +15,7 @@ import * as arrays from '../../../../base/common/arrays.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 import * as errors from '../../../../base/common/errors.js';
+import { Event } from '../../../../base/common/event.js';
 import { DisposableStore, markAsSingleton, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Platform, platform } from '../../../../base/common/platform.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -204,6 +206,7 @@ export class DebugToolBar extends Themable implements IWorkbenchContribution {
 		}));
 
 		this._register(this.layoutService.onDidChangePartVisibility(() => this.setCoordinates()));
+		this._register(Event.any<unknown>(onDidChangeDisplayCutout, this.layoutService.onDidLayoutActiveContainer)(() => this.setCoordinates())); // keep clear of a camera cutout as it comes and moves
 
 		this._register(this.layoutService.onDidChangeActiveContainer(async () => {
 			this._yRange = undefined;
@@ -300,6 +303,18 @@ export class DebugToolBar extends Themable implements IWorkbenchContribution {
 
 		const [yMin, yMax] = this.yRange;
 		y = Math.max(yMin, Math.min(y, yMax));
+
+		// Keep clear of a camera cutout reaching into the window, below it if the toolbar would
+		// reach behind it, as the title bar is then taller than the range assumes
+		const cutout = this.layoutService.activeContainerOffset.displayCutout;
+		if (cutout && y < cutout.bottom) {
+			const width = this.$el.offsetWidth;
+			const left = dom.getWindow(this.$el).innerWidth * x - width / 2;
+			if (left < cutout.right && left + width > cutout.left) {
+				y = cutout.bottom;
+			}
+		}
+
 		this.$el.style.setProperty('--x-position', `${x}`);
 		this.$el.style.setProperty('--y-position', `${y}px`);
 	}

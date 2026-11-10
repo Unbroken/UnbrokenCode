@@ -123,6 +123,15 @@
 	font-weight: 600;
 }
 
+/*
+ * At the bottom left corner of the window, where the card's corner follows a rounded display
+ * corner or the window's corner, the input starts where the curve crosses the middle of its line,
+ * 10px above the bottom, which the corner's radii give as an ellipse.
+ */
+.monaco-workbench.floating-panels .part.floating-part-outer-left.floating-part-outer-bottom .repl .repl-input-wrapper .repl-input-chevron {
+	padding-left: max(8px, calc(4px + var(--modern-ui-outer-corner-bottom-left-x, 0px) * (1 - sqrt(max(0, 1 - pow(max(0px, var(--modern-ui-outer-corner-bottom-left-y, 0px) - 10px) / max(1px, var(--modern-ui-outer-corner-bottom-left-y, 0px)), 2))))));
+}
+
 /* Output coloring  and styling */
 .monaco-workbench .repl .repl-tree .output.expression > .ignore {
 	font-style: italic;

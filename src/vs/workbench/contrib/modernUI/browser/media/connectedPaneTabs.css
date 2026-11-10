@@ -80,21 +80,23 @@
 
 .modern-ui.modern-ui-connected-editor-tabs.monaco-workbench.floating-panels:not(.agent-sessions-workbench):not(.modern-ui-compact) .pane-composite-part:not(.has-footer)::before {
 	left: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))));
-	bottom: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))));
+	bottom: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius-y, var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius)))));
 	width: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))));
-	height: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))));
+	height: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-left-radius-y, var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius)))));
 	border-right: 0;
-	border-radius: 0 0 0 var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius)));
+	border-radius: 0 0 0 var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))) / 0 0 0 var(--modern-ui-connected-pane-bottom-left-radius-y, var(--modern-ui-connected-pane-bottom-left-radius, var(--modern-ui-connected-pane-frame-radius, var(--modern-ui-connected-pane-radius))));
+	corner-bottom-left-shape: var(--modern-ui-connected-pane-bottom-left-shape, round);
 	translate: -100% 100%;
 }
 
 .modern-ui.modern-ui-connected-editor-tabs.monaco-workbench.floating-panels:not(.agent-sessions-workbench):not(.modern-ui-compact) .pane-composite-part:not(.has-footer)::after {
 	right: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius))));
-	bottom: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius))));
+	bottom: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius-y, var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius)))));
 	width: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius))));
-	height: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius))));
+	height: max(var(--modern-ui-floating-card-stroke-width), var(--modern-ui-connected-pane-bottom-right-radius-y, var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius)))));
 	border-left: 0;
-	border-radius: 0 0 var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius)));
+	border-radius: 0 0 var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius))) 0 / 0 0 var(--modern-ui-connected-pane-bottom-right-radius-y, var(--modern-ui-connected-pane-bottom-right-radius, var(--modern-ui-connected-pane-right-radius, var(--modern-ui-connected-pane-radius)))) 0;
+	corner-bottom-right-shape: var(--modern-ui-connected-pane-bottom-right-shape, round);
 	translate: 100% 100%;
 }
 

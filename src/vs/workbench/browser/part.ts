@@ -47,14 +47,26 @@ export function getPartOverlayCornerRadius(anchorElement: HTMLElement, part: Ele
 	};
 	const touches = (edge: 'left' | 'right' | 'top' | 'bottom') => Math.abs(anchor[edge] - content[edge]) <= 1;
 	const css = getWindow(part).getComputedStyle(part);
-	const radius = (value: string, firstBorder: string, secondBorder: string) =>
-		Math.max(0, Number.parseFloat(value) - Math.max(Number.parseFloat(firstBorder), Number.parseFloat(secondBorder)));
-	return [
-		touches('top') && touches('left') ? radius(css.borderTopLeftRadius, css.borderTopWidth, css.borderLeftWidth) : 0,
-		touches('top') && touches('right') ? radius(css.borderTopRightRadius, css.borderTopWidth, css.borderRightWidth) : 0,
-		touches('bottom') && touches('right') ? radius(css.borderBottomRightRadius, css.borderBottomWidth, css.borderRightWidth) : 0,
-		touches('bottom') && touches('left') ? radius(css.borderBottomLeftRadius, css.borderBottomWidth, css.borderLeftWidth) : 0,
-	].map(value => `${value}px`).join(' ');
+	// A corner can be elliptical, as at a rounded display corner, which computes to its horizontal and vertical radii
+	const radius = (value: string, topOrBottomBorder: string, leftOrRightBorder: string): [number, number] => {
+		const [horizontal, vertical = horizontal] = value.split(' ').map(component => Number.parseFloat(component));
+		if (horizontal === vertical) {
+			const circular = Math.max(0, horizontal - Math.max(Number.parseFloat(topOrBottomBorder), Number.parseFloat(leftOrRightBorder)));
+			return [circular, circular];
+		}
+		return [Math.max(0, horizontal - Number.parseFloat(leftOrRightBorder)), Math.max(0, vertical - Number.parseFloat(topOrBottomBorder))];
+	};
+	const corners = [
+		touches('top') && touches('left') ? radius(css.borderTopLeftRadius, css.borderTopWidth, css.borderLeftWidth) : [0, 0],
+		touches('top') && touches('right') ? radius(css.borderTopRightRadius, css.borderTopWidth, css.borderRightWidth) : [0, 0],
+		touches('bottom') && touches('right') ? radius(css.borderBottomRightRadius, css.borderBottomWidth, css.borderRightWidth) : [0, 0],
+		touches('bottom') && touches('left') ? radius(css.borderBottomLeftRadius, css.borderBottomWidth, css.borderLeftWidth) : [0, 0],
+	];
+	const horizontal = corners.map(([x]) => `${x}px`).join(' ');
+	if (corners.every(([x, y]) => x === y)) {
+		return horizontal;
+	}
+	return `${horizontal} / ${corners.map(([, y]) => `${y}px`).join(' ')}`;
 }
 
 /** Keeps a portaled overlay's clipping in sync with its owning part's exposed corners. */
@@ -89,7 +101,8 @@ export class PartOverlayCorners extends Disposable {
 				observer.observe(part, { attributes: true, attributeFilter: ['class', 'style'] });
 				const root = part.closest('.monaco-workbench');
 				if (root) {
-					observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+					// The shape of the display that the corners follow is set on the workbench, as attributes and in its style
+					observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-window-corner-bottom-left', 'data-window-corner-bottom-right', 'data-screen-corner-bottom-left', 'data-screen-corner-bottom-right'] });
 				}
 				this.observer.value = toDisposable(() => observer.disconnect());
 			}

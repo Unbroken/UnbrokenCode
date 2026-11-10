@@ -62,6 +62,26 @@ class WindowManager {
 		return !!this.mapWindowIdToFullScreen.get(this.getWindowId(targetWindow));
 	}
 
+	// --- Display Cutout
+
+	private readonly _onDidChangeDisplayCutout = new Emitter<number>();
+	readonly onDidChangeDisplayCutout = this._onDidChangeDisplayCutout.event;
+
+	private readonly mapWindowIdToDisplayCutout = new Map<number, boolean>();
+
+	setHasDisplayCutout(hasDisplayCutout: boolean, targetWindow: Window): void {
+		if (this.hasDisplayCutout(targetWindow) === hasDisplayCutout) {
+			return;
+		}
+
+		const windowId = this.getWindowId(targetWindow);
+		this.mapWindowIdToDisplayCutout.set(windowId, hasDisplayCutout);
+		this._onDidChangeDisplayCutout.fire(windowId);
+	}
+	hasDisplayCutout(targetWindow: Window): boolean {
+		return !!this.mapWindowIdToDisplayCutout.get(this.getWindowId(targetWindow));
+	}
+
 	private getWindowId(targetWindow: Window): number {
 		return (targetWindow as CodeWindow).vscodeWindowId;
 	}
@@ -98,6 +118,18 @@ export function isFullscreen(targetWindow: Window): boolean {
 	return WindowManager.INSTANCE.isFullscreen(targetWindow);
 }
 export const onDidChangeFullscreen = WindowManager.INSTANCE.onDidChangeFullscreen;
+
+/**
+ * Sets whether the camera cutout of the display reaches into the given window,
+ * as it does when the window covers the menu bar in full screen.
+ */
+export function setHasDisplayCutout(hasDisplayCutout: boolean, targetWindow: Window): void {
+	WindowManager.INSTANCE.setHasDisplayCutout(hasDisplayCutout, targetWindow);
+}
+export function hasDisplayCutout(targetWindow: Window): boolean {
+	return WindowManager.INSTANCE.hasDisplayCutout(targetWindow);
+}
+export const onDidChangeDisplayCutout = WindowManager.INSTANCE.onDidChangeDisplayCutout;
 
 const userAgent = navigator.userAgent;
 

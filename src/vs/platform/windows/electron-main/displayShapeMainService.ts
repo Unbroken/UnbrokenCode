@@ -11,15 +11,16 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../base/common/platform.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
-import { IDisplayShape, IScreenCorner, IScreenCorners } from '../../native/common/native.js';
+import { IDisplayCutout, IDisplayShape, IScreenCorner, IScreenCorners } from '../../native/common/native.js';
 
 export const IDisplayShapeMainService = createDecorator<IDisplayShapeMainService>('displayShapeMainService');
 
 /**
  * Fits windows to displays whose shape is not a plain rectangle, such as the
- * built-in display of recent MacBook Pros, with rounded bottom corners: macOS
- * grows a window's bottom corner to match the display's as the window nears
- * the display's corner.
+ * built-in display of recent MacBook Pros, with rounded bottom corners and a
+ * camera cutout at the top: macOS grows a window's bottom corner to match the
+ * display's as the window nears the display's corner, and windows can cover
+ * the menu bar beside the cutout in full screen.
  */
 export interface IDisplayShapeMainService {
 
@@ -36,13 +37,33 @@ export interface IDisplayShapeMainService {
 	 * the window.
 	 */
 	getWindowDisplayShape(window: electron.BrowserWindow): IDisplayShape;
+
+	/**
+	 * Makes the given window cover the menu bar when it is in native full screen
+	 * on a display with a camera cutout, or stop doing so, from the next time it
+	 * enters full screen. Covering, the window reaches beside and below the cutout
+	 * rather than leave the menu bar's band black, and the menu bar only appears
+	 * when the mouse reaches the cutout. Only for windows that show their own
+	 * title bar in full screen, which can then flow around the cutout.
+	 */
+	setCoversMenuBarInFullScreen(window: electron.BrowserWindow, covers: boolean): void;
+
+	/**
+	 * Tells the given window's full screen that its level was just changed, such as by pinning
+	 * it on top, which it keeps covering the menu bar with, and has as it leaves full screen.
+	 */
+	windowLevelDidChange(window: electron.BrowserWindow): void;
 }
 
 /**
- * The native module that reads how macOS fits windows to the display.
+ * The native module that reads and adapts how macOS fits windows to the display.
  */
 interface IDisplayShapeModule {
 	getWindowCornerRadii(nativeWindowHandle: Buffer): IWindowCornerRadii | undefined;
+	getWindowDisplayCutout(nativeWindowHandle: Buffer): IDisplayCutout | undefined;
+	setCoversMenuBarInFullScreen(nativeWindowHandle: Buffer, enabled: boolean): boolean;
+	getWindowCoversMenuBar(nativeWindowHandle: Buffer): boolean;
+	windowLevelDidChange(nativeWindowHandle: Buffer): void;
 }
 
 /**
@@ -56,7 +77,7 @@ interface IWindowCornerRadii {
 
 const NO_SCREEN_CORNER: IScreenCorner = { radius: 0, reach: 0, baseRadius: 0 };
 const NO_SCREEN_CORNERS: IScreenCorners = { bottomLeft: NO_SCREEN_CORNER, bottomRight: NO_SCREEN_CORNER };
-export const NO_DISPLAY_SHAPE: IDisplayShape = NO_SCREEN_CORNERS;
+export const NO_DISPLAY_SHAPE: IDisplayShape = { ...NO_SCREEN_CORNERS, cutout: undefined, coversMenuBar: false };
 
 /**
  * macOS rounds corners with continuous curves: a circular arc of the corner's
@@ -98,6 +119,18 @@ function getScreenCorner(radius: number, baseRadius: number): IScreenCorner {
 	return { radius: round(radius), reach: round(radius * CONTINUOUS_CORNER_REACH), baseRadius: round(baseRadius) };
 }
 
+/**
+ * Returns the display shape of a window, given its corner radii, where the
+ * display's camera cutout reaches into it, and whether it covers the menu bar.
+ */
+export function getDisplayShape(radii: IWindowCornerRadii | undefined, cutout: IDisplayCutout | undefined, coversMenuBar: boolean): IDisplayShape {
+	return {
+		...getScreenCorners(radii),
+		cutout: cutout ? { left: round(cutout.left), right: round(cutout.right), bottom: round(cutout.bottom), floats: cutout.floats } : undefined,
+		coversMenuBar
+	};
+}
+
 export class DisplayShapeMainService extends Disposable implements IDisplayShapeMainService {
 
 	declare readonly _serviceBrand: undefined;
@@ -126,7 +159,8 @@ export class DisplayShapeMainService extends Disposable implements IDisplayShape
 
 	/**
 	 * The native module, loaded on first use rather than at startup. It loads
-	 * synchronously, so that windows know their shape as soon as they exist.
+	 * synchronously, because a window restored to full screen enters it right
+	 * after it is created, and has to cover the menu bar by then.
 	 */
 	private get module(): IDisplayShapeModule | undefined {
 		if (!this.moduleLoaded && isMacintosh) {
@@ -147,10 +181,38 @@ export class DisplayShapeMainService extends Disposable implements IDisplayShape
 		}
 
 		try {
-			return getScreenCorners(this.module.getWindowCornerRadii(window.getNativeWindowHandle()));
+			const handle = window.getNativeWindowHandle();
+
+			return getDisplayShape(this.module.getWindowCornerRadii(handle), this.module.getWindowDisplayCutout(handle), this.module.getWindowCoversMenuBar(handle));
 		} catch (error) {
 			this.logService.warn('[display shape] Failed to read how the display reaches into a window', error);
 			return NO_DISPLAY_SHAPE;
+		}
+	}
+
+	setCoversMenuBarInFullScreen(window: electron.BrowserWindow, covers: boolean): void {
+		if (!this.module || window.isDestroyed()) {
+			return;
+		}
+
+		try {
+			if (!this.module.setCoversMenuBarInFullScreen(window.getNativeWindowHandle(), covers)) {
+				this.logService.trace('[display shape] macOS does not let windows cover the menu bar in full screen');
+			}
+		} catch (error) {
+			this.logService.warn('[display shape] Failed to change whether a window covers the menu bar in full screen', error);
+		}
+	}
+
+	windowLevelDidChange(window: electron.BrowserWindow): void {
+		if (!this.module || window.isDestroyed()) {
+			return;
+		}
+
+		try {
+			this.module.windowLevelDidChange(window.getNativeWindowHandle());
+		} catch (error) {
+			this.logService.warn('[display shape] Failed to follow a change of a window\'s level', error);
 		}
 	}
 }

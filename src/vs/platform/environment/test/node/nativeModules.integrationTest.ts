@@ -54,8 +54,16 @@ flakySuite('Native Modules (all platforms)', () => {
 		const displayShape = await import('@unbroken/display-shape');
 		assert.ok(typeof displayShape.getWindowCornerRadii === 'function', testErrorMessage('@unbroken/display-shape'));
 
-		const result = displayShape.getWindowCornerRadii(Buffer.alloc(8)); // a handle to no window
-		assert.strictEqual(result, undefined, testErrorMessage('@unbroken/display-shape'));
+		const noWindow = Buffer.alloc(8); // a handle to no window
+		assert.deepStrictEqual({
+			cornerRadii: displayShape.getWindowCornerRadii(noWindow),
+			cutout: displayShape.getWindowDisplayCutout(noWindow),
+			coversMenuBar: displayShape.setCoversMenuBarInFullScreen(noWindow, true)
+		}, {
+			cornerRadii: undefined,
+			cutout: undefined,
+			coversMenuBar: false
+		}, testErrorMessage('@unbroken/display-shape'));
 	});
 
 	test('@vscode/native-watchdog', async () => {

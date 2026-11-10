@@ -24,6 +24,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 import { Parts, IWorkbenchLayoutService, ActivityBarPosition, LayoutSettings, EditorActionsLocation, EditorTabsMode, isCompactMenuInTitlebar } from '../../../services/layout/browser/layoutService.js';
+import { ILayoutDisplayCutout } from '../../../../platform/layout/browser/layoutService.js';
 import { createActionViewItem, fillInActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -86,6 +87,12 @@ export interface ITitlebarPart extends IDisposable {
 	 * Adds variables to be supported in the window title.
 	 */
 	registerVariables(variables: ITitleVariable[]): void;
+
+	/**
+	 * Where the camera cutout of the display reaches into the title bar, in CSS
+	 * pixels from the top left corner of its window, if it does.
+	 */
+	readonly displayCutout?: ILayoutDisplayCutout;
 }
 
 export class BrowserTitleService extends MultiWindowParts<BrowserTitlebarPart> implements ITitleService {
@@ -245,6 +252,8 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 
 	//#endregion
 
+	get displayCutout(): ILayoutDisplayCutout | undefined { return undefined; }
+
 	//#region Events
 
 	private _onMenubarVisibilityChange = this._register(new Emitter<boolean>());
@@ -261,7 +270,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 	protected dragRegion: HTMLElement | undefined;
 	private title!: HTMLElement;
 
-	private leftContent!: HTMLElement;
+	protected leftContent!: HTMLElement;
 	private centerContent!: HTMLElement;
 	private rightContent!: HTMLElement;
 
@@ -308,7 +317,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 
 	constructor(
 		id: string,
-		private readonly targetWindow: CodeWindow,
+		protected readonly targetWindow: CodeWindow,
 		private readonly editorGroupsContainer: IEditorGroupsContainer,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IConfigurationService protected readonly configurationService: IConfigurationService,
@@ -318,7 +327,7 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		@IStorageService private readonly storageService: IStorageService,
 		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
 		@IContextKeyService protected readonly contextKeyService: IContextKeyService,
-		@IHostService private readonly hostService: IHostService,
+		@IHostService protected readonly hostService: IHostService,
 		@IEditorService editorService: IEditorService,
 		@IMenuService private readonly menuService: IMenuService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
@@ -733,6 +742,17 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 			ariaLabel: localize('ariaLabelTitleActions', "Title actions"),
 			getKeyBinding: action => this.getKeybinding(action),
 			overflowBehavior: { maxItems: 20, exempted: [ACCOUNTS_ACTIVITY_ID, GLOBAL_ACTIVITY_ID, ...EDITOR_CORE_NAVIGATION_COMMANDS] },
+			responsiveBehavior: {
+				// Beside a camera cutout, the actions only have the space right of the cutout,
+				// so those that do not fit there move into the overflow menu, the leftmost first
+				enabled: true,
+				kind: 'all',
+				overflowFrom: 'start',
+				reserveMinWidth: false,
+				observedElement: this.rightContent,
+				allowOverflow: () => this.rootContainer.classList.contains('has-display-cutout'),
+				getAvailableWidth: () => this.getActionToolBarAvailableWidth()
+			},
 			anchorAlignmentProvider: () => AnchorAlignment.RIGHT,
 			dropdownMenuClassName: WORKBENCH_MENU_MOTION_CLASS,
 			dropdownMenuCloseAnimation: workbenchMenuCloseAnimation,
@@ -991,14 +1011,51 @@ export class BrowserTitlebarPart extends Part implements ITitlebarPart {
 		this.centerAdjacentToolBarElement?.classList.remove('overflowing');
 		this.updateToolBarElement?.classList.remove('overflowing');
 
-		if (this.rootContainer.scrollWidth <= this.rootContainer.clientWidth) {
+		if (!this.isTitleBarOverflowing()) {
 			return;
 		}
 
 		centerAdjacentToolBarElement?.classList.add('overflowing');
-		if (this.rootContainer.scrollWidth > this.rootContainer.clientWidth) {
+		if (this.isTitleBarOverflowing()) {
 			updateToolBarElement?.classList.add('overflowing');
 		}
+	}
+
+	/**
+	 * The width the title bar's actions can take: the right side's, beside a camera cutout,
+	 * where the optional toolbars give way to them, and unlimited elsewhere.
+	 */
+	private getActionToolBarAvailableWidth(): number {
+		const toolBarElement = this.actionToolBarElement?.firstElementChild;
+		if (!this.rootContainer.classList.contains('has-display-cutout') || !this.actionToolBarElement || !isHTMLElement(toolBarElement)) {
+			return Number.POSITIVE_INFINITY;
+		}
+
+		const containerSpacing = this.actionToolBarElement.offsetWidth - toolBarElement.offsetWidth; // the padding around the toolbar
+		return this.rightContent.clientWidth - containerSpacing;
+	}
+
+	private isTitleBarOverflowing(): boolean {
+		if (this.rootContainer.scrollWidth > this.rootContainer.clientWidth) {
+			return true;
+		}
+
+		// Beside a camera cutout, the right side is only as wide as the space right of the
+		// cutout, which its content then overflows to the left of, where scroll widths do not
+		// count it
+		if (!this.rootContainer.classList.contains('has-display-cutout')) {
+			return false;
+		}
+
+		const rightContentLeft = this.rightContent.getBoundingClientRect().left;
+		for (const child of this.rightContent.children) {
+			const childBounds = child.getBoundingClientRect();
+			if (childBounds.width > 0) {
+				return childBounds.left < rightContentLeft - 0.5;
+			}
+		}
+
+		return false;
 	}
 
 	private updateLayout(dimension: Dimension): void {

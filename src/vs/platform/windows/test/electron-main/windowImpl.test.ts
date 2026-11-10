@@ -6,6 +6,7 @@
 import assert from 'assert';
 import type { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron';
 import sinon from 'sinon';
+import { Event } from '../../../../base/common/event.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { upcastPartial } from '../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -17,6 +18,7 @@ import { DEFAULT_CUSTOM_TITLEBAR_HEIGHT, getMacOSWindowControlsPosition } from '
 import { IWindowState, WindowMode } from '../../../window/electron-main/window.js';
 import { release } from 'os';
 import { BaseWindow } from '../../electron-main/windowImpl.js';
+import { IDisplayShapeMainService, NO_DISPLAY_SHAPE } from '../../electron-main/displayShapeMainService.js';
 
 class TestWindow extends BaseWindow {
 	readonly id = 1;
@@ -46,7 +48,8 @@ suite('BaseWindow - window controls overlay', () => {
 			configurationService,
 			new InMemoryTestStateMainService(),
 			upcastPartial<IEnvironmentMainService>({ args: { _: [] } }),
-			store.add(new NullLogService())
+			store.add(new NullLogService()),
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE })
 		));
 		const setTitleBarOverlay = sinon.stub();
 		const setWindowButtonPosition = sinon.stub();
@@ -129,7 +132,8 @@ suite('BaseWindow - restoring a window state', () => {
 			configurationService,
 			new InMemoryTestStateMainService(),
 			upcastPartial<IEnvironmentMainService>({ args: { _: [] } }),
-			store.add(new NullLogService())
+			store.add(new NullLogService()),
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE, setCoversMenuBarInFullScreen: () => { }, windowLevelDidChange: () => { } })
 		));
 
 		const calls: string[] = [];

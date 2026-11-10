@@ -14,6 +14,7 @@ import { IStateService } from '../../state/node/state.js';
 import { hasNativeTitlebar, TitlebarStyle } from '../../window/common/window.js';
 import { IBaseWindow, WindowMode } from '../../window/electron-main/window.js';
 import { BaseWindow } from '../../windows/electron-main/windowImpl.js';
+import { IDisplayShapeMainService } from '../../windows/electron-main/displayShapeMainService.js';
 
 export interface IAuxiliaryWindow extends IBaseWindow {
 	readonly parentId: number;
@@ -42,9 +43,10 @@ export class AuxiliaryWindow extends BaseWindow implements IAuxiliaryWindow {
 		@ILogService logService: ILogService,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IStateService stateService: IStateService,
-		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService
+		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
+		@IDisplayShapeMainService displayShapeMainService: IDisplayShapeMainService
 	) {
-		super(configurationService, stateService, environmentMainService, logService);
+		super(configurationService, stateService, environmentMainService, logService, displayShapeMainService);
 
 		this.id = this.webContents.id;
 

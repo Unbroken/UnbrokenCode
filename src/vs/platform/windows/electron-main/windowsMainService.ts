@@ -60,6 +60,7 @@ import { ICSSDevelopmentService } from '../../cssDev/node/cssDevService.js';
 import { ResourceSet } from '../../../base/common/map.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { resolveAgentsWindowFolder, sendAgentsWindowOpenIntent } from './agentsWindow.js';
+import { IDisplayShape } from '../../native/common/native.js';
 
 //#region Helper Interfaces
 
@@ -206,6 +207,9 @@ export class WindowsMainService extends Disposable implements IWindowsMainServic
 
 	private readonly _onDidChangeFullScreen = this._register(new Emitter<{ window: ICodeWindow; fullscreen: boolean }>());
 	readonly onDidChangeFullScreen = this._onDidChangeFullScreen.event;
+
+	private readonly _onDidChangeDisplayShape = this._register(new Emitter<{ window: ICodeWindow; shape: IDisplayShape }>());
+	readonly onDidChangeDisplayShape = this._onDidChangeDisplayShape.event;
 
 	private readonly _onDidTriggerSystemContextMenu = this._register(new Emitter<{ window: ICodeWindow; x: number; y: number }>());
 	readonly onDidTriggerSystemContextMenu = this._onDidTriggerSystemContextMenu.event;
@@ -1670,6 +1674,7 @@ export class WindowsMainService extends Disposable implements IWindowsMainServic
 			disposables.add(createdWindow.onDidUnmaximize(() => this._onDidUnmaximizeWindow.fire(createdWindow)));
 			disposables.add(createdWindow.onDidEnterFullScreen(() => this._onDidChangeFullScreen.fire({ window: createdWindow, fullscreen: true })));
 			disposables.add(createdWindow.onDidLeaveFullScreen(() => this._onDidChangeFullScreen.fire({ window: createdWindow, fullscreen: false })));
+			disposables.add(createdWindow.onDidChangeDisplayShape(shape => this._onDidChangeDisplayShape.fire({ window: createdWindow, shape })));
 			disposables.add(createdWindow.onDidTriggerSystemContextMenu(({ x, y }) => this._onDidTriggerSystemContextMenu.fire({ window: createdWindow, x, y })));
 
 			const webContents = assertReturnsDefined(createdWindow.win?.webContents);

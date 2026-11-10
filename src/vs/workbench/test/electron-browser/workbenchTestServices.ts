@@ -26,7 +26,7 @@ import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMem
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { ISharedProcessService } from '../../../platform/ipc/electron-browser/services.js';
 import { NullLogService } from '../../../platform/log/common/log.js';
-import { IApplicationBadge, INativeHostOptions, INativeHostService, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, INativeZipFile, INativeZipResult, IOSProperties, IOSStatistics, IToastOptions, IToastResult, PowerSaveBlockerType, SystemIdleState, ThermalState } from '../../../platform/native/common/native.js';
+import { IApplicationBadge, INativeHostOptions, INativeHostService, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, INativeZipFile, INativeZipResult, IOSProperties, IDisplayShape, IOSStatistics, IToastOptions, IToastResult, PowerSaveBlockerType, SystemIdleState, ThermalState } from '../../../platform/native/common/native.js';
 import { IProductService } from '../../../platform/product/common/productService.js';
 import { AuthInfo, Credentials } from '../../../platform/request/common/request.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -88,6 +88,7 @@ export class TestNativeHostService implements INativeHostService {
 	readonly onDidTriggerWindowSystemContextMenu: Event<{ windowId: number; x: number; y: number }> = Event.None;
 	onDidChangeWindowFullScreen = Event.None;
 	onDidChangeWindowAlwaysOnTop = Event.None;
+	onDidChangeWindowDisplayShape = Event.None;
 	onDidChangeDisplay = Event.None;
 	onDidChangeGPUCompositing = Event.None;
 
@@ -120,6 +121,7 @@ export class TestNativeHostService implements INativeHostService {
 	async handleTitleDoubleClick(): Promise<void> { }
 	async isMaximized(): Promise<boolean> { return true; }
 	async isFullScreen(): Promise<boolean> { return true; }
+	async getWindowDisplayShape(): Promise<IDisplayShape> { return { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 } }; }
 	async maximizeWindow(): Promise<void> { }
 	async unmaximizeWindow(): Promise<void> { }
 	async minimizeWindow(): Promise<void> { }

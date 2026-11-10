@@ -10,7 +10,7 @@ import { IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { ISerializableCommandAction } from '../../action/common/action.js';
 import { NativeParsedArgs } from '../../environment/common/argv.js';
-import { FocusMode, IApplicationBadge } from '../../native/common/native.js';
+import { FocusMode, IApplicationBadge, IDisplayShape } from '../../native/common/native.js';
 import { IUserDataProfile } from '../../userDataProfile/common/userDataProfile.js';
 import { ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 import { DEFAULT_AUX_WINDOW_SIZE, DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE, INativeWindowConfiguration } from '../common/window.js';
@@ -22,6 +22,7 @@ export interface IBaseWindow extends IDisposable {
 	readonly onDidTriggerSystemContextMenu: Event<{ readonly x: number; readonly y: number }>;
 	readonly onDidEnterFullScreen: Event<void>;
 	readonly onDidLeaveFullScreen: Event<void>;
+	readonly onDidChangeDisplayShape: Event<IDisplayShape>;
 	readonly onDidClose: Event<void>;
 
 	readonly id: number;
@@ -43,6 +44,11 @@ export interface IBaseWindow extends IDisposable {
 
 	/** Does what a double-click on the title bar of the window does, as the system settings say. */
 	handleTitleDoubleClick(): void;
+
+	/**
+	 * The rounded display corners that the window's bottom corners reach into.
+	 */
+	readonly displayShape: IDisplayShape;
 
 	updateWindowControls(options: { height?: number; horizontalInset?: number; backgroundColor?: string; foregroundColor?: string; dimmed?: boolean }): void;
 

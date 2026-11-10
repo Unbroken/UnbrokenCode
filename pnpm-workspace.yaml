@@ -44,6 +44,7 @@ ignoredOptionalDependencies:
 allowBuilds:
   '@parcel/watcher@2.5.6': true
   '@playwright/browser-chromium@1.61.1': true
+  '@unbroken/display-shape@file:packages/display-shape': true
   '@vscode/deviceid@0.1.5': true
   '@vscode/fs-copyfile@2.0.0': true
   '@vscode/native-watchdog@1.4.6': true

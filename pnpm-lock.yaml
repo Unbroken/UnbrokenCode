@@ -60,6 +60,9 @@ importers:
       '@types/semver':
         specifier: ^7.5.8
         version: 7.5.8
+      '@unbroken/display-shape':
+        specifier: file:packages/display-shape
+        version: file:packages/display-shape
       '@vscode/codicons':
         specifier: ^0.0.46-49
         version: 0.0.46-49
@@ -2029,6 +2032,9 @@ packages:
   '@typespec/ts-http-runtime@0.3.5':
     resolution: {integrity: sha512-yURCknZhvywvQItHMMmFSo+fq5arCUIyz/CVk7jD89MSai7dkaX8ufjCWp3NttLojoTVbcE72ri+be/TnEbMHw==}
     engines: {node: '>=20.0.0'}
+
+  '@unbroken/display-shape@file:packages/display-shape':
+    resolution: {directory: packages/display-shape, type: directory}
 
   '@vscode/codicons@0.0.46-49':
     resolution: {integrity: sha512-0McyVlyRjenut3PBwULxuaC5YoKPF8qkNHf9DhS6UOXUmLr31Ga6vECnNx70SSIZnI4ULLOEktcIkRqiwFvkbg==}
@@ -8650,6 +8656,8 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+
+  '@unbroken/display-shape@file:packages/display-shape': {}
 
   '@vscode/codicons@0.0.46-49': {}
 

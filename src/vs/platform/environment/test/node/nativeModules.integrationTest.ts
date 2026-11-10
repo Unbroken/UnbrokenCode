@@ -50,6 +50,14 @@ flakySuite('Native Modules (all platforms)', () => {
 		assert.ok(result, testErrorMessage('native-keymap'));
 	});
 
+	test('@unbroken/display-shape', async () => {
+		const displayShape = await import('@unbroken/display-shape');
+		assert.ok(typeof displayShape.getWindowCornerRadii === 'function', testErrorMessage('@unbroken/display-shape'));
+
+		const result = displayShape.getWindowCornerRadii(Buffer.alloc(8)); // a handle to no window
+		assert.strictEqual(result, undefined, testErrorMessage('@unbroken/display-shape'));
+	});
+
 	test('@vscode/native-watchdog', async () => {
 		const watchDog = await import('@vscode/native-watchdog');
 		assert.ok(typeof watchDog.start === 'function', testErrorMessage('@vscode/native-watchdog'));

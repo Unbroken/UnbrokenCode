@@ -73,6 +73,7 @@ extensions/vscode-colorize-tests/test/colorize-fixtures/test.js
 extensions/vscode-colorize-tests/test/colorize-fixtures/test6916.js
 extensions/yaml/build/update-grammar.js
 gulpfile.mjs
+packages/display-shape/index.js
 remote/.pnpmfile.mjs
 scripts/chat-simulation/common/perf-scenarios.js
 scripts/chat-simulation/common/utils.js

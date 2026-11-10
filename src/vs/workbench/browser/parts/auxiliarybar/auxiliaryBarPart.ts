@@ -103,7 +103,7 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 			{
 				hasTitle: true,
 				trailingSeparator: true,
-				borderWidth: () => (this.getColor(SIDE_BAR_BORDER) || this.getColor(contrastBorder)) ? 1 : 0,
+				borderWidth: () => !this.layoutService.isFloatingPanelsEnabled() && (this.getColor(SIDE_BAR_BORDER) || this.getColor(contrastBorder)) ? 1 : 0, // floating cards draw their own border, which their layout already leaves room for
 			},
 			AuxiliaryBarPart.activeViewSettingsKey,
 			ActiveAuxiliaryContext.bindTo(contextKeyService),

@@ -7,7 +7,7 @@ import { Disposable, DisposableMap, DisposableStore, IDisposable, toDisposable }
 import { Event, Emitter } from '../../base/common/event.js';
 import { alert } from '../../base/browser/ui/aria/aria.js';
 import { EventType, addDisposableListener, getClientArea, size, IDimension, isAncestorUsingFlowTo, computeScreenAwareSize, getActiveDocument, getWindows, getActiveWindow, isActiveDocument, getWindow, getWindowId, getActiveElement, Dimension } from '../../base/browser/dom.js';
-import { onDidChangeFullscreen, isFullscreen, isWCOEnabled } from '../../base/browser/browser.js';
+import { onDidChangeFullscreen, isFullscreen, isWCOEnabled, onDidChangeDisplayCutout } from '../../base/browser/browser.js';
 import { isWindows, isLinux, isMacintosh, isWeb, isIOS } from '../../base/common/platform.js';
 import { EditorInputCapabilities, GroupIdentifier, isResourceEditorInput, IUntypedEditorInput, pathsToEditors } from '../common/editor.js';
 import { SidebarPart } from './parts/sidebar/sidebarPart.js';
@@ -272,7 +272,14 @@ export abstract class Layout extends Disposable implements IWorkbenchLayoutServi
 			quickPickTop = 6;
 		}
 
-		return { top, quickPickTop };
+		// The quick input keeps clear of a camera cutout that reaches into the window,
+		// sitting on the line below it: the title bar's border, or the edge of what follows
+		const displayCutout = this.titleService.getPart(this.getContainer(targetWindow)).displayCutout;
+		if (displayCutout) {
+			quickPickTop = Math.max(quickPickTop, displayCutout.bottom);
+		}
+
+		return { top, quickPickTop, displayCutout };
 	}
 
 	//#endregion
@@ -471,6 +478,15 @@ export abstract class Layout extends Disposable implements IWorkbenchLayoutServi
 
 		// Fullscreen changes
 		this._register(onDidChangeFullscreen(windowId => this.onFullscreenChanged(windowId)));
+
+		// Display cutout changes, which keep the custom title bar visible, and move the overlays
+		// that keep clear of the cutout, such as the quick input, which follow layouts
+		this._register(onDidChangeDisplayCutout(windowId => {
+			if (windowId === mainWindow.vscodeWindowId && hasCustomTitlebar(this.configurationService)) {
+				this.updateCustomTitleBarVisibility();
+				this.layout();
+			}
+		}));
 
 		// Group changes
 		this._register(this.editorGroupService.mainPart.onDidAddGroup(() => this.centerMainEditorLayout(this.stateModel.getRuntimeValue(LayoutStateKeys.MAIN_EDITOR_CENTERED))));

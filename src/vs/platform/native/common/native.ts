@@ -220,9 +220,36 @@ export interface IScreenCorners {
 }
 
 /**
+ * Where the camera cutout at the top of a display reaches into a window, in
+ * screen points from the window's top left corner. Windows only reach the
+ * cutout when they cover the menu bar in full screen.
+ */
+export interface IDisplayCutout {
+	readonly left: number;
+	readonly right: number;
+	readonly bottom: number;
+
+	/**
+	 * Whether the cutout floats below the top edge of the display, like the
+	 * Dynamic Island, rather than hanging from it, like a notch.
+	 */
+	readonly floats: boolean;
+}
+
+/**
  * How the shape of the display a window is on reaches into the window.
  */
-export interface IDisplayShape extends IScreenCorners { }
+export interface IDisplayShape extends IScreenCorners {
+	readonly cutout: IDisplayCutout | undefined;
+
+	/**
+	 * Whether the window covers the menu bar in the native full screen it is in,
+	 * which it only does on displays with a camera cutout: the menu bar only
+	 * appears when the mouse reaches the cutout, and so do the window controls
+	 * macOS shows with it.
+	 */
+	readonly coversMenuBar: boolean;
+}
 
 export interface IStartTracingOptions {
 
@@ -369,7 +396,7 @@ export interface ICommonNativeHostService {
 
 	/**
 	 * Returns the rounded display corners that the window's bottom corners
-	 * currently reach into.
+	 * currently reach into, and the camera cutout that the window reaches.
 	 */
 	getWindowDisplayShape(options?: INativeHostOptions): Promise<IDisplayShape>;
 

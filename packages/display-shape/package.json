@@ -1,7 +1,7 @@
 {
   "name": "@unbroken/display-shape",
   "version": "1.0.0",
-  "description": "Fits windows to displays with rounded corners on macOS",
+  "description": "Fits windows to displays with rounded corners and camera cutouts on macOS",
   "main": "index.js",
   "typings": "index.d.ts",
   "license": "MIT",

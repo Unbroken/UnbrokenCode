@@ -20,7 +20,7 @@ import { localize } from '../../../nls.js';
 import { IInputBox, IInputOptions, IKeyMods, IPickOptions, IQuickInput, IQuickInputButton, IQuickNavigateConfiguration, IQuickPick, IQuickPickItem, IQuickWidget, QuickInputHideReason, QuickPickInput, QuickPickFocus, QuickInputType, IQuickTree, IQuickTreeItem, QuickInputAlignment } from '../common/quickInput.js';
 import { QuickInputBox } from './quickInputBox.js';
 import { QuickInputUI, Writeable, IQuickInputStyles, IQuickInputOptions, QuickPick, backButton, InputBox, Visibilities, QuickWidget, InQuickInputContextKey, QuickInputTypeContextKey, EndOfQuickInputBoxContextKey, QuickInputAlignmentContextKey } from './quickInput.js';
-import { ILayoutService } from '../../layout/browser/layoutService.js';
+import { ILayoutDisplayCutout, ILayoutService } from '../../layout/browser/layoutService.js';
 import { mainWindow } from '../../../base/browser/window.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { IContextMenuService } from '../../contextview/browser/contextView.js';
@@ -72,6 +72,7 @@ export class QuickInputController extends Disposable {
 	private ui: QuickInputUI | undefined;
 	private dimension?: dom.IDimension;
 	private titleBarOffset?: number;
+	private displayCutout?: ILayoutDisplayCutout;
 	private overlayLayoutCorrection: QuickInputOverlayLayoutCorrection | undefined;
 	private enabled = true;
 	private readonly onDidAcceptEmitter = this._register(new Emitter<void>());
@@ -140,7 +141,7 @@ export class QuickInputController extends Disposable {
 				// existing parent to not loose functionality.
 				// (https://github.com/microsoft/vscode/issues/195870)
 				this.reparentUI(this.layoutService.mainContainer);
-				this.layout(this.layoutService.mainContainerDimension, this.layoutService.mainContainerOffset.quickPickTop);
+				this.layout(this.layoutService.mainContainerDimension, this.layoutService.mainContainerOffset.quickPickTop, this.layoutService.mainContainerOffset.displayCutout);
 			}
 		}));
 		this.viewState = this.loadViewState();
@@ -165,7 +166,7 @@ export class QuickInputController extends Disposable {
 			if (showInActiveContainer) {
 				if (dom.getWindow(this._container) !== dom.getWindow(this.layoutService.activeContainer)) {
 					this.reparentUI(this.layoutService.activeContainer);
-					this.layout(this.layoutService.activeContainerDimension, this.layoutService.activeContainerOffset.quickPickTop);
+					this.layout(this.layoutService.activeContainerDimension, this.layoutService.activeContainerOffset.quickPickTop, this.layoutService.activeContainerOffset.displayCutout);
 				}
 			}
 
@@ -1004,9 +1005,10 @@ export class QuickInputController extends Disposable {
 		this.hide(reason);
 	}
 
-	layout(dimension: dom.IDimension, titleBarOffset: number): void {
+	layout(dimension: dom.IDimension, titleBarOffset: number, displayCutout?: ILayoutDisplayCutout): void {
 		this.dimension = dimension;
 		this.titleBarOffset = titleBarOffset;
+		this.displayCutout = displayCutout;
 		this.overlayLayoutCorrection = undefined;
 		this.updateLayout();
 	}
@@ -1073,8 +1075,10 @@ export class QuickInputController extends Disposable {
 				style.width = `${width}px`;
 				style.height = '';
 			} else {
-				style.top = `${this.viewState?.top !== undefined ? Math.round(this.dimension!.height * this.viewState.top) : this.titleBarOffset}px`;
-				style.left = `${Math.round((this.dimension!.width * (this.viewState?.left ?? 0.5 /* center */)) - (width / 2))}px`;
+				const top = this.viewState?.top !== undefined ? Math.round(this.dimension!.height * this.viewState.top) : this.titleBarOffset ?? 0;
+				const left = Math.round((this.dimension!.width * (this.viewState?.left ?? 0.5 /* center */)) - (width / 2));
+				style.top = `${keepClearOfDisplayCutout(top, left, width, this.displayCutout, this.titleBarOffset ?? 0)}px`;
+				style.left = `${left}px`;
 				style.right = '';
 				style.bottom = '';
 				style.height = '';
@@ -1204,6 +1208,20 @@ export class QuickInputController extends Disposable {
 }
 
 export interface IQuickInputControllerHost extends ILayoutService { }
+
+/**
+ * Returns where a quick input with the given position and width has to go to
+ * keep clear of a camera cutout of the display: below it, if it would reach
+ * behind it, where it keeps the distance from the cutout it otherwise keeps
+ * from the top.
+ */
+function keepClearOfDisplayCutout(top: number, left: number, width: number, cutout: ILayoutDisplayCutout | undefined, quickPickTop: number): number {
+	if (cutout && top < cutout.bottom && left < cutout.right && left + width > cutout.left) {
+		return Math.max(cutout.bottom, quickPickTop);
+	}
+
+	return top;
+}
 
 class QuickInputDragAndDropController extends Disposable {
 	readonly dndViewState = observableValue<{ top?: number; left?: number; done: boolean } | undefined>(this, undefined);
@@ -1386,16 +1404,23 @@ class QuickInputDragAndDropController extends Disposable {
 			}
 		}
 
-		const snappingToTop = Math.abs(topCoordinate - snapCoordinateYTop) < this._snapThreshold;
+		let snappingToTop = Math.abs(topCoordinate - snapCoordinateYTop) < this._snapThreshold;
 		topCoordinate = snappingToTop ? snapCoordinateYTop : topCoordinate;
 		const snappingToCenter = Math.abs(topCoordinate - snapCoordinateY) < this._snapThreshold;
 		topCoordinate = snappingToCenter ? snapCoordinateY : topCoordinate;
-		const top = topCoordinate / this._container.clientHeight;
 
 		// Make sure the quick input is not moved outside the container
 		leftCoordinate = Math.max(0, Math.min(leftCoordinate, this._container.clientWidth - this._quickInputContainer.clientWidth));
 		const snappingToCenterX = Math.abs(leftCoordinate - snapCoordinateX) < this._snapThreshold;
 		leftCoordinate = snappingToCenterX ? snapCoordinateX : leftCoordinate;
+
+		// Make sure the quick input is not moved behind a camera cutout of the display
+		const clearTopCoordinate = keepClearOfDisplayCutout(topCoordinate, leftCoordinate, this._quickInputContainer.clientWidth, this._layoutService.activeContainerOffset.displayCutout, snapCoordinateYTop);
+		if (clearTopCoordinate !== topCoordinate) {
+			topCoordinate = clearTopCoordinate;
+			snappingToTop = topCoordinate === snapCoordinateYTop;
+		}
+		const top = topCoordinate / this._container.clientHeight;
 
 		const b = this._container.clientWidth;
 		const c = this._quickInputContainer.clientWidth;

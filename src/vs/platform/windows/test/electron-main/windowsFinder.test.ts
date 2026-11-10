@@ -56,7 +56,7 @@ suite('WindowsFinder', () => {
 			isExtensionTestHost = false;
 			lastFocusTime = options.lastFocusTime;
 			isFullScreen = false;
-			displayShape: IDisplayShape = { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 } };
+			displayShape: IDisplayShape = { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 }, cutout: undefined, coversMenuBar: false };
 			isReady = true;
 
 			ready(): Promise<ICodeWindow> { throw new Error('Method not implemented.'); }

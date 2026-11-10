@@ -121,7 +121,7 @@ export class TestNativeHostService implements INativeHostService {
 	async handleTitleDoubleClick(): Promise<void> { }
 	async isMaximized(): Promise<boolean> { return true; }
 	async isFullScreen(): Promise<boolean> { return true; }
-	async getWindowDisplayShape(): Promise<IDisplayShape> { return { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 } }; }
+	async getWindowDisplayShape(): Promise<IDisplayShape> { return { bottomLeft: { radius: 0, reach: 0, baseRadius: 0 }, bottomRight: { radius: 0, reach: 0, baseRadius: 0 }, cutout: undefined, coversMenuBar: false }; }
 	async maximizeWindow(): Promise<void> { }
 	async unmaximizeWindow(): Promise<void> { }
 	async minimizeWindow(): Promise<void> { }

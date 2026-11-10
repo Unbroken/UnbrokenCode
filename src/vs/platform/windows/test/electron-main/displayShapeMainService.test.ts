@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { getScreenCorners } from '../../electron-main/displayShapeMainService.js';
+import { getDisplayShape, getScreenCorners } from '../../electron-main/displayShapeMainService.js';
 
 suite('DisplayShapeMainService', () => {
 
@@ -32,6 +32,20 @@ suite('DisplayShapeMainService', () => {
 			'19pt from the corner: left 26.22/40.08/16 right 16/24.46/16',
 			'in the corner: left 37/56.56/16 right 16/24.46/16',
 			'full screen: left 37/56.56/0 right 37/56.56/0',
+		]);
+	});
+
+	test('reports where the camera cutout reaches into the window', () => {
+
+		// The cutout of a 2064x1347 display with a 47.5pt menu bar, as the native module reports it
+		assert.deepStrictEqual([
+			getDisplayShape(undefined, undefined, false).cutout,
+			getDisplayShape(undefined, { left: 997, right: 1067, bottom: 47.5, floats: true }, true).cutout,
+			getDisplayShape(undefined, { left: 996.6666, right: 1066.3333, bottom: 47.4999, floats: false }, true).cutout,
+		], [
+			undefined,
+			{ left: 997, right: 1067, bottom: 47.5, floats: true },
+			{ left: 996.67, right: 1066.33, bottom: 47.5, floats: false },
 		]);
 	});
 });

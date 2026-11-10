@@ -21,6 +21,22 @@ export interface ILayoutOffsetInfo {
 	 * Quick pick specific top offset.
 	 */
 	readonly quickPickTop: number;
+
+	/**
+	 * Where the camera cutout of the display reaches into the container, which
+	 * overlays such as the quick pick keep clear of.
+	 */
+	readonly displayCutout?: ILayoutDisplayCutout;
+}
+
+/**
+ * Where the camera cutout at the top of a display reaches into a container, in
+ * CSS pixels from the container's top left corner.
+ */
+export interface ILayoutDisplayCutout {
+	readonly left: number;
+	readonly right: number;
+	readonly bottom: number;
 }
 
 export interface ILayoutService {

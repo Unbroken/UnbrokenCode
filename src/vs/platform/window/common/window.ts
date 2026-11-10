@@ -294,6 +294,7 @@ export interface IWindowSettings {
 	readonly newWindowDimensions: 'default' | 'inherit' | 'offset' | 'maximized' | 'fullscreen';
 	readonly nativeTabs: boolean;
 	readonly nativeFullScreen: boolean;
+	readonly nativeFullScreenCoversMenuBar: boolean;
 	readonly enableMenuBarMnemonics: boolean;
 	readonly closeWhenEmpty: boolean;
 	readonly clickThroughInactive: boolean;

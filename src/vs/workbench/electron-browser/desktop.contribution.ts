@@ -309,6 +309,13 @@ import product from '../../platform/product/common/product.js';
 				'scope': ConfigurationScope.APPLICATION,
 				'included': isMacintosh
 			},
+			'window.nativeFullScreenCoversMenuBar': {
+				'type': 'boolean',
+				'default': true,
+				'markdownDescription': localize('window.nativeFullScreenCoversMenuBar', "Controls whether windows use the menu bar's area beside the camera cutout in native full screen on macOS, on displays that have one, instead of leaving it black. The title bar then flows around the cutout, and the menu bar only appears when the mouse reaches the cutout. Only applies with {0} set to {1}, and takes effect the next time a window enters full screen.", '`#window.titleBarStyle#`', '`custom`'),
+				'scope': ConfigurationScope.APPLICATION,
+				'included': isMacintosh
+			},
 			'window.clickThroughInactive': {
 				'type': 'boolean',
 				'default': true,

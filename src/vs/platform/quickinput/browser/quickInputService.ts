@@ -93,12 +93,12 @@ export class QuickInputService extends Themable implements IQuickInputService {
 			}
 		));
 
-		controller.layout(host.activeContainerDimension, host.activeContainerOffset.quickPickTop);
+		controller.layout(host.activeContainerDimension, host.activeContainerOffset.quickPickTop, host.activeContainerOffset.displayCutout);
 
 		// Layout changes
 		this._register(host.onDidLayoutActiveContainer(dimension => {
 			if (getWindow(host.activeContainer) === getWindow(controller.container)) {
-				controller.layout(dimension, host.activeContainerOffset.quickPickTop);
+				controller.layout(dimension, host.activeContainerOffset.quickPickTop, host.activeContainerOffset.displayCutout);
 			}
 		}));
 		this._register(host.onDidChangeActiveContainer(() => {
@@ -106,7 +106,7 @@ export class QuickInputService extends Themable implements IQuickInputService {
 				return;
 			}
 
-			controller.layout(host.activeContainerDimension, host.activeContainerOffset.quickPickTop);
+			controller.layout(host.activeContainerDimension, host.activeContainerOffset.quickPickTop, host.activeContainerOffset.displayCutout);
 		}));
 
 		// Context keys

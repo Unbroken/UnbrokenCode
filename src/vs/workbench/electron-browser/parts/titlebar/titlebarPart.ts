@@ -5,8 +5,10 @@
 
 import { Event } from '../../../../base/common/event.js';
 import { Color } from '../../../../base/common/color.js';
-import { getZoomFactor } from '../../../../base/browser/browser.js';
-import { $, addDisposableListener, append, EventType, getWindow, getWindowId, hide, show } from '../../../../base/browser/dom.js';
+import { getZoomFactor, setHasDisplayCutout } from '../../../../base/browser/browser.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { $, addDisposableListener, append, EventType, getWindow, getWindowId, hide, prepend, show } from '../../../../base/browser/dom.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IConfigurationService, IConfigurationChangeEvent } from '../../../../platform/configuration/common/configuration.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -19,7 +21,10 @@ import { BrowserTitlebarPart, BrowserTitleService, IAuxiliaryTitlebarPart } from
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IWorkbenchLayoutService, Parts } from '../../../services/layout/browser/layoutService.js';
-import { INativeHostService } from '../../../../platform/native/common/native.js';
+import { IDisplayCutout, IDisplayShape, INativeHostService } from '../../../../platform/native/common/native.js';
+import { ILayoutDisplayCutout } from '../../../../platform/layout/browser/layoutService.js';
+import { localize } from '../../../../nls.js';
+import { equals } from '../../../../base/common/objects.js';
 import { hasNativeTitlebar, useWindowControlsOverlay, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, hasNativeMenu } from '../../../../platform/window/common/window.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Codicon } from '../../../../base/common/codicons.js';
@@ -31,6 +36,13 @@ import { IKeybindingService } from '../../../../platform/keybinding/common/keybi
 import { CodeWindow, mainWindow } from '../../../../base/browser/window.js';
 import { IsWindowAlwaysOnTopContext } from '../../../common/contextkeys.js';
 
+/**
+ * How far the antialiased edge of a camera cutout that floats below the top edge
+ * of the display, like the Dynamic Island, reaches past where macOS says the
+ * cutout ends, in screen points. A notch hanging from the top edge ends there.
+ */
+const FLOATING_DISPLAY_CUTOUT_ANTIALIASING = 1;
+
 export class NativeTitlebarPart extends BrowserTitlebarPart {
 
 	//#region IView
@@ -40,7 +52,12 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			return super.minimumHeight;
 		}
 
-		return (this.isCommandCenterVisible ? DEFAULT_CUSTOM_TITLEBAR_HEIGHT : this.macTitlebarSize) / (this.preventZoom ? getZoomFactor(getWindow(this.element)) : 1);
+		const height = (this.isCommandCenterVisible ? DEFAULT_CUSTOM_TITLEBAR_HEIGHT : this.macTitlebarSize) / (this.preventZoom ? getZoomFactor(getWindow(this.element)) : 1);
+		const cutout = this.displayCutout;
+
+		// Reach below the camera cutout, so that it only ever covers the title bar, and put the
+		// title bar's border, if it has one, below it
+		return cutout ? Math.max(height, cutout.bottom + (this.hasBorder ? 1 : 0)) : height;
 	}
 	override get maximumHeight(): number { return this.minimumHeight; }
 
@@ -57,6 +74,11 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 
 	private maxRestoreControl: HTMLElement | undefined;
 	private resizer: HTMLElement | undefined;
+
+	private screenCutout: IDisplayCutout | undefined; // in screen points
+	private coversMenuBar = false;
+	private hasBorder = false;
+	private fullScreenWindowControls: HTMLElement | undefined;
 
 	private cachedWindowControlStyles: { bgColor: string; fgColor: string } | undefined;
 	private cachedWindowControlHeight: number | undefined;
@@ -86,6 +108,102 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		this.tahoeOrNewer = isTahoeOrNewer(environmentService.os.release);
 
 		this.handleWindowsAlwaysOnTop(targetWindow.vscodeWindowId);
+
+		if (isMacintosh) {
+			this.handleDisplayShape(targetWindow.vscodeWindowId);
+		}
+	}
+
+	/**
+	 * In native full screen on displays with a camera cutout, windows can cover the
+	 * menu bar, and the title bar then takes its band beside the cutout: it reaches
+	 * below the cutout, keeps its contents clear of it, and turns black to hide it.
+	 * The menu bar then only appears when the mouse reaches the cutout, and so do
+	 * the window controls macOS shows with it, so the title bar shows its own.
+	 */
+	private async handleDisplayShape(targetWindowId: number): Promise<void> {
+		this._register(toDisposable(() => setHasDisplayCutout(false, this.targetWindow)));
+
+		let receivedChange = false;
+		this._register(Event.filter(this.nativeHostService.onDidChangeWindowDisplayShape, e => e.windowId === targetWindowId)(({ shape }) => {
+			receivedChange = true;
+			this.updateDisplayShape(shape);
+		}));
+
+		const shape = await this.nativeHostService.getWindowDisplayShape({ targetWindowId });
+		if (!receivedChange) { // a change event may have arrived meanwhile
+			this.updateDisplayShape(shape);
+		}
+	}
+
+	private updateDisplayShape({ cutout, coversMenuBar }: IDisplayShape): void {
+		if (equals(cutout, this.screenCutout) && coversMenuBar === this.coversMenuBar) {
+			return;
+		}
+
+		this.screenCutout = cutout;
+		this.coversMenuBar = coversMenuBar;
+		setHasDisplayCutout(!!cutout, this.targetWindow);
+		this.layoutDisplayCutout();
+		this.updateFullScreenWindowControls();
+		this.updateStyles();
+		this._onDidChange.fire(undefined); // the height follows the cutout
+	}
+
+	override get displayCutout(): ILayoutDisplayCutout | undefined {
+		if (!this.screenCutout) {
+			return undefined;
+		}
+
+		// The cutout comes in screen points, the workbench lays out in CSS pixels
+		const zoomFactor = getZoomFactor(getWindow(this.element));
+		const bottom = this.screenCutout.bottom + (this.screenCutout.floats ? FLOATING_DISPLAY_CUTOUT_ANTIALIASING : 0);
+
+		return { left: this.screenCutout.left / zoomFactor, right: this.screenCutout.right / zoomFactor, bottom: bottom / zoomFactor };
+	}
+
+	private layoutDisplayCutout(): void {
+		if (!this.rootContainer) {
+			return; // not created yet
+		}
+
+		const cutout = this.screenCutout;
+		this.rootContainer.classList.toggle('has-display-cutout', !!cutout);
+		if (!cutout) {
+			this.rootContainer.style.removeProperty('--titlebar-display-cutout-left');
+			this.rootContainer.style.removeProperty('--titlebar-display-cutout-right');
+			return;
+		}
+
+		// The cutout comes in screen points, the title bar's contents counter zoom unless they can zoom
+		const scale = this.preventZoom ? 1 : 1 / getZoomFactor(getWindow(this.element));
+		this.rootContainer.style.setProperty('--titlebar-display-cutout-left', `${cutout.left * scale}px`);
+		this.rootContainer.style.setProperty('--titlebar-display-cutout-right', `${cutout.right * scale}px`);
+	}
+
+	/**
+	 * Window controls that look and act like the ones macOS shows in full screen:
+	 * close, a disabled minimize, and exit full screen.
+	 */
+	private createFullScreenWindowControls(targetWindow: CodeWindow): void {
+		const container = this.fullScreenWindowControls = prepend(this.leftContent, $('div.fullscreen-window-controls'));
+
+		const close = this._register(new Button(container, { ariaLabel: localize('closeWindow', "Close Window") }));
+		close.element.classList.add('fullscreen-window-control', 'close');
+		this._register(close.onDidClick(() => this.nativeHostService.closeWindow({ targetWindowId: targetWindow.vscodeWindowId })));
+
+		// Minimizing is not possible in full screen, which macOS shows with a disabled control
+		append(container, $('div.fullscreen-window-control.minimize', { 'aria-hidden': 'true' }));
+
+		const exitFullScreen = this._register(new Button(container, { ariaLabel: localize('exitFullScreen', "Exit Full Screen") }));
+		exitFullScreen.element.classList.add('fullscreen-window-control', 'exit-full-screen');
+		this._register(exitFullScreen.onDidClick(() => this.hostService.toggleFullScreen(targetWindow)));
+
+		this.updateFullScreenWindowControls();
+	}
+
+	private updateFullScreenWindowControls(): void {
+		this.fullScreenWindowControls?.classList.toggle('visible', this.coversMenuBar);
 	}
 
 	private async handleWindowsAlwaysOnTop(targetWindowId: number): Promise<void> {
@@ -164,6 +282,12 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		// Native menu controller
 		if (isMacintosh || hasNativeMenu(this.configurationService)) {
 			this._register(this.instantiationService.createInstance(NativeMenubarControl));
+		}
+
+		// Full Screen Window Controls (macOS, when the window covers the menu bar)
+		if (isMacintosh) {
+			this.createFullScreenWindowControls(targetWindow);
+			this.layoutDisplayCutout();
 		}
 
 		// App Icon (Native Windows/Linux)
@@ -255,6 +379,30 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 
 		// Part container
 		if (this.element) {
+
+			// Black around a camera cutout, so that the cutout disappears into the title bar.
+			// A light theme's title bar colors would not show on black, so they get dark ones.
+			const hidesCutout = !!this.screenCutout;
+			const hasLightTheme = hidesCutout && this.element.classList.contains('light');
+			this.element.classList.toggle('display-cutout', hidesCutout);
+			this.element.classList.toggle('display-cutout-light-theme', hasLightTheme);
+			if (hidesCutout) {
+				this.element.style.backgroundColor = Color.black.toString();
+				this.element.classList.remove('light');
+				if (hasLightTheme) {
+					this.element.style.color = ''; // from the styles for light themes
+				}
+			}
+
+			// The height reaches below a camera cutout by the border, if there is one
+			const hasBorder = !!this.element.style.borderBottom;
+			if (hasBorder !== this.hasBorder) {
+				this.hasBorder = hasBorder;
+				if (hidesCutout) {
+					this._onDidChange.fire(undefined);
+				}
+			}
+
 			if (useWindowControlsOverlay(this.configurationService)) {
 				if (
 					!this.cachedWindowControlStyles ||
@@ -277,6 +425,8 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 
 	override layout(width: number, height: number): void {
 		super.layout(width, height);
+
+		this.layoutDisplayCutout(); // the zoom may have changed
 
 		if (useWindowControlsOverlay(this.configurationService)) {
 			const newHeight = Math.round(height * getZoomFactor(getWindow(this.element)));

@@ -111,6 +111,36 @@
 	padding-left: 16px; /* ensure there is some space between title and controls */
 }
 
+/*
+ * Display cutout: in full screen on displays with a camera cutout, the title bar
+ * takes the band of the menu bar beside the cutout. Its contents flow around the
+ * cutout: whatever comes before the right side ends where the cutout starts, and
+ * the right side starts where it ends, keeping the title bar's usual spacing on
+ * both sides, as if the cutout were one more item in the row.
+ */
+.monaco-workbench .part.titlebar > .titlebar-container.has-display-cutout {
+	--titlebar-display-cutout-gap: 10px;
+}
+
+.monaco-workbench .part.titlebar > .titlebar-container.has-display-cutout > .titlebar-left {
+	flex: 1 0 auto; /* the center gives way rather than run into the window controls */
+	width: auto;
+}
+
+.monaco-workbench .part.titlebar > .titlebar-container.has-display-cutout > .titlebar-center {
+	flex: 0 1 auto;
+	margin: 0 0 0 var(--titlebar-display-cutout-gap);
+}
+
+.monaco-workbench .part.titlebar > .titlebar-container.has-display-cutout > .titlebar-right {
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	width: calc(100% - var(--titlebar-display-cutout-right) - var(--titlebar-display-cutout-gap));
+	min-width: 0;
+	margin-left: calc(var(--titlebar-display-cutout-right) - var(--titlebar-display-cutout-left) + 2 * var(--titlebar-display-cutout-gap));
+	padding-left: 0;
+}
+
 /* Window title text */
 .monaco-workbench .part.titlebar > .titlebar-container > .titlebar-center > .window-title {
 	flex: 0 1 auto;
@@ -542,4 +572,119 @@
 .monaco-workbench .part.titlebar > .titlebar-container > .titlebar-right > .action-toolbar-container .monaco-action-bar .action-item.icon .badge.compact.progress-badge .badge-content::before {
 	width: 12px;
 	height: 12px;
+}
+
+/*
+ * Full screen window controls: when a window covers the menu bar in native full
+ * screen on a display with a camera cutout, the window controls macOS shows with
+ * the menu bar only appear when the mouse reaches the cutout, so the title bar
+ * shows its own, which look and act like them: close, a disabled minimize, and
+ * exit full screen. Like macOS's, they keep their size whatever the zoom, and show
+ * what they do when hovered, or when focused from the keyboard.
+ */
+.monaco-workbench .part.titlebar .fullscreen-window-controls {
+	display: none;
+	flex-shrink: 0;
+	gap: 9px;
+	margin: 0 9px 0 11px;
+	-webkit-app-region: no-drag;
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-controls.visible {
+	display: flex;
+}
+
+.monaco-workbench .part.titlebar > .titlebar-container:not(.counter-zoom) .fullscreen-window-controls {
+	zoom: calc(1 / var(--zoom-factor, 1));
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-control {
+	position: relative;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background-color: rgba(255, 255, 255, 0.25);
+}
+
+.monaco-workbench .part.titlebar:not(.inactive) .fullscreen-window-control.close {
+	background-color: color(display-p3 0.88 0.396 0.341); /* as macOS draws it */
+	--fullscreen-window-control-glyph: #4c0002;
+}
+
+.monaco-workbench .part.titlebar:not(.inactive) .fullscreen-window-control.exit-full-screen {
+	background-color: color(display-p3 0.375 0.741 0.114); /* as macOS draws it */
+	--fullscreen-window-control-glyph: #0b650d;
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-control.monaco-button:focus {
+	outline-offset: 1px;
+}
+
+.monaco-workbench .part.titlebar:not(.inactive) .fullscreen-window-control.monaco-button:active {
+	filter: brightness(0.8);
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-control::before,
+.monaco-workbench .part.titlebar .fullscreen-window-control::after {
+	content: '';
+	position: absolute;
+	opacity: 0;
+	background-color: var(--fullscreen-window-control-glyph);
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-controls:is(:hover, :focus-within) .fullscreen-window-control.monaco-button::before,
+.monaco-workbench .part.titlebar .fullscreen-window-controls:is(:hover, :focus-within) .fullscreen-window-control.monaco-button::after {
+	opacity: 1;
+}
+
+/* Close: a cross */
+.monaco-workbench .part.titlebar .fullscreen-window-control.close::before,
+.monaco-workbench .part.titlebar .fullscreen-window-control.close::after {
+	top: 6.4px;
+	left: 3px;
+	width: 8px;
+	height: 1.2px;
+	border-radius: 0.6px;
+	transform: rotate(45deg);
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-control.close::after {
+	transform: rotate(-45deg);
+}
+
+/* Exit full screen: two triangles pointing at the middle */
+.monaco-workbench .part.titlebar .fullscreen-window-control.exit-full-screen::before {
+	inset: 0;
+	clip-path: polygon(3.5px 6.5px, 6.5px 3.5px, 6.5px 6.5px);
+}
+
+.monaco-workbench .part.titlebar .fullscreen-window-control.exit-full-screen::after {
+	inset: 0;
+	clip-path: polygon(7.5px 7.5px, 10.5px 7.5px, 7.5px 10.5px);
+}
+
+/*
+ * Around a camera cutout the title bar is black, so that the cutout disappears
+ * into it. Light themes have title bar colors for a light title bar, so they
+ * get the ones of a dark title bar instead.
+ */
+.monaco-workbench .part.titlebar.display-cutout-light-theme {
+	color-scheme: dark;
+	color: var(--vscode-titleBar-activeForeground);
+	--vscode-titleBar-activeForeground: #cccccc;
+	--vscode-titleBar-inactiveForeground: #9d9d9d;
+	--vscode-icon-foreground: #cccccc;
+	--vscode-toolbar-hoverBackground: rgba(90, 93, 94, 0.31);
+	--vscode-toolbar-activeBackground: rgba(99, 102, 103, 0.31);
+	--vscode-commandCenter-foreground: #cccccc;
+	--vscode-commandCenter-activeForeground: #cccccc;
+	--vscode-commandCenter-background: rgba(255, 255, 255, 0.05);
+	--vscode-commandCenter-activeBackground: rgba(255, 255, 255, 0.08);
+	--vscode-commandCenter-border: rgba(204, 204, 204, 0.2);
+	--vscode-commandCenter-activeBorder: rgba(204, 204, 204, 0.3);
+	--vscode-commandCenter-inactiveBorder: rgba(157, 157, 157, 0.25);
+}
+
+.monaco-workbench .part.titlebar.display-cutout-light-theme.inactive {
+	color: var(--vscode-titleBar-inactiveForeground);
 }

@@ -12,7 +12,7 @@ import { Direction, IViewSize } from '../../../../base/browser/ui/grid/grid.js';
 import { isMacintosh, isNative, isWeb } from '../../../../base/common/platform.js';
 import { isAuxiliaryWindow, mainWindow } from '../../../../base/browser/window.js';
 import { CustomTitleBarVisibility, TitleBarSetting, getMenuBarVisibility, hasCustomTitlebar, hasNativeMenu, hasNativeTitlebar } from '../../../../platform/window/common/window.js';
-import { isFullscreen, isWCOEnabled } from '../../../../base/browser/browser.js';
+import { hasDisplayCutout, isFullscreen, isWCOEnabled } from '../../../../base/browser/browser.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDisposable } from '../../../../base/common/lifecycle.js';
 
@@ -736,6 +736,12 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 export function shouldShowCustomTitleBar(configurationService: IConfigurationService, window: Window, menuBarToggled?: boolean): boolean {
 	if (!hasCustomTitlebar(configurationService)) {
 		return false;
+	}
+
+	// A camera cutout reaching into the window sits in the title bar's band, which
+	// would otherwise leave the workbench under the cutout
+	if (hasDisplayCutout(window)) {
+		return true;
 	}
 
 	const inFullscreen = isFullscreen(window);

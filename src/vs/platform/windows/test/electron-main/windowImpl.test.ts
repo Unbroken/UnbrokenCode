@@ -44,7 +44,7 @@ suite('BaseWindow - window controls overlay', () => {
 			new InMemoryTestStateMainService(),
 			upcastPartial<IEnvironmentMainService>({ args: { _: [] } }),
 			store.add(new NullLogService()),
-			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE })
+			upcastPartial<IDisplayShapeMainService>({ onDidChange: Event.None, getWindowDisplayShape: () => NO_DISPLAY_SHAPE, setCoversMenuBarInFullScreen: () => { }, windowLevelDidChange: () => { } })
 		));
 		const setTitleBarOverlay = sinon.stub();
 		const setWindowButtonPosition = sinon.stub();

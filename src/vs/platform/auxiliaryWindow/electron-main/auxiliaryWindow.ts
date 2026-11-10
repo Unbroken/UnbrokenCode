@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BrowserWindow, BrowserWindowConstructorOptions, WebContents } from 'electron';
+import { BrowserWindow, BrowserWindowConstructorOptions, WebContents, webContents } from 'electron';
 import { Event } from '../../../base/common/event.js';
 import { isLinux, isMacintosh, isWindows } from '../../../base/common/platform.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
@@ -13,7 +13,7 @@ import { ILogService } from '../../log/common/log.js';
 import { IStateService } from '../../state/node/state.js';
 import { hasNativeTitlebar, TitlebarStyle } from '../../window/common/window.js';
 import { IBaseWindow, WindowMode } from '../../window/electron-main/window.js';
-import { BaseWindow } from '../../windows/electron-main/windowImpl.js';
+import { BaseWindow, isAgentsBrowserWindow } from '../../windows/electron-main/windowImpl.js';
 import { IDisplayShapeMainService } from '../../windows/electron-main/displayShapeMainService.js';
 
 export interface IAuxiliaryWindow extends IBaseWindow {
@@ -52,6 +52,12 @@ export class AuxiliaryWindow extends BaseWindow implements IAuxiliaryWindow {
 
 		// Try to claim window
 		this.tryClaimWindow();
+	}
+
+	protected override titleBarFlowsAroundDisplayCutout(win: BrowserWindow): boolean {
+		const opener = this.webContents.opener ? webContents.fromFrame(this.webContents.opener) : undefined;
+
+		return super.titleBarFlowsAroundDisplayCutout(win) && !isAgentsBrowserWindow(opener ? BrowserWindow.fromWebContents(opener) : null); // the window that opened it decides its title bar
 	}
 
 	tryClaimWindow(options?: BrowserWindowConstructorOptions): void {

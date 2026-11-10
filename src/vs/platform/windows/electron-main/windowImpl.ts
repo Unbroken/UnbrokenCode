@@ -33,7 +33,7 @@ import { IApplicationStorageMainService, IStorageMainService } from '../../stora
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
-import { getMenuBarVisibility, IFolderToOpen, INativeWindowConfiguration, IWindowSettings, IWorkspaceToOpen, MenuBarVisibility, hasNativeTitlebar, useNativeFullScreen, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, TitlebarStyle, MenuSettings, getMacOSWindowControlsPosition } from '../../window/common/window.js';
+import { getMenuBarVisibility, IFolderToOpen, INativeWindowConfiguration, IWindowSettings, IWorkspaceToOpen, MenuBarVisibility, hasNativeTitlebar, useNativeFullScreen, DEFAULT_CUSTOM_TITLEBAR_HEIGHT, TitlebarStyle, MenuSettings, getMacOSWindowControlsPosition, TitleBarSetting, CustomTitleBarVisibility } from '../../window/common/window.js';
 import { defaultBrowserWindowOptions, getAllWindowsExcludingOffscreen, IWindowsMainService, OpenContext, WindowStateValidator } from './windows.js';
 import { ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, toWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 import { IWorkspacesManagementMainService } from '../../workspaces/electron-main/workspacesManagementMainService.js';
@@ -144,6 +144,19 @@ class DockBadgeManager {
 	}
 }
 
+/**
+ * The browser windows of Agents windows, whose title bar does not flow around a
+ * camera cutout, nor do the title bars of the auxiliary windows they open.
+ */
+const agentsBrowserWindows = new WeakSet<electron.BrowserWindow>();
+
+/**
+ * Returns whether the given browser window is the one of an Agents window.
+ */
+export function isAgentsBrowserWindow(win: electron.BrowserWindow | null | undefined): boolean {
+	return !!win && agentsBrowserWindows.has(win);
+}
+
 export abstract class BaseWindow extends Disposable implements IBaseWindow {
 
 	private applicationBadgeWindowId: number | undefined;
@@ -188,6 +201,8 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 	private _displayShape = NO_DISPLAY_SHAPE;
 	get displayShape(): IDisplayShape { return this._displayShape; }
 
+	private sheetOffset: number | undefined = undefined;
+
 	protected _win: electron.BrowserWindow | null = null;
 	get win() { return this._win; }
 	protected setWin(win: electron.BrowserWindow, options?: BrowserWindowConstructorOptions): void {
@@ -228,9 +243,14 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		}));
 		this._register(Event.fromNodeEventEmitter(this._win, 'enter-full-screen')(() => this._onDidEnterFullScreen.fire()));
 		this._register(Event.fromNodeEventEmitter(this._win, 'leave-full-screen')(() => this._onDidLeaveFullScreen.fire()));
-		this._register(Event.fromNodeEventEmitter(this._win, 'always-on-top-changed', (_, alwaysOnTop) => alwaysOnTop)(alwaysOnTop => this._onDidChangeAlwaysOnTop.fire(alwaysOnTop)));
+		this._register(Event.fromNodeEventEmitter(this._win, 'always-on-top-changed', (_, alwaysOnTop) => alwaysOnTop)(alwaysOnTop => {
+			if (isMacintosh) {
+				this.displayShapeMainService.windowLevelDidChange(win); // pinning changes the level covering the menu bar
+			}
+			this._onDidChangeAlwaysOnTop.fire(alwaysOnTop);
+		}));
 
-		// Display Shape: follow the window into and out of rounded display corners
+		// Display Shape: follow the window into and out of rounded display corners and the camera cutout
 		this._register(Event.any<unknown>(
 			Event.fromNodeEventEmitter(win, 'move'),
 			Event.fromNodeEventEmitter(win, 'resize'),
@@ -243,7 +263,21 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		// Sheet Offsets
 		const useCustomTitleStyle = !hasNativeTitlebar(this.configurationService, options?.titleBarStyle === 'hidden' ? TitlebarStyle.CUSTOM : undefined /* unknown */);
 		if (isMacintosh && useCustomTitleStyle) {
-			win.setSheetOffset(isTahoeOrNewer(release()) ? 32 : 28); // offset dialogs by the height of the custom title bar if we have any
+			this.sheetOffset = isTahoeOrNewer(release()) ? 32 : 28; // offset dialogs by the height of the custom title bar if we have any
+			win.setSheetOffset(this.sheetOffset);
+		}
+
+		// Full Screen: cover the menu bar, so that the custom title bar takes its band beside the camera
+		// cutout, unless the title bar hides in full screen, which would leave the workbench under the cutout.
+		// Only for windows created with the custom title bar, which windows can opt out of.
+		const hasCustomTitleBar = options ? options.titleBarStyle === 'hidden' : useCustomTitleStyle;
+		if (isMacintosh && hasCustomTitleBar && this.titleBarFlowsAroundDisplayCutout(win)) {
+			const updateCoversMenuBar = () => this.displayShapeMainService.setCoversMenuBarInFullScreen(win,
+				this.configurationService.getValue<IWindowSettings | undefined>('window')?.nativeFullScreenCoversMenuBar !== false &&
+				this.configurationService.getValue<CustomTitleBarVisibility>(TitleBarSetting.CUSTOM_TITLE_BAR_VISIBILITY) !== CustomTitleBarVisibility.WINDOWED
+			);
+			updateCoversMenuBar();
+			this._register(Event.filter(this.configurationService.onDidChangeConfiguration, e => e.affectsConfiguration('window.nativeFullScreenCoversMenuBar') || e.affectsConfiguration(TitleBarSetting.CUSTOM_TITLE_BAR_VISIBILITY))(updateCoversMenuBar));
 		}
 
 		// Update the window controls immediately based on cached or default values
@@ -302,6 +336,14 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		}
 	}
 
+	/**
+	 * Whether the custom title bar of the given window keeps its contents clear of a
+	 * camera cutout and shows window controls when the window covers the menu bar.
+	 */
+	protected titleBarFlowsAroundDisplayCutout(win: electron.BrowserWindow): boolean {
+		return !isAgentsBrowserWindow(win);
+	}
+
 	private updateDisplayShape(): void {
 		if (!this._win) {
 			return;
@@ -310,6 +352,9 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 		const shape = isMacintosh ? this.displayShapeMainService.getWindowDisplayShape(this._win) : NO_DISPLAY_SHAPE;
 		if (!equals(shape, this._displayShape)) {
 			this._displayShape = shape;
+			if (this.sheetOffset !== undefined) {
+				this._win.setSheetOffset(Math.max(this.sheetOffset, Math.ceil(shape.cutout?.bottom ?? 0))); // keep dialogs below the camera cutout, where the title bar grows to
+			}
 			this._onDidChangeDisplayShape.fire(shape);
 		}
 	}
@@ -836,6 +881,9 @@ export class CodeWindow extends BaseWindow implements ICodeWindow {
 			mark('code/willCreateCodeBrowserWindow');
 			this._win = new electron.BrowserWindow(options);
 			mark('code/didCreateCodeBrowserWindow');
+			if (config.isSessionsWindow) {
+				agentsBrowserWindows.add(this._win);
+			}
 
 			this._id = this._win.id;
 			this.setWin(this._win, options);

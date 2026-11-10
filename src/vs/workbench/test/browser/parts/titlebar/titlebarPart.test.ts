@@ -236,6 +236,47 @@ suite('Workbench - Titlebar Part', () => {
 			bothVisible: [false, false],
 		});
 	});
+
+	test('hides optional toolbar groups that overflow the space beside a camera cutout', () => {
+		let rightContentWidth = 100;
+		const centerAdjacentToolBar = mainWindow.document.createElement('div');
+		const updateToolBar = mainWindow.document.createElement('div');
+		const root = createMeasuredElement(() => 1000, () => 1000); // the whole title bar fits
+		root.classList.add('has-display-cutout');
+
+		// Right aligned in a right side of a fixed width, so whatever does not fit sticks out to its left
+		const rightContent = mainWindow.document.createElement('div');
+		const contentWidth = () => 60 + visibleWidth(centerAdjacentToolBar, 30) + visibleWidth(updateToolBar, 30);
+		const childLeft = (child: HTMLElement) => 900 - contentWidth() + (child === centerAdjacentToolBar ? 0 : visibleWidth(centerAdjacentToolBar, 30));
+		for (const child of [centerAdjacentToolBar, updateToolBar]) {
+			child.getBoundingClientRect = () => new DOMRect(childLeft(child), 0, visibleWidth(child, 30), 30);
+			rightContent.append(child);
+		}
+		rightContent.getBoundingClientRect = () => new DOMRect(900 - rightContentWidth, 0, rightContentWidth, 30);
+
+		const titlebarPart = Object.create(BrowserTitlebarPart.prototype) as BrowserTitlebarPart;
+		Reflect.set(titlebarPart, 'rootContainer', root);
+		Reflect.set(titlebarPart, 'rightContent', rightContent);
+		Reflect.set(titlebarPart, 'centerAdjacentToolBarElement', centerAdjacentToolBar);
+		Reflect.set(titlebarPart, 'updateToolBarElement', updateToolBar);
+
+		updateTitleBarToolBarOverflow.call(titlebarPart);
+		const centerHiddenFirst = [centerAdjacentToolBar, updateToolBar].map(element => element.classList.contains('overflowing'));
+
+		rightContentWidth = 70;
+		updateTitleBarToolBarOverflow.call(titlebarPart);
+		const bothHidden = [centerAdjacentToolBar, updateToolBar].map(element => element.classList.contains('overflowing'));
+
+		rightContentWidth = 120;
+		updateTitleBarToolBarOverflow.call(titlebarPart);
+		const bothVisible = [centerAdjacentToolBar, updateToolBar].map(element => element.classList.contains('overflowing'));
+
+		assert.deepStrictEqual({ centerHiddenFirst, bothHidden, bothVisible }, {
+			centerHiddenFirst: [true, false],
+			bothHidden: [true, true],
+			bothVisible: [false, false],
+		});
+	});
 });
 
 function createMeasuredElement(clientWidth: () => number, scrollWidth: () => number): HTMLElement {

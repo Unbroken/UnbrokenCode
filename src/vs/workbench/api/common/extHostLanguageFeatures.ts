@@ -2595,6 +2595,13 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 		return result;
 	}
 
+	registerCodeFragmentTokenRules(extension: IExtensionDescription, selector: vscode.DocumentSelector, rules: readonly vscode.CodeFragmentTokenRule[]): vscode.Disposable {
+		const handle = this._nextHandle();
+		const rulesDto = rules.map(rule => ({ regex: String(rule.regex), tokenType: String(rule.tokenType), tokenModifiers: rule.tokenModifiers?.map(String), kinds: rule.kinds?.map(typeConvert.CodeFragmentKind.from) }));
+		this._proxy.$registerCodeFragmentTokenRules(handle, this._transformDocumentSelector(selector, extension), rulesDto);
+		return this._createDisposable(handle);
+	}
+
 	$provideDocumentSemanticTokens(handle: number, resource: UriComponents, previousResultId: number, token: CancellationToken): Promise<VSBuffer | null> {
 		return this._withAdapter(handle, DocumentSemanticTokensAdapter, adapter => adapter.provideDocumentSemanticTokens(URI.revive(resource), previousResultId, token), null, token);
 	}

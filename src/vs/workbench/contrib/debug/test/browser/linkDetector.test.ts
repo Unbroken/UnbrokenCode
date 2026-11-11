@@ -91,6 +91,17 @@ suite('Debug - Link Detector', () => {
 		hoverBehavior.store.dispose();
 	});
 
+	test('styles text and the text of links', () => {
+		const hoverBehavior = { type: DebugLinkHoverBehavior.None, store: new DisposableStore() };
+		const path = isWindows ? 'C:\\foo\\bar.js:12:34' : '/Users/foo/bar.js:12:34';
+		const input = `{m_Foo:1, ${path}}`;
+		const end = input.length;
+		const output = linkDetector.linkify(input, hoverBehavior, false, undefined, false, [{ start: 2, end: 5 }], [{ start: 1, end: 6, classNames: ['mtk5'] }, { start: 7, end: end, classNames: ['mtk6'] }]);
+
+		assert.strictEqual(output.outerHTML, `<span>{<span class="mtk5">m</span><span class="mtk5"><span class="highlight">_Fo</span></span><span class="mtk5">o</span>:<span class="mtk6">1, </span><a tabindex="0"><span class="mtk6">${path}</span></a><span class="mtk6">}</span></span>`);
+		hoverBehavior.store.dispose();
+	});
+
 	test('allows links with @ (#282635)', () => {
 		if (!isWindows) {
 			const hoverBehavior = { type: DebugLinkHoverBehavior.None, store: new DisposableStore() };

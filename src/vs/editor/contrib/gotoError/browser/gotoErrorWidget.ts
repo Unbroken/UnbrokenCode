@@ -30,6 +30,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IMarker, IRelatedInformation, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { SeverityIcon } from '../../../../base/browser/ui/severityIcon/severityIcon.js';
 import { contrastBorder, editorBackground, editorErrorBorder, editorErrorForeground, editorInfoBorder, editorInfoForeground, editorWarningBorder, editorWarningForeground, oneOf, registerColor, transparent } from '../../../../platform/theme/common/colorRegistry.js';
 import { IColorTheme, IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -54,6 +55,7 @@ class MessageWidget {
 	private _layoutWidth: number | undefined;
 	private _pendingScrollPosition: { scrollTop: number; scrollLeft: number } | undefined;
 	private _laysOutCode = false;
+	private _contentHeight = 0;
 	// By message, the layouts of its code, which show while it is laid out for another width
 	private readonly _layouts = new Map<string, Map<string, string>>();
 
@@ -66,7 +68,8 @@ class MessageWidget {
 		private readonly _openerService: IOpenerService,
 		private readonly _labelService: ILabelService,
 		private readonly _codeFragmentService: ICodeFragmentService,
-		private readonly _onDidChangeHeight: () => void
+		private readonly _onDidChangeHeight: () => void,
+		private readonly _isHeightDragged: () => boolean
 	) {
 		this._editor = editor;
 		this._disposables.add(this._messageDisposables);
@@ -161,7 +164,9 @@ class MessageWidget {
 			const height = this._domNode.scrollHeight;
 			const paddingTop = parseFloat(dom.getComputedStyle(this._domNode).paddingTop) || 0;
 			const lines = Math.max(1, Math.ceil((height - paddingTop) / lineHeight));
-			this._scrollable.setScrollDimensions({ scrollWidth: this._domNode.scrollWidth, scrollHeight: height });
+			this._contentHeight = height;
+			this._scrollable.setScrollDimensions({ scrollWidth: this._domNode.scrollWidth });
+			this._updateScrollHeight();
 			if (this._pendingScrollPosition) {
 				this._scrollable.setScrollPosition(this._pendingScrollPosition);
 				this._pendingScrollPosition = undefined;
@@ -357,8 +362,12 @@ class MessageWidget {
 		const fontInfo = this._editor.getOption(EditorOption.fontInfo);
 		const scrollWidth = Math.ceil(fontInfo.typicalFullwidthCharacterWidth * this._longestLineLength * 0.75);
 		const scrollHeight = fontInfo.lineHeight * this._lines + this._extraHeight;
-		this._scrollable.setScrollDimensions({ scrollWidth, scrollHeight });
-		if (this._laysOutCode) {
+		this._contentHeight = scrollHeight;
+		this._scrollable.setScrollDimensions({ scrollWidth });
+		this._updateScrollHeight();
+		// Also when the widget was dragged to a height, which it only keeps when the content needs it, and the lines it
+		// counts don't count all of related information that takes more than one
+		if (this._laysOutCode || this._isHeightDragged()) {
 			this._measure();
 		}
 	}
@@ -373,10 +382,38 @@ class MessageWidget {
 		this._scrollable.getDomNode().style.height = `${height}px`;
 		this._scrollable.getDomNode().style.width = `${width}px`;
 		this._scrollable.setScrollDimensions({ width, height });
+		this._updateScrollHeight();
+	}
+
+	/**
+	 * Content that scrolls has a line after it, which shows that it ends when it is scrolled to the end. Content that fits
+	 * doesn't, as the line would make it scroll.
+	 */
+	private _updateScrollHeight(): void {
+		const lineHeight = this._editor.getOption(EditorOption.lineHeight);
+		// The height the lines of the content are estimated to take leaves out the container's padding, which what it
+		// shows, once it does, has
+		const contentHeight = Math.max(this._contentHeight, this._domNode.isConnected ? this._domNode.scrollHeight : 0);
+		const overflows = contentHeight > this._scrollable.getScrollDimensions().height;
+		this._scrollable.setScrollDimensions({ scrollHeight: overflows ? contentHeight + lineHeight : contentHeight });
 	}
 
 	getHeightInLines(): number {
 		return Math.min(17, this._lines);
+	}
+
+	/**
+	 * The lines of what the widget shows, however many that is.
+	 */
+	getContentHeightInLines(): number {
+		// The lines are counted from the messages, whose related information can take more than one, so what the widget
+		// shows, once it does, is measured
+		if (!this._domNode.isConnected) {
+			return this._lines;
+		}
+		const lineHeight = this._editor.getOption(EditorOption.lineHeight);
+		const paddingTop = parseFloat(dom.getComputedStyle(this._domNode).paddingTop) || 0;
+		return Math.max(this._lines, Math.ceil((this._domNode.scrollHeight - paddingTop) / lineHeight));
 	}
 
 	private getAriaLabel(marker: IMarker): string {
@@ -419,6 +456,9 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 	private _backgroundColor?: Color;
 	private readonly _onDidSelectRelatedInformation = new Emitter<IRelatedInformation>();
 	private _heightInPixel!: number;
+	private _heightInLines: number | undefined;
+	private static readonly _minimumHeightInLines = 5;
+	private static readonly _heightStorageKey = 'editor.problemPeek.heightInLines';
 
 	readonly onDidSelectRelatedInformation: Event<IRelatedInformation> = this._onDidSelectRelatedInformation.event;
 
@@ -430,7 +470,8 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@ILabelService private readonly _labelService: ILabelService,
-		@ICodeFragmentService private readonly _codeFragmentService: ICodeFragmentService
+		@ICodeFragmentService private readonly _codeFragmentService: ICodeFragmentService,
+		@IStorageService private readonly _storageService: IStorageService
 	) {
 		super(editor, { showArrow: true, showFrame: true, isAccessible: true, frameWidth: 1 }, instantiationService);
 		this._severity = MarkerSeverity.Warning;
@@ -438,6 +479,7 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 
 		this._applyTheme(_themeService.getColorTheme());
 		this._callOnDispose.add(_themeService.onDidColorThemeChange(this._applyTheme.bind(this)));
+		this._callOnDispose.add(this.editor.onDidLayoutChange(() => this._fitToEditor()));
 
 		this.create();
 	}
@@ -507,7 +549,7 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		this._container = document.createElement('div');
 		container.appendChild(this._container);
 
-		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService, this._codeFragmentService, () => this._relayout());
+		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService, this._codeFragmentService, () => this._relayout(), () => this._getDraggedHeightInLines() !== undefined);
 		this._disposables.add(this._message);
 	}
 
@@ -530,7 +572,8 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		const range = Range.lift(marker);
 		const editorPosition = this.editor.getPosition();
 		const position = editorPosition && range.containsPosition(editorPosition) ? editorPosition : range.getStartPosition();
-		super.show(position, this.computeRequiredHeight());
+		this._heightInLines = Math.min(this._getNeededHeightInLines(), this._getMaximumHeightInLines());
+		super.show(position, this._heightInLines);
 
 		const model = this.editor.getModel();
 		if (model) {
@@ -566,9 +609,57 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		this._message.layout(this._heightInPixel, widthInPixel);
 	}
 
-	protected override _relayout(): void {
-		// No taller than the editor allows, also when code laid out once shown makes the message taller
-		super._relayout(this.computeRequiredHeight(), true);
+	protected override _relayout(newHeightInLines?: number): void {
+		// The height the sash is dragged to, which stays when the content changes, as the height the problem needs would
+		// otherwise undo the drag, and for every problem after, in any editor, also after a restart
+		if (newHeightInLines !== undefined) {
+			this._heightInLines = newHeightInLines;
+			this._storageService.store(MarkerNavigationWidget._heightStorageKey, newHeightInLines, StorageScope.PROFILE, StorageTarget.MACHINE);
+			super._relayout(newHeightInLines);
+		} else {
+			this._heightInLines = Math.min(this._getNeededHeightInLines(), this._getMaximumHeightInLines());
+			super._relayout(this._heightInLines);
+		}
+	}
+
+	/**
+	 * The height the sash was last dragged to, or less when the problem fits in less, or else the height the problem
+	 * needs.
+	 */
+	private _getNeededHeightInLines(): number {
+		const draggedHeightInLines = this._getDraggedHeightInLines();
+		if (draggedHeightInLines === undefined) {
+			return this.computeRequiredHeight();
+		}
+		return Math.max(MarkerNavigationWidget._minimumHeightInLines, Math.min(draggedHeightInLines, 3 + this._message.getContentHeightInLines()));
+	}
+
+	private _getDraggedHeightInLines(): number | undefined {
+		const heightInLines = this._storageService.getNumber(MarkerNavigationWidget._heightStorageKey, StorageScope.PROFILE);
+		return heightInLines !== undefined && heightInLines >= MarkerNavigationWidget._minimumHeightInLines ? heightInLines : undefined;
+	}
+
+	/**
+	 * The widget can take two thirds of the editor's height, also when the sash is dragged.
+	 */
+	protected override _getMaximumHeightInLines(): number {
+		const maximum = Math.floor(this.editor.getLayoutInfo().height * 0.66 / this.editor.getOption(EditorOption.lineHeight));
+		return Math.max(MarkerNavigationWidget._minimumHeightInLines + 1, maximum);
+	}
+
+	protected override _getResizeBounds(): { readonly minLines: number; readonly maxLines: number } {
+		// The sash moves only between the bounds, so the maximum itself is one more
+		return { minLines: MarkerNavigationWidget._minimumHeightInLines, maxLines: this._getMaximumHeightInLines() + 1 };
+	}
+
+	/**
+	 * The widget follows the editor's height: smaller with it when it would be taller than it can be, and back to the
+	 * height it wants when the editor grows again.
+	 */
+	private _fitToEditor(): void {
+		if (this._heightInLines !== undefined) {
+			this._relayout();
+		}
 	}
 
 	private computeRequiredHeight() {

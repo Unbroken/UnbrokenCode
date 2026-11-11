@@ -28,6 +28,7 @@ import { ExtensionIdentifier, IExtensionDescription } from '../../../platform/ex
 import { ILogService } from '../../../platform/log/common/log.js';
 import { checkProposedApiEnabled, isProposedApiEnabled } from '../../services/extensions/common/extensions.js';
 import { Cache } from './cache.js';
+import { CodeFragmentFormattingOptions } from '../../../editor/common/languages/codeFragments.js';
 import * as extHostProtocol from './extHost.protocol.js';
 import { IExtHostApiDeprecationService } from './extHostApiDeprecationService.js';
 import { CommandsConverter, ExtHostCommands } from './extHostCommands.js';
@@ -425,6 +426,18 @@ class LinkedEditingRangeAdapter {
 			};
 		}
 		return undefined;
+	}
+}
+
+class CodeFragmentFormattingAdapter {
+	constructor(
+		private readonly _provider: vscode.CodeFragmentFormattingProvider
+	) { }
+
+	async provideCodeFragmentFormatting(resource: URI, languageId: string, fragments: string[], options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | null)[] | undefined> {
+		const value = await this._provider.provideCodeFragmentFormatting({ uri: resource, languageId }, fragments, options, token);
+		// Sent as null, as an array can't hold undefined in JSON
+		return Array.isArray(value) ? fragments.map((_, index) => typeof value[index] === 'string' ? value[index] : null) : undefined;
 	}
 }
 
@@ -2155,7 +2168,7 @@ type Adapter = DocumentSymbolAdapter | CodeLensAdapter | DefinitionAdapter | Hov
 	| DocumentSemanticTokensAdapter | DocumentRangeSemanticTokensAdapter
 	| EvaluatableExpressionAdapter | InlineValuesAdapter
 	| LinkedEditingRangeAdapter | InlayHintsAdapter | InlineCompletionAdapter
-	| DocumentDropEditAdapter | NewSymbolNamesAdapter;
+	| DocumentDropEditAdapter | NewSymbolNamesAdapter | CodeFragmentFormattingAdapter;
 
 class AdapterData {
 	constructor(
@@ -2600,6 +2613,16 @@ export class ExtHostLanguageFeatures extends CoreDisposable implements extHostPr
 		const rulesDto = rules.map(rule => ({ regex: String(rule.regex), tokenType: String(rule.tokenType), tokenModifiers: rule.tokenModifiers?.map(String), kinds: rule.kinds?.map(typeConvert.CodeFragmentKind.from) }));
 		this._proxy.$registerCodeFragmentTokenRules(handle, this._transformDocumentSelector(selector, extension), rulesDto);
 		return this._createDisposable(handle);
+	}
+
+	registerCodeFragmentFormattingProvider(extension: IExtensionDescription, selector: vscode.DocumentSelector, provider: vscode.CodeFragmentFormattingProvider): vscode.Disposable {
+		const handle = this._addNewAdapter(new CodeFragmentFormattingAdapter(provider), extension);
+		this._proxy.$registerCodeFragmentFormattingProvider(handle, this._transformDocumentSelector(selector, extension));
+		return this._createDisposable(handle);
+	}
+
+	$provideCodeFragmentFormatting(handle: number, resource: UriComponents, languageId: string, fragments: string[], options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | null)[] | undefined> {
+		return this._withAdapter(handle, CodeFragmentFormattingAdapter, adapter => adapter.provideCodeFragmentFormatting(URI.revive(resource), languageId, fragments, options, token), undefined, token);
 	}
 
 	$provideDocumentSemanticTokens(handle: number, resource: UriComponents, previousResultId: number, token: CancellationToken): Promise<VSBuffer | null> {

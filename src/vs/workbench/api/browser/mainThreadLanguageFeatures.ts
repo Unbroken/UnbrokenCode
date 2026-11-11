@@ -547,6 +547,15 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 		this._registrations.set(handle, this._languageFeaturesService.codeFragmentTokenRules.register(selector, { rules }));
 	}
 
+	$registerCodeFragmentFormattingProvider(handle: number, selector: IDocumentFilterDto[]): void {
+		this._registrations.set(handle, this._languageFeaturesService.codeFragmentFormattingProvider.register(selector, {
+			provideCodeFragmentFormatting: async (resource, languageId, fragments, options, token) => {
+				const result = await this._proxy.$provideCodeFragmentFormatting(handle, resource, languageId, [...fragments], options, token);
+				return result?.map(text => text ?? undefined);
+			}
+		}));
+	}
+
 	$emitDocumentSemanticTokensEvent(eventHandle: number): void {
 		const obj = this._registrations.get(eventHandle);
 		if (obj instanceof Emitter) {

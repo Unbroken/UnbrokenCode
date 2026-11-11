@@ -27,6 +27,9 @@ import { IListAccessibilityProvider } from '../../../../base/browser/ui/list/lis
 import { isUndefinedOrNull } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ICodeFragmentService } from '../../../../editor/common/services/codeFragmentService.js';
+import { readEditorFontInfo, renderMessageHover } from '../../../../editor/browser/codeFragmentRenderer.js';
+import { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Action, IAction, toAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import { CancelablePromise, createCancelablePromise, Delayer } from '../../../../base/common/async.js';
@@ -51,7 +54,7 @@ import { unsupportedSchemas } from '../../../../platform/markers/common/markerSe
 import { defaultCountBadgeStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import Severity from '../../../../base/common/severity.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
-import type { IManagedHover } from '../../../../base/browser/ui/hover/hover.js';
+import type { IManagedHover, IManagedHoverTooltipHTMLElement } from '../../../../base/browser/ui/hover/hover.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 
 interface IResourceMarkersTemplateData {
@@ -78,13 +81,44 @@ interface ISubProblemTemplateData {
 }
 
 /**
- * Sets a label to a message, coloring the code it quotes as code of the resource's language, and again when the
- * coloring changes.
+ * The content of a hover that shows a message, coloring the code it quotes and laying out the code too long for the hover
+ * over lines, or undefined when extensions do neither for the resource's language.
  */
-function setMessageLabel(codeFragmentService: ICodeFragmentService, label: HighlightedLabel, message: string, highlights: IHighlight[], title: string, resource: URI, maxLength = Infinity): IDisposable {
+function getMessageHoverContent(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, message: string, resource: URI, target: HTMLElement): IManagedHoverTooltipHTMLElement | undefined {
+	// Decided on each rendering of the row, so without coloring the message, which can be long, until the hover shows
+	if (!codeFragmentService.canFormat(resource) && !(codeFragmentService.canColor(resource) && /['\u2018`]/.test(message))) {
+		return undefined;
+	}
+	return {
+		// The code's content has the inset of the hover's, which it would otherwise have twice
+		contentOwnsPadding: true,
+		element: token => {
+			const targetWindow = dom.getWindow(target);
+			const fontInfo = readEditorFontInfo(targetWindow, configurationService.getValue<IEditorOptions>('editor'));
+			return renderMessageHover(codeFragmentService, message, resource, { fontInfo, tabSize: configurationService.getValue<number>('editor.tabSize') ?? 4, targetWindow }, token);
+		}
+	};
+}
+
+/**
+ * Sets a label to a message, showing it in a hover of its own when extensions color or lay out the code it quotes.
+ */
+function setMessageLabelWithHover(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, label: HighlightedLabel, message: string, highlights: IHighlight[], resource: URI): IDisposable {
+	// The label's own hover shows the code, as a second hover on the label would replace it. Whether it does is decided
+	// on each rendering, as an extension can start coloring or laying out the code after the first.
+	let hoverContent: IManagedHoverTooltipHTMLElement | undefined;
+	return setMessageLabel(codeFragmentService, label, message, highlights, () => {
+		// The same content while there is one, so the label renders again only when it changes
+		const content = getMessageHoverContent(codeFragmentService, configurationService, message, resource, label.element);
+		hoverContent = content ? hoverContent ?? content : undefined;
+		return hoverContent ?? message;
+	}, resource);
+}
+
+function setMessageLabel(codeFragmentService: ICodeFragmentService, label: HighlightedLabel, message: string, highlights: IHighlight[], title: string | (() => string | IManagedHoverTooltipHTMLElement), resource: URI, maxLength = Infinity): IDisposable {
 	// A message longer than shown is cut after its code is found in all of it, so code the cut ends is colored too
 	const text = message.length > maxLength ? `${message.substring(0, maxLength)}...` : message;
-	const render = () => label.set(text, highlights, title, undefined, undefined, codeFragmentService.getQuotedCodeStyles(message, resource, Math.min(message.length, maxLength)));
+	const render = () => label.set(text, highlights, typeof title === 'string' ? title : title(), undefined, undefined, codeFragmentService.getQuotedCodeStyles(message, resource, Math.min(message.length, maxLength)));
 	render();
 	return codeFragmentService.onDidChange(render);
 }
@@ -292,13 +326,14 @@ export class MarkerRenderer implements ITreeRenderer<Marker, MarkerFilterData, I
 		@IInstantiationService protected instantiationService: IInstantiationService,
 		@IOpenerService protected openerService: IOpenerService,
 		@ICodeFragmentService protected codeFragmentService: ICodeFragmentService,
+		@IConfigurationService protected configurationService: IConfigurationService,
 	) { }
 
 	templateId = TemplateId.Marker;
 
 	renderTemplate(container: HTMLElement): IMarkerTemplateData {
 		const data: IMarkerTemplateData = Object.create(null);
-		data.markerWidget = new MarkerWidget(container, this.markersViewState, this.hoverService, this.openerService, this.instantiationService, this.codeFragmentService);
+		data.markerWidget = new MarkerWidget(container, this.markersViewState, this.hoverService, this.openerService, this.instantiationService, this.codeFragmentService, this.configurationService);
 		return data;
 	}
 
@@ -350,7 +385,8 @@ class MarkerWidget extends Disposable {
 		private readonly _hoverService: IHoverService,
 		private readonly _openerService: IOpenerService,
 		_instantiationService: IInstantiationService,
-		private readonly _codeFragmentService: ICodeFragmentService
+		private readonly _codeFragmentService: ICodeFragmentService,
+		private readonly _configurationService: IConfigurationService
 	) {
 		super();
 		this.actionBar = this._register(new ActionBar(dom.append(parent, dom.$('.actions')), {
@@ -426,7 +462,10 @@ class MarkerWidget extends Disposable {
 		const viewState = this.markersViewModel.getViewModel(element);
 		const multiline = !viewState || viewState.multiline;
 		const lineMatches = filterData && filterData.lineMatches || [];
-		this.messageAndDetailsContainerHover.update(element.marker.message);
+		// Decided again when the code's coloring or layout changes, as when an extension that lays it out registers
+		const updateHover = () => this.messageAndDetailsContainerHover.update(getMessageHoverContent(this._codeFragmentService, this._configurationService, marker.message, marker.resource, this.parent) ?? marker.message);
+		updateHover();
+		this.disposables.add(this._codeFragmentService.onDidChange(updateHover));
 
 		const lineElements: HTMLElement[] = [];
 		for (let index = 0; index < (multiline ? lines.length : 1); index++) {
@@ -480,7 +519,8 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 
 	constructor(
 		@ILabelService private readonly labelService: ILabelService,
-		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
+		@IConfigurationService private readonly configurationService: IConfigurationService
 	) { }
 
 	templateId = TemplateId.RelatedInformation;
@@ -512,7 +552,7 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		const resourceLabelTitle = this.labelService.getUriLabel(relatedInformation.resource, { relative: true });
 		templateData.resourceLabel.set(basename(relatedInformation.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(relatedInformation.startLineNumber, relatedInformation.startColumn);
-		templateData.elementDisposables.add(setMessageLabel(this.codeFragmentService, templateData.description, relatedInformation.message, messageMatches, relatedInformation.message, relatedInformation.resource));
+		templateData.elementDisposables.add(setMessageLabelWithHover(this.codeFragmentService, this.configurationService, templateData.description, relatedInformation.message, messageMatches, relatedInformation.resource));
 	}
 
 	disposeElement(_element: ITreeNode<RelatedInformation, RelatedInformationFilterData>, _index: number, templateData: IRelatedInformationTemplateData): void {
@@ -530,7 +570,8 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 
 	constructor(
 		@ILabelService private readonly labelService: ILabelService,
-		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
+		@IConfigurationService private readonly configurationService: IConfigurationService
 	) { }
 
 	templateId = TemplateId.SubProblem;
@@ -562,7 +603,7 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		const resourceLabelTitle = this.labelService.getUriLabel(subProblem.resource, { relative: true });
 		templateData.resourceLabel.set(basename(subProblem.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(subProblem.resourceMarker.marker.startLineNumber, subProblem.resourceMarker.marker.startColumn);
-		templateData.elementDisposables.add(setMessageLabel(this.codeFragmentService, templateData.description, subProblem.resourceMarker.marker.message, messageMatches, subProblem.resourceMarker.marker.message, subProblem.resource));
+		templateData.elementDisposables.add(setMessageLabelWithHover(this.codeFragmentService, this.configurationService, templateData.description, subProblem.resourceMarker.marker.message, messageMatches, subProblem.resource));
 	}
 
 	disposeElement(_element: ITreeNode<SubProblem, SubProblemFilterData>, _index: number, templateData: ISubProblemTemplateData): void {

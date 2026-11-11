@@ -753,6 +753,9 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			registerCodeFragmentTokenRules(selector: vscode.DocumentSelector, rules: readonly vscode.CodeFragmentTokenRule[]): vscode.Disposable {
 				return extHostLanguageFeatures.registerCodeFragmentTokenRules(extension, checkSelector(selector), rules);
 			},
+			registerCodeFragmentFormattingProvider(selector: vscode.DocumentSelector, provider: vscode.CodeFragmentFormattingProvider): vscode.Disposable {
+				return extHostLanguageFeatures.registerCodeFragmentFormattingProvider(extension, checkSelector(selector), provider);
+			},
 			registerDocumentRangeSemanticTokensProvider(selector: vscode.DocumentSelector, provider: vscode.DocumentRangeSemanticTokensProvider, legend: vscode.SemanticTokensLegend): vscode.Disposable {
 				return extHostLanguageFeatures.registerDocumentRangeSemanticTokensProvider(extension, checkSelector(selector), provider, legend);
 			},

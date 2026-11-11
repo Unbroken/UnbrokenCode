@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { onUnexpectedExternalError } from '../../../base/common/errors.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { LRUCache } from '../../../base/common/map.js';
@@ -12,7 +14,7 @@ import { createDecorator } from '../../../platform/instantiation/common/instanti
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ColorId, FontStyle, StandardTokenType, TokenMetadata } from '../encodedTokenAttributes.js';
 import { TokenizationRegistry } from '../languages.js';
-import { CodeFragmentKind, computeCodeFragmentTokens, findQuotedCodeFragments, ICodeFragmentToken } from '../languages/codeFragments.js';
+import { CodeFragmentFormattingOptions, CodeFragmentKind, computeCodeFragmentTokens, findQuotedCodeFragments, ICodeFragmentToken } from '../languages/codeFragments.js';
 import { ILanguageService } from '../languages/language.js';
 import { ILanguageFeaturesService } from './languageFeatures.js';
 import { IModelService } from './model.js';
@@ -52,7 +54,8 @@ export interface ICodeFragmentService {
 	readonly _serviceBrand: undefined;
 
 	/**
-	 * Fires when fragments may be styled differently than before: the theme, the rules or a tokenizer changed.
+	 * Fires when fragments may be styled or laid out differently than before: the theme, the rules, a tokenizer, the
+	 * language of a file or the extensions that lay out code changed.
 	 */
 	readonly onDidChange: Event<void>;
 
@@ -73,6 +76,22 @@ export interface ICodeFragmentService {
 	 * ends is styled too, and styled up to the length.
 	 */
 	getQuotedCodeStyles(message: string, resource: URI, length?: number): readonly ICodeFragmentStyle[];
+
+	/**
+	 * Whether an extension colors the code of a resource, which is cheaper to ask than for the styles of a message.
+	 */
+	canColor(resource: URI): boolean;
+
+	/**
+	 * Whether an extension lays out the fragments of the code of a resource over lines.
+	 */
+	canFormat(resource: URI): boolean;
+
+	/**
+	 * For each fragment of the code of a resource, its text laid out over lines that fit a width by the extension that
+	 * does that for the resource's language, or undefined where there is none or it leaves the fragment as is.
+	 */
+	format(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | undefined)[]>;
 }
 
 // A number, with its sign where one starts it, its digit separators and its suffix, as the C family and languages such
@@ -102,6 +121,8 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 	readonly onDidChange = this._onDidChange.event;
 
 	private readonly _cache = new LRUCache<string, readonly ICodeFragmentStyle[]>(500);
+	private readonly _formattedCache = new LRUCache<string, string | undefined>(500);
+	private _formattingProviderGeneration = 0;
 	private readonly _requestedLanguages = new Set<string>();
 	private readonly _activatedLanguages = new Set<string>();
 
@@ -114,6 +135,11 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 		super();
 
 		this._register(this._languageFeaturesService.codeFragmentTokenRules.onDidChange(() => this._changed()));
+		this._register(this._languageFeaturesService.codeFragmentFormattingProvider.onDidChange(() => {
+			this._formattedCache.clear();
+			++this._formattingProviderGeneration;
+			this._onDidChange.fire();
+		}));
 		this._register(this._themeService.onDidColorThemeChange(() => this._changed()));
 		// The fragments of a file are styled as code of its language, which can change, also when a model of it is added or
 		// removed, such as a debugger's source with the language the debugger gives it
@@ -145,12 +171,74 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 		this._onDidChange.fire();
 	}
 
+	private _getLanguageId(resource: URI): string | null {
+		return this._modelService.getModel(resource)?.getLanguageId() ?? this._languageService.guessLanguageIdByFilepathOrFirstLine(resource);
+	}
+
+	canColor(resource: URI): boolean {
+		const languageId = this._getLanguageId(resource);
+		if (!languageId) {
+			return false;
+		}
+		this._activate(languageId);
+		return this._languageFeaturesService.codeFragmentTokenRules.orderedForResource(resource, languageId).length > 0;
+	}
+
+	canFormat(resource: URI): boolean {
+		const languageId = this._getLanguageId(resource);
+		return !!languageId && this._languageFeaturesService.codeFragmentFormattingProvider.orderedForResource(resource, languageId).length > 0;
+	}
+
+	async format(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | undefined)[]> {
+		const result: (string | undefined)[] = fragments.map(() => undefined);
+		const languageId = this._getLanguageId(resource);
+		const provider = languageId ? this._languageFeaturesService.codeFragmentFormattingProvider.orderedForResource(resource, languageId)[0] : undefined;
+		if (!languageId || !provider) {
+			return result;
+		}
+
+		const keyPrefix = `${languageId}\n${resource.toString()}\n${options.maxColumns}\n${options.tabSize}\n${options.insertSpaces}\n`;
+		const missing: number[] = [];
+		fragments.forEach((fragment, index) => {
+			const key = keyPrefix + fragment;
+			if (this._formattedCache.has(key)) {
+				result[index] = this._formattedCache.get(key);
+			} else {
+				missing.push(index);
+			}
+		});
+		if (!missing.length) {
+			return result;
+		}
+
+		try {
+			// The results of a provider that was replaced while it was asked aren't kept
+			const generation = this._formattingProviderGeneration;
+			const formatted = await provider.provideCodeFragmentFormatting(resource, languageId, missing.map(index => fragments[index]), options, token);
+			// No results, unlike results that leave fragments as they are, are no answer, which isn't kept, so the
+			// fragments are asked for again, such as once the formatter is available
+			if (token.isCancellationRequested || !formatted) {
+				return result;
+			}
+			missing.forEach((index, i) => {
+				const text = formatted?.[i];
+				result[index] = typeof text === 'string' ? text : undefined;
+				if (generation === this._formattingProviderGeneration) {
+					this._formattedCache.set(keyPrefix + fragments[index], result[index]);
+				}
+			});
+		} catch (error) {
+			onUnexpectedExternalError(error);
+		}
+		return result;
+	}
+
 	getStyles(text: string, resource: URI, options?: ICodeFragmentStyleOptions): readonly ICodeFragmentStyle[] {
 		if (!text) {
 			return [];
 		}
 
-		const languageId = this._modelService.getModel(resource)?.getLanguageId() ?? this._languageService.guessLanguageIdByFilepathOrFirstLine(resource);
+		const languageId = this._getLanguageId(resource);
 		if (!languageId) {
 			return [];
 		}

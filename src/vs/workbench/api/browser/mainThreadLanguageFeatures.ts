@@ -18,6 +18,7 @@ import { Position as EditorPosition, IPosition } from '../../../editor/common/co
 import { Range as EditorRange, IRange } from '../../../editor/common/core/range.js';
 import { Selection } from '../../../editor/common/core/selection.js';
 import * as languages from '../../../editor/common/languages.js';
+import { CodeFragmentTokenRule } from '../../../editor/common/languages/codeFragments.js';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { IAutoClosingPairConditional, IndentationRule, LanguageConfiguration, OnEnterRule } from '../../../editor/common/languages/languageConfiguration.js';
 import { ILanguageConfigurationService } from '../../../editor/common/languages/languageConfigurationRegistry.js';
@@ -540,6 +541,10 @@ export class MainThreadLanguageFeatures extends Disposable implements MainThread
 			event = emitter.event;
 		}
 		this._registrations.set(handle, this._languageFeaturesService.documentSemanticTokensProvider.register(selector, new MainThreadDocumentSemanticTokensProvider(this._proxy, handle, legend, event, merge)));
+	}
+
+	$registerCodeFragmentTokenRules(handle: number, selector: IDocumentFilterDto[], rules: CodeFragmentTokenRule[]): void {
+		this._registrations.set(handle, this._languageFeaturesService.codeFragmentTokenRules.register(selector, { rules }));
 	}
 
 	$emitDocumentSemanticTokensEvent(eventHandle: number): void {

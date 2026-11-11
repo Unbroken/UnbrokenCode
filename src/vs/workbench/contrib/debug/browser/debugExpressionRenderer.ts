@@ -4,17 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dom from '../../../../base/browser/dom.js';
-import { IHighlight } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
+import { HighlightedLabel, IHighlight, renderStyledText } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
-import { DisposableStore, IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IObservable } from '../../../../base/common/observable.js';
+import { URI } from '../../../../base/common/uri.js';
+import { ICodeFragmentService, ICodeFragmentStyle } from '../../../../editor/common/services/codeFragmentService.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
-import { IDebugSession, IExpressionValue } from '../common/debug.js';
-import { Expression, ExpressionContainer, Variable } from '../common/debugModel.js';
+import { IDebugService, IDebugSession, IExpression, IExpressionContainer, IExpressionValue } from '../common/debug.js';
+import { Expression, ExpressionContainer, Scope, Variable } from '../common/debugModel.js';
 import { ReplEvaluationResult } from '../common/replModel.js';
 import { IVariableTemplateData, splitExpressionOrScopeHighlights } from './baseDebugView.js';
 import { handleANSIOutput } from './debugANSIHandling.js';
@@ -43,6 +45,11 @@ export interface IRenderValueOptions {
 	wasANSI?: boolean;
 	session?: IDebugSession;
 	locationReference?: number;
+	/**
+	 * The source of the code the value comes from, such as that of a stack frame. A value that isn't colored as a number,
+	 * boolean or string is colored as code of its language, if an extension registered rules for that.
+	 */
+	codeResource?: URI;
 }
 
 export interface IRenderVariableOptions {
@@ -84,28 +91,76 @@ export class DebugExpressionRenderer {
 		@IConfigurationService configurationService: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IHoverService private readonly hoverService: IHoverService,
+		@IDebugService private readonly debugService: IDebugService,
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
 	) {
 		this.linkDetector = instantiationService.createInstance(LinkDetector);
 		this.displayType = observableConfigValue('debug.showVariableTypes', false, configurationService);
 	}
 
+	/**
+	 * Renders the label of a variable or expression, which starts with its name, and its type when it is shown, coloring
+	 * the name and type as code of the language of the stack frame they belong to, and again when the coloring changes.
+	 */
+	renderNameAndType(data: { label: HighlightedLabel; type: HTMLElement }, expression: IExpression, text: string, highlights: IHighlight[], title: string, type: string | undefined): IDisposable {
+		const resource = this.getCodeResource(expression);
+		const render = () => {
+			let nameStyles: ICodeFragmentStyle[] = [];
+			if (resource && typeof expression.name === 'string') {
+				// The name of a variable in brackets, such as [0] or [raw], is one a debugger gives the children it makes up,
+				// not code, so it keeps the color of names, unlike an expression such as [Foo]
+				const madeUp = expression instanceof Variable && /^\[.*\]$/s.test(expression.name);
+				nameStyles = madeUp ? [] : [...this.codeFragmentService.getStyles(expression.name, resource, { kind: 'name', defaultForeground: true })];
+				// The = or : between the name and the value has the default color of code too
+				const separator = text.substring(expression.name.length);
+				for (const style of this.codeFragmentService.getStyles(separator, resource, { kind: 'name', defaultForeground: true })) {
+					nameStyles.push({ ...style, start: expression.name.length + style.start, end: expression.name.length + style.end });
+				}
+			}
+			data.label.set(text, highlights, title, undefined, undefined, nameStyles);
+			if (type === undefined) {
+				data.type.textContent = '';
+			} else {
+				const typeText = `${type} =`;
+				const typeStyles = resource ? this.codeFragmentService.getStyles(typeText, resource, { kind: 'type', defaultForeground: true }) : [];
+				dom.reset(data.type, ...renderStyledText(typeText, [], typeStyles));
+			}
+		};
+		render();
+		return resource ? this.codeFragmentService.onDidChange(render) : Disposable.None;
+	}
+
+	/**
+	 * The source of the stack frame a variable belongs to, or for an expression, such as a watch expression, the
+	 * focused stack frame it is evaluated in.
+	 */
+	getCodeResource(expression: IExpression): URI | undefined {
+		let container: IExpression | IExpressionContainer = expression;
+		while (container instanceof Variable) {
+			container = container.parent;
+		}
+		const stackFrame = container instanceof Scope ? container.stackFrame : this.debugService.getViewModel().focusedStackFrame;
+		return stackFrame?.source?.uri;
+	}
+
 	renderVariable(data: IVariableTemplateData, variable: Variable, options: IRenderVariableOptions = {}): IDisposable {
 		const displayType = this.displayType.get();
 		const highlights = splitExpressionOrScopeHighlights(variable, options.highlights || []);
+		const store = new DisposableStore();
 
 		if (variable.available) {
-			data.type.textContent = '';
 			let text = variable.name;
+			let type: string | undefined;
 			if (variable.value && typeof variable.name === 'string') {
 				if (variable.type && displayType) {
 					text += ': ';
-					data.type.textContent = variable.type + ' =';
+					type = variable.type;
 				} else {
 					text += ' =';
 				}
 			}
 
-			data.label.set(text, highlights.name, variable.type && !displayType ? variable.type : variable.name);
+			store.add(this.renderNameAndType(data, variable, text, highlights.name, variable.type && !displayType ? variable.type : variable.name, type));
 			data.name.classList.toggle('virtual', variable.presentationHint?.kind === 'virtual');
 			data.name.classList.toggle('internal', variable.presentationHint?.visibility === 'internal');
 		} else if (variable.value && typeof variable.name === 'string' && variable.name) {
@@ -120,14 +175,16 @@ export class DebugExpressionRenderer {
 			commands.push({ id: COPY_EVALUATE_PATH_ID, args: [{ variable }] });
 		}
 
-		return this.renderValue(data.value, variable, {
+		store.add(this.renderValue(data.value, variable, {
 			showChanged: options.showChanged,
 			maxValueLength: MAX_VALUE_RENDER_LENGTH_IN_VIEWLET,
 			hover: { commands },
 			highlights: highlights.value,
 			colorize: true,
 			session: variable.getSession(),
-		});
+			codeResource: this.getCodeResource(variable),
+		}));
+		return store;
 	}
 
 	renderValue(container: HTMLElement, expressionOrValue: IExpressionValue | string, options: IRenderValueOptions = {}): IDisposable {
@@ -136,6 +193,7 @@ export class DebugExpressionRenderer {
 		const supportsANSI: boolean = options.session?.rememberedCapabilities?.supportsANSIStyling ?? options.wasANSI ?? false;
 
 		let value = typeof expressionOrValue === 'string' ? expressionOrValue : expressionOrValue.value;
+		let colorizeAsCode = false;
 
 		// remove stale classes
 		for (const cls of allClasses) {
@@ -156,6 +214,7 @@ export class DebugExpressionRenderer {
 			}
 
 			if (options.colorize && typeof expressionOrValue !== 'string') {
+				colorizeAsCode = !container.classList.contains(Cls.Changed);
 				if (expressionOrValue.type === 'number' || expressionOrValue.type === 'boolean' || expressionOrValue.type === 'string') {
 					container.classList.add(expressionOrValue.type);
 				} else if (!isNaN(+value)) {
@@ -164,6 +223,9 @@ export class DebugExpressionRenderer {
 					container.classList.add(Cls.Boolean);
 				} else if (stringRegex.test(value)) {
 					container.classList.add(Cls.String);
+				}
+				if (container.classList.contains(Cls.Number) || container.classList.contains(Cls.Boolean) || container.classList.contains(Cls.String)) {
+					colorizeAsCode = false;
 				}
 			}
 		}
@@ -189,7 +251,18 @@ export class DebugExpressionRenderer {
 		if (supportsANSI) {
 			container.appendChild(handleANSIOutput(value, linkDetector, session ? session.root : undefined, options.highlights, hoverBehavior));
 		} else {
-			container.appendChild(linkDetector.linkify(value, hoverBehavior, false, session?.root, true, options.highlights));
+			const codeResource = colorizeAsCode ? options.codeResource : undefined;
+			// The listeners of a rendering's links go with it when the value is rendered again with new styles
+			const textStore = store.add(new MutableDisposable<DisposableStore>());
+			const renderText = () => {
+				const styles = codeResource ? this.codeFragmentService.getStyles(value, codeResource, { kind: 'value' }) : undefined;
+				textStore.value = new DisposableStore();
+				dom.reset(container, linkDetector.linkify(value, { ...hoverBehavior, store: textStore.value }, false, session?.root, true, options.highlights, styles));
+			};
+			renderText();
+			if (codeResource) {
+				store.add(this.codeFragmentService.onDidChange(renderText));
+			}
 		}
 
 		if (options.hover !== false) {

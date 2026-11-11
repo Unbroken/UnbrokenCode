@@ -750,6 +750,9 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 				const priority = metadata?.priority;
 				return extHostLanguageFeatures.registerDocumentSemanticTokensProvider(extension, checkSelector(selector), provider, legend, { priority: typeof priority === 'number' && isFinite(priority) ? priority : 0 });
 			},
+			registerCodeFragmentTokenRules(selector: vscode.DocumentSelector, rules: readonly vscode.CodeFragmentTokenRule[]): vscode.Disposable {
+				return extHostLanguageFeatures.registerCodeFragmentTokenRules(extension, checkSelector(selector), rules);
+			},
 			registerDocumentRangeSemanticTokensProvider(selector: vscode.DocumentSelector, provider: vscode.DocumentRangeSemanticTokensProvider, legend: vscode.SemanticTokensLegend): vscode.Disposable {
 				return extHostLanguageFeatures.registerDocumentRangeSemanticTokensProvider(extension, checkSelector(selector), provider, legend);
 			},
@@ -2189,6 +2192,7 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			InlayHint: extHostTypes.InlayHint,
 			InlayHintLabelPart: extHostTypes.InlayHintLabelPart,
 			InlayHintKind: extHostTypes.InlayHintKind,
+			CodeFragmentKind: extHostTypes.CodeFragmentKind,
 			RemoteAuthorityResolverError: extHostTypes.RemoteAuthorityResolverError,
 			ResolvedAuthority: extHostTypes.ResolvedAuthority,
 			ManagedResolvedAuthority: extHostTypes.ManagedResolvedAuthority,

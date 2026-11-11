@@ -456,6 +456,14 @@ export enum SignatureHelpTriggerKind {
 }
 
 
+export enum CodeFragmentKind {
+	Name = 1,
+	Type = 2,
+	Value = 3,
+	Quoted = 4,
+	StackFrame = 5
+}
+
 export enum InlayHintKind {
 	Type = 1,
 	Parameter = 2,

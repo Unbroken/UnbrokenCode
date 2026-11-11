@@ -33,6 +33,7 @@ import { IContentDecorationRenderOptions, IDecorationOptions, IDecorationRenderO
 import * as encodedTokenAttributes from '../../../editor/common/encodedTokenAttributes.js';
 import * as languageSelector from '../../../editor/common/languageSelector.js';
 import * as languages from '../../../editor/common/languages.js';
+import * as codeFragments from '../../../editor/common/languages/codeFragments.js';
 import { EndOfLineSequence, TrackedRangeStickiness } from '../../../editor/common/model.js';
 import { ITextEditorOptions } from '../../../platform/editor/common/editor.js';
 import { IExtensionDescription, IRelaxedExtensionDescription } from '../../../platform/extensions/common/extensions.js';
@@ -1388,6 +1389,18 @@ export namespace InlayHintKind {
 	}
 	export function to(kind: languages.InlayHintKind): vscode.InlayHintKind {
 		return kind;
+	}
+}
+
+export namespace CodeFragmentKind {
+	export function from(kind: vscode.CodeFragmentKind): codeFragments.CodeFragmentKind {
+		switch (kind) {
+			case types.CodeFragmentKind.Name: return 'name';
+			case types.CodeFragmentKind.Type: return 'type';
+			case types.CodeFragmentKind.Value: return 'value';
+			case types.CodeFragmentKind.StackFrame: return 'stackFrame';
+			default: return 'quoted';
+		}
 	}
 }
 

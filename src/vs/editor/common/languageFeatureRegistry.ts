@@ -42,11 +42,13 @@ class MatchCandidate {
 		readonly notebookUri: URI | undefined,
 		readonly notebookType: string | undefined,
 		readonly recursive: boolean,
+		readonly candidateIsSynchronized: boolean,
 	) { }
 
 	equals(other: MatchCandidate): boolean {
 		return this.notebookType === other.notebookType
 			&& this.languageId === other.languageId
+			&& this.candidateIsSynchronized === other.candidateIsSynchronized
 			&& this.uri.toString() === other.uri.toString()
 			&& this.notebookUri?.toString() === other.notebookUri?.toString()
 			&& this.recursive === other.recursive;
@@ -129,6 +131,20 @@ export class LanguageFeatureRegistry<T> {
 		return result;
 	}
 
+	/**
+	 * The providers for a resource that may have no model, such as the file of a diagnostic or a stack frame, best first.
+	 */
+	orderedForResource(resource: URI, languageId: string): T[] {
+		const result: T[] = [];
+		this._updateScoresForResource(resource, languageId, true, false);
+		for (const entry of this._entries) {
+			if (entry._score > 0) {
+				result.push(entry.provider);
+			}
+		}
+		return result;
+	}
+
 	orderedGroups(model: ITextModel): T[][] {
 		const result: T[][] = [];
 		let lastBucket: T[];
@@ -161,14 +177,18 @@ export class LanguageFeatureRegistry<T> {
 	private _lastCandidate: MatchCandidate | undefined;
 
 	private _updateScores(model: ITextModel, recursive: boolean): void {
+		this._updateScoresForResource(model.uri, model.getLanguageId(), shouldSynchronizeModel(model), recursive);
+	}
 
-		const notebookInfo = this._notebookInfoResolver?.(model.uri);
+	private _updateScoresForResource(uri: URI, languageId: string, candidateIsSynchronized: boolean, recursive: boolean): void {
+
+		const notebookInfo = this._notebookInfoResolver?.(uri);
 
 		// use the uri (scheme, pattern) of the notebook info iff we have one
 		// otherwise it's the model's/document's uri
 		const candidate = notebookInfo
-			? new MatchCandidate(model.uri, model.getLanguageId(), notebookInfo.uri, notebookInfo.type, recursive)
-			: new MatchCandidate(model.uri, model.getLanguageId(), undefined, undefined, recursive);
+			? new MatchCandidate(uri, languageId, notebookInfo.uri, notebookInfo.type, recursive, candidateIsSynchronized)
+			: new MatchCandidate(uri, languageId, undefined, undefined, recursive, candidateIsSynchronized);
 
 		if (this._lastCandidate?.equals(candidate)) {
 			// nothing has changed
@@ -178,7 +198,7 @@ export class LanguageFeatureRegistry<T> {
 		this._lastCandidate = candidate;
 
 		for (const entry of this._entries) {
-			entry._score = score(entry.selector, candidate.uri, candidate.languageId, shouldSynchronizeModel(model), candidate.notebookUri, candidate.notebookType);
+			entry._score = score(entry.selector, candidate.uri, candidate.languageId, candidate.candidateIsSynchronized, candidate.notebookUri, candidate.notebookType);
 
 			if (isExclusive(entry.selector) && entry._score > 0) {
 				if (recursive) {

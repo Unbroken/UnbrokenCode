@@ -321,3 +321,9 @@
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .related-info-resource {
 	white-space: nowrap;
 }
+
+/* Code in messages, colored like code in the editor, is in the color of the selection in a selected row, as the rest of
+ * the message is, since its colors can be hard to read on the selection's background */
+.markers-panel .monaco-list:focus .monaco-list-row.selected .code-fragment-token {
+	color: inherit;
+}

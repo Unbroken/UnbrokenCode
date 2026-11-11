@@ -10,6 +10,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IMarker, MarkerSeverity } from '../../../../../platform/markers/common/markers.js';
 import { Range } from '../../../../common/core/range.js';
+import { CodeFragmentService, ICodeFragmentService } from '../../../../common/services/codeFragmentService.js';
 import { IMarkerDecorationsService } from '../../../../common/services/markerDecorations.js';
 import { withTestCodeEditor } from '../../../../test/browser/testCodeEditor.js';
 import { EditorHoverStatusBar } from '../../browser/contentHoverStatusBar.js';
@@ -23,6 +24,7 @@ suite('Marker Hover Participant', () => {
 		withTestCodeEditor('void foo(List<(baz)> l) {}', { readOnly: true }, (editor, _viewModel, instantiationService) => {
 			instantiationService.stub(IMarkerDecorationsService, {});
 			instantiationService.stub(IMenuService, { getMenuActions: () => [] });
+			instantiationService.stub(ICodeFragmentService, store.add(instantiationService.createInstance(CodeFragmentService)));
 			const participant = instantiationService.createInstance(MarkerHoverParticipant, editor);
 			const createHover = (severity: MarkerSeverity, message: string, startColumn: number) => {
 				const marker: IMarker = {
@@ -85,6 +87,7 @@ suite('Marker Hover Participant', () => {
 		withTestCodeEditor('some text', { readOnly: true }, (editor, _viewModel, instantiationService) => {
 			instantiationService.stub(IMarkerDecorationsService, {});
 			instantiationService.stub(IMenuService, { getMenuActions: () => [] });
+			instantiationService.stub(ICodeFragmentService, store.add(instantiationService.createInstance(CodeFragmentService)));
 			const participant = instantiationService.createInstance(MarkerHoverParticipant, editor);
 			const marker: IMarker = {
 				owner: 'test',

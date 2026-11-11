@@ -90,12 +90,12 @@ suite('Debug - Variable Debug View', () => {
 		instantiationService = workbenchInstantiationService(undefined, disposables);
 		configurationService = instantiationService.createInstance(TestConfigurationService);
 		instantiationService.stub(IConfigurationService, configurationService);
-		expressionRenderer = instantiationService.createInstance(DebugExpressionRenderer);
 		const debugService = new MockDebugService();
 		instantiationService.stub(IHoverService, NullHoverService);
 		debugService.getViewModel = () => <IViewModel>{ focusedStackFrame: undefined, getSelectedExpression: () => undefined };
 		debugService.getViewModel().getSelectedExpression = () => undefined;
 		instantiationService.stub(IDebugService, debugService);
+		expressionRenderer = instantiationService.createInstance(DebugExpressionRenderer);
 	});
 
 	test('variable expressions with display type', () => {

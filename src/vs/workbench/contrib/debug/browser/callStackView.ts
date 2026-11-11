@@ -25,6 +25,7 @@ import { posix } from '../../../../base/common/path.js';
 import { commonSuffixLength } from '../../../../base/common/strings.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { IRange } from '../../../../editor/common/core/range.js';
+import { ICodeFragmentService } from '../../../../editor/common/services/codeFragmentService.js';
 import { localize } from '../../../../nls.js';
 import { ICommandActionTitle, Icon } from '../../../../platform/action/common/action.js';
 import { getActionBarActions, getContextMenuActions, MenuEntryActionViewItem, SubmenuEntryActionViewItem } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -727,6 +728,7 @@ class StackFramesRenderer implements ICompressibleTreeRenderer<IStackFrame, Fuzz
 		@IHoverService private readonly hoverService: IHoverService,
 		@ILabelService private readonly labelService: ILabelService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
 	) { }
 
 	get templateId(): string {
@@ -763,7 +765,11 @@ class StackFramesRenderer implements ICompressibleTreeRenderer<IStackFrame, Fuzz
 		}
 		data.elementDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), data.file, title));
 
-		data.label.set(stackFrame.name, createMatches(element.filterData), stackFrame.name);
+		// The name, such as the signature of a function, is colored as code of the frame's source
+		const matches = createMatches(element.filterData);
+		const renderLabel = () => data.label.set(stackFrame.name, matches, stackFrame.name, undefined, undefined, this.codeFragmentService.getStyles(stackFrame.name, stackFrame.source.uri, { kind: 'stackFrame' }));
+		renderLabel();
+		data.elementDisposables.add(this.codeFragmentService.onDidChange(renderLabel));
 		data.fileName.textContent = getSpecificSourceName(stackFrame);
 		if (stackFrame.range.startLineNumber !== undefined) {
 			data.lineNumber.textContent = `${stackFrame.range.startLineNumber}`;

@@ -133,6 +133,13 @@
 	color: inherit;
 }
 
+/* And so is their code and that of stack frames, colored like code in the editor, whose colors can be hard to read on the
+ * selection's background */
+.monaco-workbench .monaco-list:focus .monaco-list-row.selected .expression .code-fragment-token,
+.monaco-workbench .monaco-list:focus .monaco-list-row.selected .stack-frame .code-fragment-token {
+	color: inherit;
+}
+
 .monaco-workbench .monaco-list-row .expression .name.virtual {
 	opacity: 0.5;
 }

@@ -53,6 +53,11 @@ suite('HighlightedLabel', () => {
 		assert.strictEqual(label.element.innerHTML, 'foo<span class="highlight">bar</span>foo');
 	});
 
+	test('styles and highlights', function () {
+		label.set('m_Foo = 1', [{ start: 2, end: 7 }], undefined, undefined, undefined, [{ start: 0, end: 5, classNames: ['mtk5'] }, { start: 8, end: 9, classNames: ['mtk6', 'mtkb'] }]);
+		assert.strictEqual(label.element.innerHTML, '<span class="mtk5">m_</span><span class="mtk5"><span class="highlight">Foo</span></span><span class="highlight"> =</span> <span class="mtk6 mtkb">1</span>');
+	});
+
 	test('escapeNewLines', () => {
 
 		let highlights = [{ start: 0, end: 5 }, { start: 7, end: 9 }, { start: 11, end: 12 }];// before,after,after

@@ -1,0 +1,40 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* A hover that shows code laid out over lines is as wide as the hover can be, not as narrow as Markdown in hovers is.
+   The hover widget creates the contents element and inserts the code into it, so the code can't mark it beforehand, and
+   marking it once inserted would first show the hover at the narrower width; :has() keeps to the hover's own short-lived
+   contents. It repeats the :not() of the rule it overrides, so it wins whichever stylesheet loads first. */
+.monaco-hover .markdown-hover > .hover-contents:not(.code-hover-contents):has(> .code-fragment-hover) {
+	max-width: none;
+}
+
+/* Code in a message is set off like inline code in the Markdown preview, on the background of preformatted text, within
+   the border of preformatted text or else of widgets */
+.monaco-hover .hover-contents code.code-fragment-inline,
+.monaco-hover .hover-contents .code-fragment-block,
+.monaco-editor .marker-widget code.code-fragment-inline,
+.monaco-editor .marker-widget .code-fragment-block {
+	border: 1px solid var(--vscode-textPreformat-border, var(--vscode-widget-border));
+	border-radius: var(--vscode-cornerRadius-small, 3px);
+	background-color: var(--vscode-textPreformat-background);
+}
+
+.monaco-hover .hover-contents .code-fragment-block,
+.monaco-editor .marker-widget .code-fragment-block {
+	width: fit-content;
+}
+
+/* Room between the content and the edges of the hover, which the code's backgrounds would otherwise hug */
+.monaco-hover .hover-contents > .code-fragment-hover {
+	padding: 4px 0;
+}
+
+/* The code's content in a hover of an element, such as of the debugger or the Problems view, has the inset of hover
+   contents itself, as the hover of an element is told to leave it out (contentOwnsPadding), so that it is the width the
+   code is laid out for */
+.monaco-hover .hover-contents.html-hover-contents > .code-fragment-hover {
+	padding: 4px 8px;
+}

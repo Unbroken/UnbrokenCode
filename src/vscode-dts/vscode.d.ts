@@ -4580,6 +4580,60 @@ declare module 'vscode' {
 	}
 
 	/**
+	 * How code fragments are to be laid out, see {@link CodeFragmentFormattingProvider}.
+	 */
+	export interface CodeFragmentFormattingOptions {
+		/**
+		 * The width, in columns, the lines of a fragment should fit.
+		 */
+		readonly maxColumns: number;
+
+		/**
+		 * The size of a tab in spaces.
+		 */
+		readonly tabSize: number;
+
+		/**
+		 * Whether to indent with spaces rather than tabs.
+		 */
+		readonly insertSpaces: boolean;
+	}
+
+	/**
+	 * Where code fragments come from, see {@link CodeFragmentFormattingProvider}.
+	 */
+	export interface CodeFragmentFormattingContext {
+		/**
+		 * The document the fragments come from, such as the file of a diagnostic or a stack frame. It need not be open.
+		 */
+		readonly uri: Uri;
+
+		/**
+		 * The language of the fragments.
+		 */
+		readonly languageId: string;
+	}
+
+	/**
+	 * Lays out code fragments, such as the long types that compiler errors quote, over lines that fit a width, so hovers
+	 * can show them readably. See {@link languages.registerCodeFragmentFormattingProvider}.
+	 */
+	export interface CodeFragmentFormattingProvider {
+		/**
+		 * Lay out code fragments over lines.
+		 *
+		 * @param context Where the fragments come from.
+		 * @param fragments The fragments, each on one line.
+		 * @param options How to lay them out.
+		 * @param token A cancellation token.
+		 * @returns For each fragment, its text laid out over lines that fit {@link CodeFragmentFormattingOptions.maxColumns},
+		 * starting at column 0, or `undefined` to leave it as it is. Or `undefined`, rather than an array, when they can't be
+		 * laid out now, such as while the formatter isn't available, so they are asked for again.
+		 */
+		provideCodeFragmentFormatting(context: CodeFragmentFormattingContext, fragments: readonly string[], options: CodeFragmentFormattingOptions, token: CancellationToken): ProviderResult<Array<string | undefined>>;
+	}
+
+	/**
 	 * The document range semantic tokens provider interface defines the contract between extensions and
 	 * semantic tokens.
 	 */
@@ -15225,6 +15279,20 @@ declare module 'vscode' {
 		 * @returns A {@link Disposable} that unregisters the rules when being disposed.
 		 */
 		export function registerCodeFragmentTokenRules(selector: DocumentSelector, rules: readonly CodeFragmentTokenRule[]): Disposable;
+
+		/**
+		 * Register a provider that lays out code fragments over lines, so hovers can show long ones, such as the types
+		 * that compiler errors quote, readably. A fragment is matched against the selector with the document it comes
+		 * from, such as the file of a diagnostic or of a stack frame, and the provider with the best
+		 * {@link languages.match score} and most recently registered lays it out.
+		 *
+		 * Check that the function exists before calling it, as editors other than Unbroken Code don't have it.
+		 *
+		 * @param selector A selector that defines the documents the fragments of which the provider lays out.
+		 * @param provider A code fragment formatting provider.
+		 * @returns A {@link Disposable} that unregisters this provider when being disposed.
+		 */
+		export function registerCodeFragmentFormattingProvider(selector: DocumentSelector, provider: CodeFragmentFormattingProvider): Disposable;
 
 		/**
 		 * Register a semantic tokens provider for a document range.

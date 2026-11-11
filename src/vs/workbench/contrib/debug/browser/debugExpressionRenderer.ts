@@ -3,13 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import type { IManagedHoverTooltipHTMLElement } from '../../../../base/browser/ui/hover/hover.js';
 import * as dom from '../../../../base/browser/dom.js';
 import { HighlightedLabel, IHighlight, renderStyledText } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
-import { Disposable, DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { DisposableStore, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ICodeFragmentService, ICodeFragmentStyle } from '../../../../editor/common/services/codeFragmentService.js';
+import { readEditorFontInfo, renderCodeHover } from '../../../../editor/browser/codeFragmentRenderer.js';
+import { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
@@ -88,7 +92,7 @@ export class DebugExpressionRenderer {
 
 	constructor(
 		@ICommandService private readonly commandService: ICommandService,
-		@IConfigurationService configurationService: IConfigurationService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IHoverService private readonly hoverService: IHoverService,
 		@IDebugService private readonly debugService: IDebugService,
@@ -102,8 +106,27 @@ export class DebugExpressionRenderer {
 	 * Renders the label of a variable or expression, which starts with its name, and its type when it is shown, coloring
 	 * the name and type as code of the language of the stack frame they belong to, and again when the coloring changes.
 	 */
-	renderNameAndType(data: { label: HighlightedLabel; type: HTMLElement }, expression: IExpression, text: string, highlights: IHighlight[], title: string, type: string | undefined): IDisposable {
+	renderNameAndType(data: { label: HighlightedLabel; type: HTMLElement }, expression: IExpression, text: string, highlights: IHighlight[], title: string, type: string | undefined, titleIsCode = true): IDisposable {
+		const store = new DisposableStore();
 		const resource = this.getCodeResource(expression);
+		// A title that is code, such as a long type, shows in the label's hover in the editor font, laid out over lines,
+		// when an extension lays out the code, which it can start doing after the label is rendered
+		let codeHover: IManagedHoverTooltipHTMLElement | undefined;
+		const getCodeHover = () => {
+			const codeHoverResource = resource && titleIsCode && title && this.codeFragmentService.canFormat(resource) ? resource : undefined;
+			if (!codeHoverResource) {
+				return codeHover = undefined;
+			}
+			return codeHover ??= {
+				// The code's content has the inset of the hover's, which it would otherwise have twice
+				contentOwnsPadding: true,
+				element: (token: CancellationToken) => {
+					const targetWindow = dom.getWindow(data.label.element);
+					const fontInfo = readEditorFontInfo(targetWindow, this.configurationService.getValue<IEditorOptions>('editor'));
+					return renderCodeHover(this.codeFragmentService, title, codeHoverResource, { fontInfo, tabSize: this.configurationService.getValue<number>('editor.tabSize') ?? 4, targetWindow }, token, title === expression.name ? 'name' : 'type');
+				}
+			};
+		};
 		const render = () => {
 			let nameStyles: ICodeFragmentStyle[] = [];
 			if (resource && typeof expression.name === 'string') {
@@ -117,7 +140,7 @@ export class DebugExpressionRenderer {
 					nameStyles.push({ ...style, start: expression.name.length + style.start, end: expression.name.length + style.end });
 				}
 			}
-			data.label.set(text, highlights, title, undefined, undefined, nameStyles);
+			data.label.set(text, highlights, getCodeHover() ?? title, undefined, undefined, nameStyles);
 			if (type === undefined) {
 				data.type.textContent = '';
 			} else {
@@ -127,7 +150,10 @@ export class DebugExpressionRenderer {
 			}
 		};
 		render();
-		return resource ? this.codeFragmentService.onDidChange(render) : Disposable.None;
+		if (resource) {
+			store.add(this.codeFragmentService.onDidChange(render));
+		}
+		return store;
 	}
 
 	/**
@@ -267,7 +293,21 @@ export class DebugExpressionRenderer {
 
 		if (options.hover !== false) {
 			const { commands = [] } = options.hover || {};
-			store.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), container, () => {
+			// A value of the code of a language extensions color shows in the editor font, colored, and laid out over lines
+			// when it is too long for the hover
+			// Decided when the hover shows, as an extension can start coloring or laying out the code after the value is
+			// rendered
+			const codeResource = !supportsANSI ? options.codeResource : undefined;
+			const codeHover = (): IManagedHoverTooltipHTMLElement | undefined => codeResource && (this.codeFragmentService.canFormat(codeResource) || this.codeFragmentService.getStyles(value, codeResource, { kind: 'value' }).length) ? {
+				// The code's content has the inset of the hover's, which it would otherwise have twice
+				contentOwnsPadding: true,
+				element: (token: CancellationToken) => {
+					const targetWindow = dom.getWindow(container);
+					const fontInfo = readEditorFontInfo(targetWindow, this.configurationService.getValue<IEditorOptions>('editor'));
+					return renderCodeHover(this.codeFragmentService, value, codeResource, { fontInfo, tabSize: this.configurationService.getValue<number>('editor.tabSize') ?? 4, targetWindow }, token, 'value');
+				}
+			} : undefined;
+			store.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), container, () => codeHover() ?? (() => {
 				const container = dom.$('div');
 				const markdownHoverElement = dom.$('div.hover-row');
 				const hoverContentsElement = dom.append(markdownHoverElement, dom.$('div.hover-contents'));
@@ -281,7 +321,7 @@ export class DebugExpressionRenderer {
 				}
 				container.appendChild(markdownHoverElement);
 				return container;
-			}, {
+			})(), {
 				actions: commands.map(({ id, args }) => {
 					const description = CommandsRegistry.getCommand(id)?.metadata?.description;
 					return {

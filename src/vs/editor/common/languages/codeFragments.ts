@@ -3,7 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../base/common/cancellation.js';
+import { URI } from '../../../base/common/uri.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../base/common/strings.js';
+import { ProviderResult } from '../languages.js';
 
 /**
  * What a code fragment is: the name, type or value of a debugger variable, code that a message, such as a compiler
@@ -34,6 +37,28 @@ export interface CodeFragmentTokenRule {
  */
 export interface CodeFragmentTokenRules {
 	readonly rules: readonly CodeFragmentTokenRule[];
+}
+
+/**
+ * How code fragments are to be laid out.
+ */
+export interface CodeFragmentFormattingOptions {
+	/**
+	 * The width, in columns, the lines of a fragment should fit.
+	 */
+	readonly maxColumns: number;
+	readonly tabSize: number;
+	readonly insertSpaces: boolean;
+}
+
+/**
+ * Lays out code fragments over lines that fit a width, such as the long types compilers quote in their errors.
+ */
+export interface CodeFragmentFormattingProvider {
+	/**
+	 * For each fragment of the code of a resource, its text laid out over lines, or undefined to leave it as is.
+	 */
+	provideCodeFragmentFormatting(resource: URI, languageId: string, fragments: readonly string[], options: CodeFragmentFormattingOptions, token: CancellationToken): ProviderResult<(string | undefined)[]>;
 }
 
 /**

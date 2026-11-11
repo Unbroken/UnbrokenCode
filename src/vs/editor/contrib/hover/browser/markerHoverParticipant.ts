@@ -109,7 +109,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		}
 		const renderedHoverParts: IRenderedHoverPart<MarkerHover>[] = [];
 		hoverParts.forEach(hoverPart => {
-			const renderedMarkerHover = this._renderMarkerHover(hoverPart);
+			const renderedMarkerHover = this._renderMarkerHover(context, hoverPart);
 			context.fragment.appendChild(renderedMarkerHover.hoverElement);
 			renderedHoverParts.push(renderedMarkerHover);
 		});
@@ -126,8 +126,15 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		return [marker.message, relatedInformation].filter(value => !!value).join('\n');
 	}
 
-	private _renderMarkerHover(markerHover: MarkerHover): IRenderedHoverPart<MarkerHover> {
+	private _renderMarkerHover(context: IEditorHoverRenderContext, markerHover: MarkerHover): IRenderedHoverPart<MarkerHover> {
 		const disposables: DisposableStore = new DisposableStore();
+		// Code that a message quotes and that is too long for the hover is laid out over lines
+		const hoverLayout = {
+			fontInfo: this._editor.getOption(EditorOption.fontInfo),
+			tabSize: this._editor.getModel()?.getOptions().tabSize ?? 4,
+			targetWindow: dom.getWindow(this._editor.getDomNode()),
+			onDidLayout: () => context.onContentsChanged(),
+		};
 		const hoverElement = $('div.hover-row');
 		const markerElement = dom.append(hoverElement, $('div.marker.hover-contents'));
 		const { source, message, code, relatedInformation, subProblems } = markerHover.marker;
@@ -135,7 +142,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		this._editor.applyFontInfo(markerElement);
 		const messageElement = dom.append(markerElement, $('span'));
 		messageElement.style.whiteSpace = 'pre-wrap';
-		disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, markerHover.marker.resource));
+		disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, markerHover.marker.resource, hoverLayout));
 
 		if (source || code) {
 			// Code has link
@@ -187,7 +194,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 					}
 				}));
 				const messageElement = dom.append<HTMLAnchorElement>(relatedInfoContainer, $('span'));
-				disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, resource));
+				disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, resource, hoverLayout));
 				this._editor.applyFontInfo(messageElement);
 			}
 		}
@@ -223,7 +230,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 						}
 					}));
 					const messageElement = dom.append<HTMLAnchorElement>(subProblemContainer, $('span'));
-					disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, resourceMarker.marker.message, resourceMarker.resource));
+					disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, resourceMarker.marker.message, resourceMarker.resource, hoverLayout));
 					this._editor.applyFontInfo(messageElement);
 				}
 			}

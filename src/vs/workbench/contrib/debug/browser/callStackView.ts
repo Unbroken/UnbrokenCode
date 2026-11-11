@@ -7,7 +7,7 @@ import * as dom from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { AriaRole } from '../../../../base/browser/ui/aria/aria.js';
 import { HighlightedLabel } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
-import type { IManagedHover } from '../../../../base/browser/ui/hover/hover.js';
+import type { IManagedHover, IManagedHoverTooltipHTMLElement } from '../../../../base/browser/ui/hover/hover.js';
 import { getDefaultHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { IListVirtualDelegate } from '../../../../base/browser/ui/list/list.js';
 import { IListAccessibilityProvider } from '../../../../base/browser/ui/list/listWidget.js';
@@ -15,6 +15,7 @@ import { ITreeCompressionDelegate } from '../../../../base/browser/ui/tree/async
 import { ICompressedTreeNode } from '../../../../base/browser/ui/tree/compressedObjectTreeModel.js';
 import { ICompressibleTreeRenderer } from '../../../../base/browser/ui/tree/objectTree.js';
 import { IAsyncDataSource, ITreeContextMenuEvent, ITreeNode } from '../../../../base/browser/ui/tree/tree.js';
+import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Action } from '../../../../base/common/actions.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Codicon } from '../../../../base/common/codicons.js';
@@ -26,6 +27,8 @@ import { commonSuffixLength } from '../../../../base/common/strings.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { IRange } from '../../../../editor/common/core/range.js';
 import { ICodeFragmentService } from '../../../../editor/common/services/codeFragmentService.js';
+import { readEditorFontInfo, renderCodeHover } from '../../../../editor/browser/codeFragmentRenderer.js';
+import { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { localize } from '../../../../nls.js';
 import { ICommandActionTitle, Icon } from '../../../../platform/action/common/action.js';
 import { getActionBarActions, getContextMenuActions, MenuEntryActionViewItem, SubmenuEntryActionViewItem } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -729,6 +732,7 @@ class StackFramesRenderer implements ICompressibleTreeRenderer<IStackFrame, Fuzz
 		@ILabelService private readonly labelService: ILabelService,
 		@INotificationService private readonly notificationService: INotificationService,
 		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) { }
 
 	get templateId(): string {
@@ -765,9 +769,28 @@ class StackFramesRenderer implements ICompressibleTreeRenderer<IStackFrame, Fuzz
 		}
 		data.elementDisposables.add(this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), data.file, title));
 
-		// The name, such as the signature of a function, is colored as code of the frame's source
+		// The name, such as the signature of a function, is colored as code of the frame's source, and shows in a hover of
+		// its own in the editor font, colored, and laid out over lines when it is too long for the hover
+		const resource = stackFrame.source.uri;
+		// Decided on each rendering, as an extension can start coloring or laying out the code after the first
+		let codeHover: IManagedHoverTooltipHTMLElement | undefined;
+		const getCodeHover = () => {
+			if (!this.codeFragmentService.canFormat(resource) && !this.codeFragmentService.getStyles(stackFrame.name, resource, { kind: 'stackFrame' }).length) {
+				return codeHover = undefined;
+			}
+			return codeHover ??= {
+				// The code's content has the inset of the hover's, which it would otherwise have twice
+				contentOwnsPadding: true,
+				element: (token: CancellationToken) => {
+					const targetWindow = dom.getWindow(data.label.element);
+					const fontInfo = readEditorFontInfo(targetWindow, this.configurationService.getValue<IEditorOptions>('editor'));
+					return renderCodeHover(this.codeFragmentService, stackFrame.name, resource, { fontInfo, tabSize: this.configurationService.getValue<number>('editor.tabSize') ?? 4, targetWindow }, token, 'stackFrame');
+				}
+			};
+		};
 		const matches = createMatches(element.filterData);
-		const renderLabel = () => data.label.set(stackFrame.name, matches, stackFrame.name, undefined, undefined, this.codeFragmentService.getStyles(stackFrame.name, stackFrame.source.uri, { kind: 'stackFrame' }));
+		// The label's own hover shows the code, as a second hover on the label would replace it
+		const renderLabel = () => data.label.set(stackFrame.name, matches, getCodeHover() ?? stackFrame.name, undefined, undefined, this.codeFragmentService.getStyles(stackFrame.name, resource, { kind: 'stackFrame' }));
 		renderLabel();
 		data.elementDisposables.add(this.codeFragmentService.onDidChange(renderLabel));
 		data.fileName.textContent = getSpecificSourceName(stackFrame);

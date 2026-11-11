@@ -41,6 +41,7 @@ import { ILanguageFeaturesService } from '../../../editor/common/services/langua
 import { LanguageFeaturesService } from '../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { IModelService } from '../../../editor/common/services/model.js';
+import { CodeFragmentService, ICodeFragmentService } from '../../../editor/common/services/codeFragmentService.js';
 import { ModelService } from '../../../editor/common/services/modelService.js';
 import { ITextModelService } from '../../../editor/common/services/resolverService.js';
 import { ITextResourceConfigurationService, ITextResourcePropertiesService } from '../../../editor/common/services/textResourceConfiguration.js';
@@ -341,6 +342,7 @@ export function workbenchInstantiationService(
 	instantiationService.stub(ILanguageConfigurationService, disposables.add(new TestLanguageConfigurationService()));
 	instantiationService.stub(ITreeSitterLibraryService, new TestTreeSitterLibraryService());
 	instantiationService.stub(IModelService, disposables.add(instantiationService.createInstance(ModelService)));
+	instantiationService.stub(ICodeFragmentService, disposables.add(instantiationService.createInstance(CodeFragmentService)));
 	const fileService = overrides?.fileService ? overrides.fileService(instantiationService) : disposables.add(new TestFileService());
 	instantiationService.stub(IFileService, fileService);
 	instantiationService.stub(IUriIdentityService, disposables.add(new UriIdentityService(fileService)));

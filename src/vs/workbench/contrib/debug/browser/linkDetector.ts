@@ -23,7 +23,7 @@ import { IDebugSession } from '../common/debug.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { IPathService } from '../../../services/path/common/pathService.js';
-import { IHighlight } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
+import { IHighlight, IStyledRange, renderStyledText } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { Iterable } from '../../../../base/common/iterator.js';
 
 const CONTROL_CODES = '\\u0000-\\u0020\\u007f-\\u009f';
@@ -92,8 +92,20 @@ export type DebugLinkHoverBehaviorTypeData =
 
 
 export interface ILinkDetector {
-	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[]): HTMLElement;
+	/**
+	 * @param styles Ranges of the text that CSS classes style outside links, such as the token classes that color code.
+	 */
+	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[], styles?: readonly IStyledRange[]): HTMLElement;
 	linkifyLocation(text: string, locationReference: number, session: IDebugSession, hoverBehavior: DebugLinkHoverBehaviorTypeData): HTMLElement;
+}
+
+/**
+ * The parts of ranges within a range of a text, as offsets into that range.
+ */
+function rangesWithin<T extends { readonly start: number; readonly end: number }>(ranges: readonly T[], start: number, end: number): T[] {
+	return ranges
+		.filter(range => range.start < end && range.end > start)
+		.map(range => ({ ...range, start: Math.max(range.start, start) - start, end: Math.min(range.end, end) - start }));
 }
 
 export class LinkDetector implements ILinkDetector {
@@ -118,11 +130,11 @@ export class LinkDetector implements ILinkDetector {
 	 * and added as a child of the returned <span>.
 	 * The `hoverBehavior` is required and manages the lifecycle of event listeners.
 	 */
-	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[]): HTMLElement {
-		return this._linkify(text, hoverBehavior, splitLines, workspaceFolder, includeFulltext, highlights);
+	linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[], styles?: readonly IStyledRange[]): HTMLElement {
+		return this._linkify(text, hoverBehavior, splitLines, workspaceFolder, includeFulltext, highlights, undefined, splitLines ? undefined : styles);
 	}
 
-	private _linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[], defaultRef?: { locationReference: number; session: IDebugSession }): HTMLElement {
+	private _linkify(text: string, hoverBehavior: DebugLinkHoverBehaviorTypeData, splitLines?: boolean, workspaceFolder?: IWorkspaceFolder, includeFulltext?: boolean, highlights?: IHighlight[], defaultRef?: { locationReference: number; session: IDebugSession }, styles?: readonly IStyledRange[]): HTMLElement {
 		if (splitLines) {
 			const lines = text.split('\n');
 			for (let i = 0; i < lines.length - 1; i++) {
@@ -145,7 +157,14 @@ export class LinkDetector implements ILinkDetector {
 		const container = document.createElement('span');
 		for (const part of this.detectLinks(text)) {
 			try {
+				if (part.kind === 'text' && !defaultRef && styles?.length) {
+					const end = part.index + part.value.length;
+					container.append(...renderStyledText(part.value, rangesWithin(highlights ?? [], part.index, end), rangesWithin(styles, part.index, end)));
+					continue;
+				}
 				let node: Node;
+				// The text of a link in styled text keeps its styles, such as a path in a string
+				const styleLink = !defaultRef && !!styles?.length;
 				switch (part.kind) {
 					case 'text':
 						node = defaultRef ? this.linkifyLocation(part.value, defaultRef.locationReference, defaultRef.session, hoverBehavior) : document.createTextNode(part.value);
@@ -173,6 +192,17 @@ export class LinkDetector implements ILinkDetector {
 						node = document.createTextNode(part.value);
 				}
 
+				if (styleLink) {
+					const end = part.index + part.value.length;
+					const styled = renderStyledText(part.value, rangesWithin(highlights ?? [], part.index, end), rangesWithin(styles!, part.index, end));
+					if (isHTMLElement(node) && node.textContent === part.value) {
+						reset(node, ...styled);
+						container.append(node);
+					} else {
+						container.append(...styled);
+					}
+					continue;
+				}
 				container.append(...this.applyHighlights(node, part.index, part.value.length, highlights));
 			} catch (e) {
 				container.appendChild(document.createTextNode(part.value));

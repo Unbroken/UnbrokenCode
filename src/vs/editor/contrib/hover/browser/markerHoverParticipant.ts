@@ -10,11 +10,13 @@ import { CancelablePromise, createCancelablePromise, disposableTimeout } from '.
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
+import { renderMessageWithQuotedCode } from '../../../browser/codeFragmentRenderer.js';
 import { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { CodeActionTriggerType } from '../../../common/languages.js';
 import { IModelDecoration } from '../../../common/model.js';
+import { ICodeFragmentService } from '../../../common/services/codeFragmentService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { ApplyCodeActionReason, getCodeActions, quickFixCommandId } from '../../codeAction/browser/codeAction.js';
@@ -74,6 +76,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		@ILanguageFeaturesService private readonly _languageFeaturesService: ILanguageFeaturesService,
 		@IMenuService private readonly _menuService: IMenuService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
+		@ICodeFragmentService private readonly _codeFragmentService: ICodeFragmentService,
 	) { }
 
 	public computeSync(anchor: HoverAnchor, lineDecorations: IModelDecoration[]): MarkerHover[] {
@@ -146,7 +149,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 		const markerElement = dom.append(markerContainer, $('div.marker-message'));
 		const messageElement = dom.append(markerElement, $('span'));
 		messageElement.style.whiteSpace = 'pre-wrap';
-		messageElement.innerText = message;
+		disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, markerHover.marker.resource));
 
 		if (source || code) {
 			// Code has link
@@ -198,7 +201,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 					}
 				}));
 				const messageElement = dom.append<HTMLAnchorElement>(relatedInfoContainer, $('span'));
-				messageElement.innerText = message;
+				disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, message, resource));
 				this._editor.applyFontInfo(messageElement);
 			}
 		}
@@ -234,7 +237,7 @@ export class MarkerHoverParticipant implements IEditorHoverParticipant<MarkerHov
 						}
 					}));
 					const messageElement = dom.append<HTMLAnchorElement>(subProblemContainer, $('span'));
-					messageElement.innerText = resourceMarker.marker.message;
+					disposables.add(renderMessageWithQuotedCode(this._codeFragmentService, messageElement, resourceMarker.marker.message, resourceMarker.resource));
 					this._editor.applyFontInfo(messageElement);
 				}
 			}

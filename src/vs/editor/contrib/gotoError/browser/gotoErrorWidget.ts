@@ -13,11 +13,14 @@ import { DisposableStore, dispose } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import { splitLines } from '../../../../base/common/strings.js';
+import { URI } from '../../../../base/common/uri.js';
 import './media/gotoErrorWidget.css';
+import { renderMessageWithQuotedCode } from '../../../browser/codeFragmentRenderer.js';
 import { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { ScrollType } from '../../../common/editorCommon.js';
+import { ICodeFragmentService } from '../../../common/services/codeFragmentService.js';
 import { peekViewTitleForeground, peekViewTitleInfoForeground, PeekViewWidget } from '../../peekView/browser/peekView.js';
 import * as nls from '../../../../nls.js';
 import { getFlatActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
@@ -43,6 +46,7 @@ class MessageWidget {
 	private readonly _scrollable: ScrollableElement;
 	private readonly _relatedDiagnostics = new WeakMap<HTMLElement, IRelatedInformation>();
 	private readonly _disposables: DisposableStore = new DisposableStore();
+	private readonly _messageDisposables = new DisposableStore();
 
 	private _codeLink?: HTMLElement;
 
@@ -51,9 +55,11 @@ class MessageWidget {
 		editor: ICodeEditor,
 		onRelatedInformation: (related: IRelatedInformation) => void,
 		private readonly _openerService: IOpenerService,
-		private readonly _labelService: ILabelService
+		private readonly _labelService: ILabelService,
+		private readonly _codeFragmentService: ICodeFragmentService
 	) {
 		this._editor = editor;
+		this._disposables.add(this._messageDisposables);
 
 		const domNode = document.createElement('div');
 		domNode.className = 'descriptioncontainer';
@@ -93,6 +99,10 @@ class MessageWidget {
 		dispose(this._disposables);
 	}
 
+	private _addMessage(element: HTMLElement, message: string, resource: URI): void {
+		this._messageDisposables.add(renderMessageWithQuotedCode(this._codeFragmentService, element, message, resource));
+	}
+
 	update(marker: IMarker): void {
 		const { source, message, relatedInformation, subProblems, code } = marker;
 		let sourceAndCodeLength = (source?.length || 0) + '()'.length;
@@ -105,6 +115,7 @@ class MessageWidget {
 		}
 
 		const lines = splitLines(message);
+		this._messageDisposables.clear();
 		this._lines = lines.length;
 		this._longestLineLength = 0;
 		this._extraHeight = 0;
@@ -119,7 +130,7 @@ class MessageWidget {
 		let lastLineElement = this._messageBlock;
 		for (const line of lines) {
 			lastLineElement = document.createElement('div');
-			lastLineElement.innerText = line;
+			this._addMessage(dom.append(lastLineElement, dom.$('span')), line, marker.resource);
 			if (line === '') {
 				lastLineElement.style.height = this._messageBlock.style.lineHeight;
 			}
@@ -176,7 +187,7 @@ class MessageWidget {
 				this._relatedDiagnostics.set(relatedResource, related);
 
 				const relatedMessage = document.createElement('span');
-				relatedMessage.innerText = related.message;
+				this._addMessage(relatedMessage, related.message, related.resource);
 
 				container.appendChild(relatedResource);
 				container.appendChild(relatedMessage);
@@ -227,7 +238,7 @@ class MessageWidget {
 					this._relatedDiagnostics.set(subResource, relatedInfo);
 
 					const subMessage = document.createElement('span');
-					subMessage.innerText = resourceMarker.marker.message;
+					this._addMessage(subMessage, resourceMarker.marker.message, resourceMarker.resource);
 
 					container.appendChild(subResource);
 					container.appendChild(subMessage);
@@ -323,7 +334,8 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		@IMenuService private readonly _menuService: IMenuService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
-		@ILabelService private readonly _labelService: ILabelService
+		@ILabelService private readonly _labelService: ILabelService,
+		@ICodeFragmentService private readonly _codeFragmentService: ICodeFragmentService
 	) {
 		super(editor, { showArrow: true, showFrame: true, isAccessible: true, frameWidth: 1 }, instantiationService);
 		this._severity = MarkerSeverity.Warning;
@@ -400,7 +412,7 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		this._container = document.createElement('div');
 		container.appendChild(this._container);
 
-		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService);
+		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService, this._codeFragmentService);
 		this._disposables.add(this._message);
 	}
 

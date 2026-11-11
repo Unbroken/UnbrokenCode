@@ -133,6 +133,8 @@
 	color: inherit;
 }
 
+/* Their code and that of stack frames, colored like code in the editor, keeps its colors when selected. */
+
 .monaco-workbench .monaco-list-row .expression .name.virtual {
 	opacity: 0.5;
 }

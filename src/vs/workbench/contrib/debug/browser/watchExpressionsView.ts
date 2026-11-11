@@ -312,12 +312,11 @@ export class WatchExpressionsRenderer extends AbstractExpressionsRenderer {
 
 	protected renderExpression(expression: IExpression, data: IExpressionTemplateData, highlights: IHighlight[]): void {
 		let text: string;
-		data.type.textContent = '';
+		let type: string | undefined;
 		const showType = this.configurationService.getValue<IDebugConfiguration>('debug').showVariableTypes;
 		if (showType && expression.type) {
 			text = typeof expression.value === 'string' ? `${expression.name}: ` : expression.name;
-			//render type
-			data.type.textContent = expression.type + ' =';
+			type = expression.type;
 		} else {
 			text = typeof expression.value === 'string' ? `${expression.name} =` : expression.name;
 		}
@@ -335,12 +334,13 @@ export class WatchExpressionsRenderer extends AbstractExpressionsRenderer {
 			title = expression.value;
 		}
 
-		data.label.set(text, highlights, title);
+		data.elementDisposable.add(this.expressionRenderer.renderNameAndType(data, expression, text, highlights, title, type));
 		data.elementDisposable.add(this.expressionRenderer.renderValue(data.value, expression, {
 			showChanged: true,
 			maxValueLength: MAX_VALUE_RENDER_LENGTH_IN_VIEWLET,
 			colorize: true,
 			session: expression.getSession(),
+			codeResource: this.expressionRenderer.getCodeResource(expression),
 		}));
 	}
 

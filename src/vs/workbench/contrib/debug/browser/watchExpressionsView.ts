@@ -334,7 +334,7 @@ export class WatchExpressionsRenderer extends AbstractExpressionsRenderer {
 			title = expression.value;
 		}
 
-		data.elementDisposable.add(this.expressionRenderer.renderNameAndType(data, expression, text, highlights, title, type));
+		data.elementDisposable.add(this.expressionRenderer.renderNameAndType(data, expression, text, highlights, title, type, !!expression.type));
 		data.elementDisposable.add(this.expressionRenderer.renderValue(data.value, expression, {
 			showChanged: true,
 			maxValueLength: MAX_VALUE_RENDER_LENGTH_IN_VIEWLET,

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dom from '../../dom.js';
-import type { IManagedHover } from '../hover/hover.js';
+import type { IManagedHover, IManagedHoverTooltipHTMLElement } from '../hover/hover.js';
 import { IHoverDelegate } from '../hover/hoverDelegate.js';
 import { getBaseLayerHoverDelegate } from '../hover/hoverDelegate2.js';
 import { getDefaultHoverDelegate } from '../hover/hoverDelegateFactory.js';
@@ -88,7 +88,7 @@ export class HighlightedLabel extends Disposable {
 
 	private readonly domNode: HTMLElement;
 	private text: string = '';
-	private title: string = '';
+	private title: string | IManagedHoverTooltipHTMLElement = '';
 	private highlights: readonly IHighlight[] = [];
 	private styles: readonly IStyledRange[] = [];
 	private didEverRender: boolean = false;
@@ -117,14 +117,14 @@ export class HighlightedLabel extends Disposable {
 	 *
 	 * @param text The label to display.
 	 * @param highlights The ranges to highlight.
-	 * @param title An optional title for the hover tooltip.
+	 * @param title An optional title for the hover tooltip, or the content of the hover, such as code laid out over lines.
 	 * @param escapeNewLines Whether to escape new lines.
 	 * @param supportIcons Whether to render icons, which leaves the styled ranges out.
 	 * @param styles Ranges that CSS classes style, such as the token classes that color code. A label whose new lines
 	 * are escaped leaves them out.
 	 * @returns
 	 */
-	set(text: string | undefined, highlights: readonly IHighlight[] = [], title: string = '', escapeNewLines?: boolean, supportIcons?: boolean, styles: readonly IStyledRange[] = []) {
+	set(text: string | undefined, highlights: readonly IHighlight[] = [], title: string | IManagedHoverTooltipHTMLElement = '', escapeNewLines?: boolean, supportIcons?: boolean, styles: readonly IStyledRange[] = []) {
 		if (!text) {
 			text = '';
 		}

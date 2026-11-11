@@ -9,7 +9,7 @@ import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrolla
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { Color } from '../../../../base/common/color.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
-import { DisposableStore, dispose } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, dispose, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { ScrollbarVisibility } from '../../../../base/common/scrollable.js';
 import { splitLines } from '../../../../base/common/strings.js';
@@ -47,6 +47,15 @@ class MessageWidget {
 	private readonly _relatedDiagnostics = new WeakMap<HTMLElement, IRelatedInformation>();
 	private readonly _disposables: DisposableStore = new DisposableStore();
 	private readonly _messageDisposables = new DisposableStore();
+	private readonly _domNode: HTMLElement;
+	private readonly _measurement = new MutableDisposable();
+	private _width: number | undefined;
+	private _marker: IMarker | undefined;
+	private _layoutWidth: number | undefined;
+	private _pendingScrollPosition: { scrollTop: number; scrollLeft: number } | undefined;
+	private _laysOutCode = false;
+	// By message, the layouts of its code, which show while it is laid out for another width
+	private readonly _layouts = new Map<string, Map<string, string>>();
 
 	private _codeLink?: HTMLElement;
 
@@ -56,12 +65,14 @@ class MessageWidget {
 		onRelatedInformation: (related: IRelatedInformation) => void,
 		private readonly _openerService: IOpenerService,
 		private readonly _labelService: ILabelService,
-		private readonly _codeFragmentService: ICodeFragmentService
+		private readonly _codeFragmentService: ICodeFragmentService,
+		private readonly _onDidChangeHeight: () => void
 	) {
 		this._editor = editor;
 		this._disposables.add(this._messageDisposables);
+		this._disposables.add(this._measurement);
 
-		const domNode = document.createElement('div');
+		const domNode = this._domNode = document.createElement('div');
 		domNode.className = 'descriptioncontainer';
 
 		this._messageBlock = document.createElement('div');
@@ -99,11 +110,83 @@ class MessageWidget {
 		dispose(this._disposables);
 	}
 
-	private _addMessage(element: HTMLElement, message: string, resource: URI): void {
-		this._messageDisposables.add(renderMessageWithQuotedCode(this._codeFragmentService, element, message, resource));
+	/**
+	 * Renders a message, with the code it quotes colored, and laid out like in hovers, in blocks of its own where it is
+	 * long, when extensions lay out the code of the resource's language.
+	 */
+	private _addMessage(element: HTMLElement, message: string, resource: URI, label = ''): void {
+		// The widget measures what it shows when a message of the problem, its related information or a sub-problem, can
+		// have code laid out in blocks, whose lines it doesn't count
+		this._laysOutCode ||= this._codeFragmentService.canFormat(resource);
+		const fontInfo = this._editor.getOption(EditorOption.fontInfo);
+		// The message's container is padded 20 pixels at the start and 12 at the end, and a sub-problem is indented 16
+		const width = (this._layoutWidth ?? this._editor.getLayoutInfo().contentWidth) - 48;
+		this._messageDisposables.add(renderMessageWithQuotedCode(this._codeFragmentService, element, message, resource, {
+			fontInfo,
+			tabSize: this._editor.getModel()?.getOptions().tabSize ?? 4,
+			width,
+			targetWindow: dom.getWindow(this._editor.getDomNode()),
+			// The label of related information or a sub-problem, its file and position, comes first on its line
+			lineStartColumns: label.length,
+			onDidLayout: () => {
+				// An extension that lays out code can register after the message showed
+				this._laysOutCode = true;
+				this._measure();
+			},
+			previousLayouts: this._getLayouts(message),
+		}));
 	}
 
-	update(marker: IMarker): void {
+	private _getLayouts(message: string): Map<string, string> {
+		let layouts = this._layouts.get(message);
+		if (!layouts) {
+			layouts = new Map();
+			this._layouts.set(message, layouts);
+		}
+		return layouts;
+	}
+
+	/**
+	 * Code laid out in blocks takes lines the message's lines don't count, so the widget takes the height and width of
+	 * what it shows once that has been laid out.
+	 */
+	private _measure(): void {
+		this._measurement.value = dom.scheduleAtNextAnimationFrame(dom.getWindow(this._domNode), () => {
+			if (!this._domNode.isConnected) {
+				return;
+			}
+			// The container holds the margins of the blocks of code, which can collapse through the elements around them,
+			// and its own padding, which its content scrolls with
+			const lineHeight = this._editor.getOption(EditorOption.lineHeight);
+			const height = this._domNode.scrollHeight;
+			const paddingTop = parseFloat(dom.getComputedStyle(this._domNode).paddingTop) || 0;
+			const lines = Math.max(1, Math.ceil((height - paddingTop) / lineHeight));
+			this._scrollable.setScrollDimensions({ scrollWidth: this._domNode.scrollWidth, scrollHeight: height });
+			if (this._pendingScrollPosition) {
+				this._scrollable.setScrollPosition(this._pendingScrollPosition);
+				this._pendingScrollPosition = undefined;
+			}
+			if (lines !== this._lines || this._extraHeight) {
+				this._lines = lines;
+				this._extraHeight = 0;
+				this._onDidChangeHeight();
+			}
+		});
+	}
+
+	update(marker: IMarker, announce = true): void {
+		// Laying the code out again keeps where it is scrolled to, once the content's size is measured. Laid out again
+		// before that, it keeps where it was scrolled to first, as the content can't be scrolled as far until measured.
+		if (!announce && !this._pendingScrollPosition) {
+			const { scrollTop, scrollLeft } = this._scrollable.getScrollPosition();
+			this._pendingScrollPosition = { scrollTop, scrollLeft };
+		}
+		if (marker !== this._marker) {
+			this._layouts.clear();
+		}
+		this._marker = marker;
+		this._layoutWidth = this._width ?? this._editor.getLayoutInfo().contentWidth;
+		this._laysOutCode = false;
 		const { source, message, relatedInformation, subProblems, code } = marker;
 		let sourceAndCodeLength = (source?.length || 0) + '()'.length;
 		if (code) {
@@ -125,7 +208,9 @@ class MessageWidget {
 
 		dom.clearNode(this._messageBlock);
 		this._messageBlock.setAttribute('aria-label', this.getAriaLabel(marker));
-		aria.status(this.getAriaLabel(marker));
+		if (announce) {
+			aria.status(this.getAriaLabel(marker));
+		}
 		this._editor.applyFontInfo(this._messageBlock);
 		let lastLineElement = this._messageBlock;
 		for (const line of lines) {
@@ -182,12 +267,13 @@ class MessageWidget {
 
 				const relatedResource = document.createElement('a');
 				relatedResource.classList.add('filename');
-				relatedResource.innerText = `${this._labelService.getUriBasenameLabel(related.resource)}(${related.startLineNumber}, ${related.startColumn}): `;
+				const relatedLabel = `${this._labelService.getUriBasenameLabel(related.resource)}(${related.startLineNumber}, ${related.startColumn}): `;
+				relatedResource.innerText = relatedLabel;
 				relatedResource.title = this._labelService.getUriLabel(related.resource);
 				this._relatedDiagnostics.set(relatedResource, related);
 
 				const relatedMessage = document.createElement('span');
-				this._addMessage(relatedMessage, related.message, related.resource);
+				this._addMessage(relatedMessage, related.message, related.resource, relatedLabel);
 
 				container.appendChild(relatedResource);
 				container.appendChild(relatedMessage);
@@ -238,7 +324,7 @@ class MessageWidget {
 					this._relatedDiagnostics.set(subResource, relatedInfo);
 
 					const subMessage = document.createElement('span');
-					this._addMessage(subMessage, resourceMarker.marker.message, resourceMarker.resource);
+					this._addMessage(subMessage, resourceMarker.marker.message, resourceMarker.resource, fileLabel);
 
 					container.appendChild(subResource);
 					container.appendChild(subMessage);
@@ -272,9 +358,18 @@ class MessageWidget {
 		const scrollWidth = Math.ceil(fontInfo.typicalFullwidthCharacterWidth * this._longestLineLength * 0.75);
 		const scrollHeight = fontInfo.lineHeight * this._lines + this._extraHeight;
 		this._scrollable.setScrollDimensions({ scrollWidth, scrollHeight });
+		if (this._laysOutCode) {
+			this._measure();
+		}
 	}
 
 	layout(height: number, width: number): void {
+		this._width = width;
+		// The code of the messages is laid out again for a width a column or more away from the one it was laid out for
+		const fontInfo = this._editor.getOption(EditorOption.fontInfo);
+		if (this._marker && this._laysOutCode && Math.abs(width - (this._layoutWidth ?? 0)) >= fontInfo.typicalHalfwidthCharacterWidth) {
+			this.update(this._marker, false);
+		}
 		this._scrollable.getDomNode().style.height = `${height}px`;
 		this._scrollable.getDomNode().style.width = `${width}px`;
 		this._scrollable.setScrollDimensions({ width, height });
@@ -412,7 +507,7 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 		this._container = document.createElement('div');
 		container.appendChild(this._container);
 
-		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService, this._codeFragmentService);
+		this._message = new MessageWidget(this._container, this.editor, related => this._onDidSelectRelatedInformation.fire(related), this._openerService, this._labelService, this._codeFragmentService, () => this._relayout());
 		this._disposables.add(this._message);
 	}
 
@@ -472,7 +567,8 @@ export class MarkerNavigationWidget extends PeekViewWidget {
 	}
 
 	protected override _relayout(): void {
-		super._relayout(this.computeRequiredHeight());
+		// No taller than the editor allows, also when code laid out once shown makes the message taller
+		super._relayout(this.computeRequiredHeight(), true);
 	}
 
 	private computeRequiredHeight() {

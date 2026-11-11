@@ -4520,6 +4520,66 @@ declare module 'vscode' {
 	}
 
 	/**
+	 * A rule that gives the words a regular expression matches a semantic token type in code fragments: the short
+	 * pieces of code shown outside editors, such as the names and types of debugger variables and the code that compiler
+	 * errors quote. See {@link languages.registerCodeFragmentTokenRules}.
+	 */
+	export interface CodeFragmentTokenRule {
+		/**
+		 * The source of a JavaScript regular expression. It is tried where a word starts and at characters outside
+		 * words, and counts only when its match ends where a word ends, so `int` doesn't match the start of `int32`.
+		 */
+		readonly regex: string;
+
+		/**
+		 * The semantic token type of what the rule matches, which the theme styles as it does in editors. Declare a
+		 * custom type with the `semanticTokenTypes` contribution point.
+		 */
+		readonly tokenType: string;
+
+		/**
+		 * The semantic token modifiers of what the rule matches.
+		 */
+		readonly tokenModifiers?: readonly string[];
+
+		/**
+		 * The kinds of fragments the rule applies to, all when unset. A rule for the names of local variables, say, can
+		 * leave out values, which show text such as `Start of time` more often than names.
+		 */
+		readonly kinds?: readonly CodeFragmentKind[];
+	}
+
+	/**
+	 * What a code fragment is, see {@link CodeFragmentTokenRule.kinds}.
+	 */
+	export enum CodeFragmentKind {
+		/**
+		 * The name of a debugger variable or watch expression.
+		 */
+		Name = 1,
+
+		/**
+		 * The type of a debugger variable or watch expression.
+		 */
+		Type = 2,
+
+		/**
+		 * The value of a debugger variable or watch expression.
+		 */
+		Value = 3,
+
+		/**
+		 * Code that a message, such as a compiler error, quotes.
+		 */
+		Quoted = 4,
+
+		/**
+		 * The name of a stack frame, such as the signature of a function.
+		 */
+		StackFrame = 5
+	}
+
+	/**
 	 * The document range semantic tokens provider interface defines the contract between extensions and
 	 * semantic tokens.
 	 */
@@ -15410,6 +15470,26 @@ declare module 'vscode' {
 		 * @returns A {@link Disposable} that unregisters this provider when being disposed.
 		 */
 		export function registerMergedDocumentSemanticTokensProvider(selector: DocumentSelector, provider: DocumentSemanticTokensProvider, legend: SemanticTokensLegend, metadata?: MergedDocumentSemanticTokensProviderMetadata): Disposable;
+
+		/**
+		 * Register rules that color code fragments, the short pieces of code shown outside editors, such as the names,
+		 * types and values of debugger variables and the code that compiler errors quote. Their strings, comments and
+		 * numbers are colored by the syntax highlighting of their language, and the words the rules match by the
+		 * semantic token types the rules give them, styled by the theme like in editors. Words in strings and comments
+		 * aren't matched. Fragments of documents no rules are registered for keep the coloring of where they are shown.
+		 *
+		 * A fragment is matched against the selector with the document it comes from, such as the file of a diagnostic
+		 * or of a stack frame. The rules of all registrations that match are tried, those with the best
+		 * {@link languages.match score} and most recently registered first, each registration's rules in order, and the
+		 * first rule that matches wins.
+		 *
+		 * Check that the function exists before calling it, as editors other than Unbroken Code don't have it.
+		 *
+		 * @param selector A selector that defines the documents the fragments of which the rules apply to.
+		 * @param rules The rules, in the order they are tried.
+		 * @returns A {@link Disposable} that unregisters the rules when being disposed.
+		 */
+		export function registerCodeFragmentTokenRules(selector: DocumentSelector, rules: readonly CodeFragmentTokenRule[]): Disposable;
 
 		/**
 		 * Register a semantic tokens provider for a document range.

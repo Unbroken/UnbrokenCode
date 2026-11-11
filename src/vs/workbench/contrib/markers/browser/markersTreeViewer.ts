@@ -7,7 +7,7 @@ import * as dom from '../../../../base/browser/dom.js';
 import * as paths from '../../../../base/common/path.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import { ResourceLabels, IResourceLabel } from '../../../browser/labels.js';
-import { HighlightedLabel } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
+import { HighlightedLabel, IHighlight } from '../../../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { IMarker, MarkerSeverity } from '../../../../platform/markers/common/markers.js';
 import { ResourceMarkers, Marker, RelatedInformation, MarkerElement, MarkerTableItem, SubProblem, Category } from './markersModel.js';
 import Messages from './messages.js';
@@ -26,6 +26,7 @@ import { Event, Emitter } from '../../../../base/common/event.js';
 import { IListAccessibilityProvider } from '../../../../base/browser/ui/list/listWidget.js';
 import { isUndefinedOrNull } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
+import { ICodeFragmentService } from '../../../../editor/common/services/codeFragmentService.js';
 import { Action, IAction, toAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import { CancelablePromise, createCancelablePromise, Delayer } from '../../../../base/common/async.js';
@@ -66,12 +67,26 @@ interface IRelatedInformationTemplateData {
 	resourceLabel: HighlightedLabel;
 	lnCol: HTMLElement;
 	description: HighlightedLabel;
+	elementDisposables: DisposableStore;
 }
 
 interface ISubProblemTemplateData {
 	resourceLabel: HighlightedLabel;
 	lnCol: HTMLElement;
 	description: HighlightedLabel;
+	elementDisposables: DisposableStore;
+}
+
+/**
+ * Sets a label to a message, coloring the code it quotes as code of the resource's language, and again when the
+ * coloring changes.
+ */
+function setMessageLabel(codeFragmentService: ICodeFragmentService, label: HighlightedLabel, message: string, highlights: IHighlight[], title: string, resource: URI, maxLength = Infinity): IDisposable {
+	// A message longer than shown is cut after its code is found in all of it, so code the cut ends is colored too
+	const text = message.length > maxLength ? `${message.substring(0, maxLength)}...` : message;
+	const render = () => label.set(text, highlights, title, undefined, undefined, codeFragmentService.getQuotedCodeStyles(message, resource, Math.min(message.length, maxLength)));
+	render();
+	return codeFragmentService.onDidChange(render);
 }
 
 interface ICategoryTemplateData {
@@ -276,13 +291,14 @@ export class MarkerRenderer implements ITreeRenderer<Marker, MarkerFilterData, I
 		@IHoverService protected hoverService: IHoverService,
 		@IInstantiationService protected instantiationService: IInstantiationService,
 		@IOpenerService protected openerService: IOpenerService,
+		@ICodeFragmentService protected codeFragmentService: ICodeFragmentService,
 	) { }
 
 	templateId = TemplateId.Marker;
 
 	renderTemplate(container: HTMLElement): IMarkerTemplateData {
 		const data: IMarkerTemplateData = Object.create(null);
-		data.markerWidget = new MarkerWidget(container, this.markersViewState, this.hoverService, this.openerService, this.instantiationService);
+		data.markerWidget = new MarkerWidget(container, this.markersViewState, this.hoverService, this.openerService, this.instantiationService, this.codeFragmentService);
 		return data;
 	}
 
@@ -333,7 +349,8 @@ class MarkerWidget extends Disposable {
 		private readonly markersViewModel: MarkersViewModel,
 		private readonly _hoverService: IHoverService,
 		private readonly _openerService: IOpenerService,
-		_instantiationService: IInstantiationService
+		_instantiationService: IInstantiationService,
+		private readonly _codeFragmentService: ICodeFragmentService
 	) {
 		super();
 		this.actionBar = this._register(new ActionBar(dom.append(parent, dom.$('.actions')), {
@@ -416,7 +433,7 @@ class MarkerWidget extends Disposable {
 			const lineElement = dom.append(this.messageAndDetailsContainer, dom.$('.marker-message-line'));
 			const messageElement = dom.append(lineElement, dom.$('.marker-message'));
 			const highlightedLabel = this.disposables.add(new HighlightedLabel(messageElement));
-			highlightedLabel.set(lines[index].length > 1000 ? `${lines[index].substring(0, 1000)}...` : lines[index], lineMatches[index]);
+			this.disposables.add(setMessageLabel(this._codeFragmentService, highlightedLabel, lines[index], lineMatches[index], '', marker.resource, 1000));
 			if (lines[index] === '') {
 				lineElement.style.height = `${VirtualDelegate.LINE_HEIGHT}px`;
 			}
@@ -462,7 +479,8 @@ class MarkerWidget extends Disposable {
 export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformation, RelatedInformationFilterData, IRelatedInformationTemplateData> {
 
 	constructor(
-		@ILabelService private readonly labelService: ILabelService
+		@ILabelService private readonly labelService: ILabelService,
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService
 	) { }
 
 	templateId = TemplateId.RelatedInformation;
@@ -481,6 +499,7 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		data.lnCol.style.paddingLeft = '4px';
 
 		data.resourceLabel = new HighlightedLabel(dom.append(resourceLineContainer, dom.$('.related-info-resource')));
+		data.elementDisposables = new DisposableStore();
 
 		return data;
 	}
@@ -493,19 +512,25 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		const resourceLabelTitle = this.labelService.getUriLabel(relatedInformation.resource, { relative: true });
 		templateData.resourceLabel.set(basename(relatedInformation.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(relatedInformation.startLineNumber, relatedInformation.startColumn);
-		templateData.description.set(relatedInformation.message, messageMatches, relatedInformation.message);
+		templateData.elementDisposables.add(setMessageLabel(this.codeFragmentService, templateData.description, relatedInformation.message, messageMatches, relatedInformation.message, relatedInformation.resource));
+	}
+
+	disposeElement(_element: ITreeNode<RelatedInformation, RelatedInformationFilterData>, _index: number, templateData: IRelatedInformationTemplateData): void {
+		templateData.elementDisposables.clear();
 	}
 
 	disposeTemplate(templateData: IRelatedInformationTemplateData): void {
 		templateData.resourceLabel.dispose();
 		templateData.description.dispose();
+		templateData.elementDisposables.dispose();
 	}
 }
 
 export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemFilterData, ISubProblemTemplateData> {
 
 	constructor(
-		@ILabelService private readonly labelService: ILabelService
+		@ILabelService private readonly labelService: ILabelService,
+		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService
 	) { }
 
 	templateId = TemplateId.SubProblem;
@@ -524,6 +549,7 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		data.lnCol.style.paddingLeft = '4px';
 
 		data.resourceLabel = new HighlightedLabel(dom.append(resourceLineContainer, dom.$('.resource')));
+		data.elementDisposables = new DisposableStore();
 
 		return data;
 	}
@@ -536,12 +562,17 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		const resourceLabelTitle = this.labelService.getUriLabel(subProblem.resource, { relative: true });
 		templateData.resourceLabel.set(basename(subProblem.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(subProblem.resourceMarker.marker.startLineNumber, subProblem.resourceMarker.marker.startColumn);
-		templateData.description.set(subProblem.resourceMarker.marker.message, messageMatches, subProblem.resourceMarker.marker.message);
+		templateData.elementDisposables.add(setMessageLabel(this.codeFragmentService, templateData.description, subProblem.resourceMarker.marker.message, messageMatches, subProblem.resourceMarker.marker.message, subProblem.resource));
+	}
+
+	disposeElement(_element: ITreeNode<SubProblem, SubProblemFilterData>, _index: number, templateData: ISubProblemTemplateData): void {
+		templateData.elementDisposables.clear();
 	}
 
 	disposeTemplate(templateData: ISubProblemTemplateData): void {
 		templateData.resourceLabel.dispose();
 		templateData.description.dispose();
+		templateData.elementDisposables.dispose();
 	}
 }
 

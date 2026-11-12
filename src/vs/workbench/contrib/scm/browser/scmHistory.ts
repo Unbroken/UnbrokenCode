@@ -20,7 +20,7 @@ import { findLastIdx } from '../../../../base/common/arraysFind.js';
 export const SWIMLANE_HEIGHT = 16;
 export const SWIMLANE_WIDTH = 11;
 const SWIMLANE_CURVE_RADIUS = 5;
-const CIRCLE_RADIUS = 4;
+const CIRCLE_RADIUS = 3;
 const CIRCLE_STROKE_WIDTH = 2;
 
 /**
@@ -80,7 +80,7 @@ function createPath(colorIdentifier: string, strokeWidth = 1): SVGPathElement {
 function drawCircle(index: number, radius: number, strokeWidth: number, colorIdentifier?: string): SVGCircleElement {
 	const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 	circle.setAttribute('cx', `${SWIMLANE_WIDTH * (index + 1)}`);
-	circle.setAttribute('cy', `${SWIMLANE_WIDTH}`);
+	circle.setAttribute('cy', `${SWIMLANE_HEIGHT / 2}`);
 	circle.setAttribute('r', `${radius}`);
 
 	circle.style.strokeWidth = `${strokeWidth}px`;
@@ -94,7 +94,7 @@ function drawCircle(index: number, radius: number, strokeWidth: number, colorIde
 function drawDashedCircle(index: number, radius: number, strokeWidth: number, colorIdentifier: string): SVGCircleElement {
 	const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 	circle.setAttribute('cx', `${SWIMLANE_WIDTH * (index + 1)}`);
-	circle.setAttribute('cy', `${SWIMLANE_WIDTH}`);
+	circle.setAttribute('cy', `${SWIMLANE_HEIGHT / 2}`);
 	circle.setAttribute('r', `${CIRCLE_RADIUS + 1}`);
 
 	circle.style.stroke = asCssVariable(colorIdentifier);
@@ -152,7 +152,7 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 
 				// Draw /
 				d.push(`M ${SWIMLANE_WIDTH * (index + 1)} 0`);
-				d.push(`A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * (index)} ${SWIMLANE_WIDTH}`);
+				d.push(`A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * (index)} ${SWIMLANE_HEIGHT / 2}`);
 
 				// Draw -
 				d.push(`H ${SWIMLANE_WIDTH * (circleIndex + 1)}`);
@@ -176,7 +176,7 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 
 					// Draw |
 					d.push(`M ${SWIMLANE_WIDTH * (index + 1)} 0`);
-					d.push(`V 6`);
+					d.push(`V ${(SWIMLANE_HEIGHT / 2) - SWIMLANE_CURVE_RADIUS}`);
 
 					// Draw /
 					d.push(`A ${SWIMLANE_CURVE_RADIUS} ${SWIMLANE_CURVE_RADIUS} 0 0 1 ${(SWIMLANE_WIDTH * (index + 1)) - SWIMLANE_CURVE_RADIUS} ${SWIMLANE_HEIGHT / 2}`);

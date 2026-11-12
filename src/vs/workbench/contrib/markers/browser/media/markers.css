@@ -151,7 +151,7 @@
 	display: none;
 }
 
-.markers-panel .monaco-action-bar .actions-container {
+.markers-panel .monaco-list-row .monaco-action-bar .actions-container {
 	height: 16px;
 }
 

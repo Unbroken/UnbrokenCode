@@ -298,13 +298,17 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 // whether it covers the menu bar in this full screen, which it decided on as it
 // entered, and raises it above the menu bar's backdrop while it is in full screen
 // on a display with a camera cutout, also as the cutout moves or the window moves
-// to another display, restoring its level as it leaves. While raised, the mouse
-// reaching the cutout reveals the menu bar, with what the cutout shows, until
-// macOS hides the menu bar again. Stops observing when the window goes away.
+// to another display, restoring its level as it leaves. It is only raised while
+// its Space is the active one or it shows, such as as its Space slides in: macOS
+// does not switch to the Space of a window above the normal level as its app is
+// activated, such as from the Dock or an app switcher. While raised, the mouse reaching the cutout reveals the menu bar, with
+// what the cutout shows, until macOS hides the menu bar again. Stops observing
+// when the window goes away.
 @interface UnbrokenMenuBarObserver : NSObject
 @property(nonatomic, weak) NSWindow *window;
 @property(nonatomic) BOOL coversMenuBar;
 @property(nonatomic, strong) NSNumber *levelBeforeFullScreen;
+@property(nonatomic) NSWindowLevel levelSet; // the level last given to the window here
 @property(nonatomic) NSRect cutout; // in screen coordinates
 @property(nonatomic, strong) NSArray *mouseMonitors;
 @property(nonatomic, strong) NSTimer *revealedMenuBarTimer;
@@ -323,12 +327,15 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 		[center addObserver:self selector:@selector(willExitFullScreen:) name:NSWindowWillCloseNotification object:window];
 		[center addObserver:self selector:@selector(screenDidChange:) name:NSApplicationDidChangeScreenParametersNotification object:nil];
 		[center addObserver:self selector:@selector(screenDidChange:) name:NSWindowDidChangeScreenNotification object:window];
+		[center addObserver:self selector:@selector(spaceVisibilityDidChange:) name:NSWindowDidChangeOcclusionStateNotification object:window];
+		[[NSWorkspace sharedWorkspace].notificationCenter addObserver:self selector:@selector(spaceVisibilityDidChange:) name:NSWorkspaceActiveSpaceDidChangeNotification object:nil];
 	}
 	return self;
 }
 
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+	[[NSWorkspace sharedWorkspace].notificationCenter removeObserver:self];
 	[self stopWatchingCutout];
 }
 
@@ -371,7 +378,7 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 			SetPresentationOptions(WithHiddenMenuBar(NSApp.presentationOptions)); // already so as the window entered full screen on this display
 		}
 		self.levelBeforeFullScreen = @(window.level);
-		window.level = [self coveringLevel];
+		[self updateLevel];
 	}
 	if (self.levelBeforeFullScreen != nil && self.mouseMonitors == nil) {
 		[self watchCutout];
@@ -382,7 +389,7 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 	[self followLevelChange];
 	[self stopWatchingCutout];
 	if (self.levelBeforeFullScreen != nil) {
-		self.window.level = self.levelBeforeFullScreen.integerValue;
+		[self setWindowLevel:self.levelBeforeFullScreen.integerValue];
 		self.levelBeforeFullScreen = nil;
 	}
 }
@@ -393,8 +400,7 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 	if (self.levelBeforeFullScreen == nil) {
 		return;
 	}
-	NSWindowLevel levelSet = self.revealedMenuBarTimer != nil ? self.levelBeforeFullScreen.integerValue : [self coveringLevel];
-	if (self.window.level != levelSet) {
+	if (self.window.level != self.levelSet) {
 		self.levelBeforeFullScreen = @(self.window.level);
 	}
 }
@@ -404,15 +410,41 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 	return MAX(NSMainMenuWindowLevel + 1, self.levelBeforeFullScreen.integerValue);
 }
 
+- (void)setWindowLevel:(NSWindowLevel)level {
+	self.levelSet = level;
+	self.window.level = level;
+}
+
+// Covers the menu bar while the window's Space is the active one or the window shows, unless
+// the menu bar is revealed, and has the level it had before full screen otherwise. The window
+// shows as soon as its Space starts to slide in, such as with the trackpad, while its Space
+// only becomes the active one once it is all in.
+- (void)updateLevel {
+	NSWindow *window = self.window;
+	BOOL shows = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+	BOOL covers = self.revealedMenuBarTimer == nil && (window.isOnActiveSpace || shows);
+	[self setWindowLevel:covers ? [self coveringLevel] : self.levelBeforeFullScreen.integerValue];
+}
+
+// macOS only switches to the window's Space when it is at the level it had before full screen
+- (void)spaceVisibilityDidChange:(NSNotification *)notification {
+	if (self.levelBeforeFullScreen == nil) {
+		return;
+	}
+	[self followLevelChange];
+	[self updateLevel];
+}
+
 // Follows a level the window was just given elsewhere, such as by pinning it on top, which
 // would drop it below the menu bar's backdrop: restores that level as it leaves full screen,
-// and keeps it covering until then, unless the menu bar is revealed
+// and keeps it covering until then, unless the menu bar is revealed or the window's Space
+// is not the active one
 - (void)windowLevelDidChange {
 	if (self.levelBeforeFullScreen == nil) {
 		return;
 	}
 	[self followLevelChange];
-	self.window.level = self.revealedMenuBarTimer != nil ? self.levelBeforeFullScreen.integerValue : [self coveringLevel];
+	[self updateLevel];
 }
 
 - (void)willExitFullScreen:(NSNotification *)notification {
@@ -454,7 +486,7 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 - (void)revealMenuBar {
 	[self followLevelChange];
 	SetPresentationOptions(WithAutoHiddenMenuBar(NSApp.presentationOptions));
-	self.window.level = self.levelBeforeFullScreen.integerValue;
+	[self setWindowLevel:self.levelBeforeFullScreen.integerValue];
 
 	// The strip with the window's buttons comes down below the menu bar, but its
 	// frame does not follow it there, so only its height tells where it ends
@@ -489,7 +521,7 @@ static void InstallWillUsePresentationOptionsHook(Class delegateClass) {
 	if ([self presentsFullScreen]) {
 		SetPresentationOptions(WithHiddenMenuBar(NSApp.presentationOptions));
 	}
-	self.window.level = [self coveringLevel];
+	[self updateLevel];
 }
 
 // The presentation options belong to the whole application, so only the full screen window

@@ -37,6 +37,7 @@ import { IBaseActionViewItemOptions } from '../../../base/browser/ui/actionbar/a
 import { IHoverDelegate } from '../../../base/browser/ui/hover/hoverDelegate.js';
 import { createInstantHoverDelegate, getDefaultHoverDelegate } from '../../../base/browser/ui/hover/hoverDelegateFactory.js';
 import type { IHoverService } from '../../../platform/hover/browser/hover.js';
+import { VIEWPANE_FILTER_ACTION } from './views/viewPane.js';
 
 export interface ICompositeTitleLabel {
 
@@ -360,6 +361,7 @@ export abstract class CompositePart<T extends Composite, MementoType extends obj
 		return () => {
 			this.toolBar?.setActions(prepareActions(primaryActions), prepareActions(secondaryActions), menuIds);
 			this.titleArea?.classList.toggle('has-actions', primaryActions.length > 0 || secondaryActions.length > 0);
+			this.titleArea?.classList.toggle('has-filter', primaryActions.includes(VIEWPANE_FILTER_ACTION));
 		};
 	}
 

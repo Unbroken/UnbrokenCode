@@ -21,6 +21,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { IPaneOptions, Pane, IPaneStyles } from '../../../../base/browser/ui/splitview/paneview.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ViewContainerExtensions, IView, IViewDescriptorService, ViewContainerLocation, IViewsRegistry, IViewContentDescriptor, defaultViewIcon, ViewContainerLocationToString } from '../../../common/views.js';
+import { ActivityBarPosition, LayoutSettings } from '../../../services/layout/browser/layoutService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { assertReturnsDefined, PartialExcept } from '../../../../base/common/types.js';
@@ -812,7 +813,50 @@ export abstract class FilterViewPane extends ViewPane {
 	}
 
 	override shouldShowFilterInHeader(): boolean {
-		return !(this.dimension && this.dimension.width < 600 && this.dimension.height > 100);
+		return !(this.dimension && this.dimension.width < this.getFilterInHeaderMinimumWidth() && this.dimension.height > 100);
+	}
+
+	private getFilterInHeaderMinimumWidth(): number {
+		// The tabs of the views keep their room where they share the title
+		if (!this.headerVisible && this.isTitleSharedWithTabs()) {
+			return Math.max(this.filterInHeaderMinimumWidth, 600);
+		}
+		return this.filterInHeaderMinimumWidth;
+	}
+
+	/**
+	 * Whether the title of the view's container, where a view without a header of its own shows its title, also has the
+	 * tabs of the container's views: always in the panel, and in the secondary side bar unless the activity bar is at
+	 * the top or bottom, which puts them above or below it.
+	 */
+	private isTitleSharedWithTabs(): boolean {
+		switch (this.viewDescriptorService.getViewLocationById(this.id)) {
+			case ViewContainerLocation.Panel:
+				return true;
+			case ViewContainerLocation.AuxiliaryBar: {
+				const activityBarPosition = this.configurationService.getValue<ActivityBarPosition>(LayoutSettings.ACTIVITY_BAR_LOCATION);
+				return activityBarPosition !== ActivityBarPosition.TOP && activityBarPosition !== ActivityBarPosition.BOTTOM;
+			}
+			default:
+				return false;
+		}
+	}
+
+	/**
+	 * The width from which the filter is shown in the view's title, which then has room for it next to the title's
+	 * other controls.
+	 */
+	protected get filterInHeaderMinimumWidth(): number {
+		return 300;
+	}
+
+	/**
+	 * Moves the filter to where it fits again, such as after the title got more controls.
+	 */
+	protected relayoutFilter(): void {
+		if (this.dimension) {
+			this.layoutBody(this.dimension.height, this.dimension.width);
+		}
 	}
 
 	protected abstract layoutBodyContent(height: number, width: number): void;

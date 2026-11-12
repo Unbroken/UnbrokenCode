@@ -86,6 +86,7 @@ export class FilterWidget extends Widget {
 	private moreFiltersActionViewItem: MoreFiltersActionViewItem | undefined;
 	private isMoreFiltersChecked: boolean = false;
 	private lastWidth?: number;
+	private filterWidth = 0;
 
 	/**
 	 * Tracks whether the accessibility help hint has been announced in the ARIA label.
@@ -124,6 +125,13 @@ export class FilterWidget extends Widget {
 		const controlsContainer = DOM.append(this.element, DOM.$('.viewpane-filter-controls'));
 		this.filterBadge = this.createBadge(controlsContainer);
 		this.toolbar = this._register(this.createToolBar(controlsContainer));
+
+		// The filter can be narrower than the view, such as next to the other controls of a title
+		const resizeObserver = this._register(new DOM.DisposableResizeObserver('FilterWidget.width', entries => {
+			this.filterWidth = entries[entries.length - 1].contentRect.width;
+			this.updateSmall();
+		}));
+		this._register(resizeObserver.observe(this.element));
 
 		this.adjustInputBox();
 	}
@@ -188,10 +196,19 @@ export class FilterWidget extends Widget {
 	}
 
 	layout(width: number): void {
-		this.element.parentElement?.classList.toggle('grow', width > 700);
-		this.element.classList.toggle('small', width < 400);
-		this.adjustInputBox();
+		this.element.parentElement?.classList.toggle('grow', width >= 300);
 		this.lastWidth = width;
+		this.updateSmall();
+	}
+
+	/**
+	 * Compact, without the badge, in a narrow view, and where the filter itself is too narrow for the badge's room next
+	 * to that for typing.
+	 */
+	private updateSmall(): void {
+		const small = (this.lastWidth !== undefined && this.lastWidth < 400) || (this.filterWidth > 0 && this.filterWidth < 250);
+		this.element.classList.toggle('small', small);
+		this.adjustInputBox();
 	}
 
 	relayout() {

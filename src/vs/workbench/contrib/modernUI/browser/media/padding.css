@@ -118,6 +118,12 @@
 	flex: 2;
 }
 
+/* A view's filter in the title, such as that of the Problems view, takes the room the title label doesn't need. */
+.modern-ui.monaco-workbench .part > .title.has-filter > .title-label {
+	flex: 0 1 auto;
+	padding-right: var(--vscode-spacing-size80, 8px);
+}
+
 .modern-ui.monaco-workbench .pane-body .agent-sessions-viewer .monaco-scrollable-element {
 	padding: 0 var(--vscode-spacing-size80);
 }

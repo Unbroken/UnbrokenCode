@@ -143,6 +143,13 @@ export class OutputViewPane extends FilterViewPane {
 		this.filterWidget.setFilterText('');
 	}
 
+	/**
+	 * The title also has the channel picker and more actions.
+	 */
+	protected override get filterInHeaderMinimumWidth(): number {
+		return 460;
+	}
+
 	protected override renderBody(container: HTMLElement): void {
 		super.renderBody(container);
 		this.editor.create(container);

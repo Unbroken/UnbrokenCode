@@ -190,12 +190,12 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 			if (!input || input.state === State.Inactive) {
 				await this.selectSession(newSession);
 			}
-			this.multiSessionRepl.set(this.isMultiSessionView);
+			this.updateMultiSessionRepl();
 		}));
 		this._register(this.debugService.onDidEndSession(async () => {
 			// Update view, since orphaned sessions might now be separate
 			await Promise.resolve(); // allow other listeners to go first, so sessions can update parents
-			this.multiSessionRepl.set(this.isMultiSessionView);
+			this.updateMultiSessionRepl();
 		}));
 		this._register(this.themeService.onDidColorThemeChange(() => {
 			this.refreshReplElements(false);
@@ -481,7 +481,7 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 				// Ignore inactive sessions which got cleared - so they are not shown any more
 				sessionsToIgnore.add(session);
 				await this.selectSession();
-				this.multiSessionRepl.set(this.isMultiSessionView);
+				this.updateMultiSessionRepl();
 			}
 		}
 		this.replInput.focus();
@@ -588,6 +588,19 @@ export class Repl extends FilterViewPane implements IHistoryNavigationWidget {
 
 	private get isMultiSessionView(): boolean {
 		return this.debugService.getModel().getSessions(true).filter(s => s.hasSeparateRepl() && !sessionsToIgnore.has(s)).length > 1;
+	}
+
+	private updateMultiSessionRepl(): void {
+		this.multiSessionRepl.set(this.isMultiSessionView);
+		// The title gets or loses the session picker, which the filter may no longer fit next to
+		this.relayoutFilter();
+	}
+
+	/**
+	 * With several sessions, the title also has the session picker.
+	 */
+	protected override get filterInHeaderMinimumWidth(): number {
+		return this.isMultiSessionView ? 460 : super.filterInHeaderMinimumWidth;
 	}
 
 	// --- Cached locals

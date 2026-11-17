@@ -93,19 +93,26 @@ function toWholeDevicePixel(element: HTMLElement, position: number): number {
 
 /**
  * Where the text of an element starts: within its border and padding, which can be fractions of a pixel, as a padding
- * that is relative to the font's size is.
+ * that is relative to the font's size is. Of an element within text that is on several lines, also where the text of
+ * each of its further lines starts, which have no border or padding before them.
  */
-function getTextOrigin(code: HTMLElement): { left: number; top: number } {
-	const bounds = code.getBoundingClientRect();
+function getTextOrigin(code: HTMLElement): { left: number; top: number; furtherLefts: number[] } {
+	const [first, ...further] = code.getClientRects();
+	const bounds = first ?? code.getBoundingClientRect();
 	const style = dom.getWindow(code).getComputedStyle(code);
 	const inset = (...values: string[]) => values.reduce((sum, value) => sum + (Number.parseFloat(value) || 0), 0);
-	return { left: bounds.left + inset(style.borderLeftWidth, style.paddingLeft), top: bounds.top + inset(style.borderTopWidth, style.paddingTop) };
+	return {
+		left: bounds.left + inset(style.borderLeftWidth, style.paddingLeft),
+		top: bounds.top + inset(style.borderTopWidth, style.paddingTop),
+		furtherLefts: further.map(line => line.left)
+	};
 }
 
 /**
- * Moves each of the elements less than a pixel, so that its text starts on a whole device pixel.
+ * Moves each of the elements less than a pixel, so that its text starts on a whole device pixel, or only on a whole
+ * one from the left: the lines of text are put on whole pixels from the top as it is.
  */
-function alignCodeElements(codeElements: readonly HTMLElement[]): void {
+function alignCodeElements(codeElements: readonly HTMLElement[], horizontalOnly = false): void {
 	for (const code of codeElements) {
 		code.style.position = 'relative';
 		code.style.left = '';
@@ -114,11 +121,15 @@ function alignCodeElements(codeElements: readonly HTMLElement[]): void {
 	// A relative position doesn't move anything else, so all can be measured before any moves
 	const offsets = codeElements.map(code => {
 		const origin = getTextOrigin(code);
-		return { left: toWholeDevicePixel(code, origin.left), top: toWholeDevicePixel(code, origin.top) };
+		const left = toWholeDevicePixel(code, origin.left);
+		// An element on several lines moves as a whole, so it only moves where that suits each of its lines: its
+		// further lines start where their lines do, which is usually on a whole pixel already
+		const suitsEveryLine = origin.furtherLefts.every(furtherLeft => Math.abs(toWholeDevicePixel(code, furtherLeft) - left) < 0.01);
+		return { left: suitsEveryLine ? left : 0, top: horizontalOnly ? 0 : toWholeDevicePixel(code, origin.top) };
 	});
 	codeElements.forEach((code, index) => {
 		code.style.left = `${offsets[index].left}px`;
-		code.style.top = `${offsets[index].top}px`;
+		code.style.top = offsets[index].top ? `${offsets[index].top}px` : '';
 	});
 }
 
@@ -127,7 +138,7 @@ function alignCodeElements(codeElements: readonly HTMLElement[]): void {
  * within a line of text in another font usually doesn't. Once the element shows, its code moves less than a pixel
  * to start on one.
  */
-function alignToDevicePixels(element: HTMLElement, getCodeElements: () => readonly HTMLElement[], targetWindow: Window | undefined, token: CancellationToken): void {
+function alignToDevicePixels(element: HTMLElement, getCodeElements: () => readonly HTMLElement[], targetWindow: Window | undefined, token: CancellationToken, horizontalOnly = false): void {
 	let frames = 0;
 	let passes = 0;
 	const align = () => {
@@ -141,10 +152,32 @@ function alignToDevicePixels(element: HTMLElement, getCodeElements: () => readon
 			}
 			return;
 		}
-		alignCodeElements(getCodeElements());
+		alignCodeElements(getCodeElements(), horizontalOnly);
 	};
 	// In the window it shows in, whose frames run while it shows, unlike those of another that can be minimized
 	dom.scheduleAtNextAnimationFrame(targetWindow ?? dom.getWindow(element), align);
+}
+
+/**
+ * Moves the code within the text of an element, such as the inline code of the Markdown of a hover, to whole device
+ * pixels from the left once the element shows, like the code of a message is. It follows text in another font, so it
+ * rarely starts on one. Code in blocks of its own starts where its block does.
+ */
+export function alignInlineCodeToDevicePixels(element: HTMLElement, targetWindow?: Window): IDisposable {
+	const cancellation = new CancellationTokenSource();
+	// Code in a block of its own starts where the block does, and code within code moves with the code it is in
+	const isWithinBlockOrCode = (code: HTMLElement) => {
+		for (let parent = code.parentElement; parent && parent !== element; parent = parent.parentElement) {
+			if (parent.tagName === 'PRE' || parent.tagName === 'CODE') {
+				return true;
+			}
+		}
+		return false;
+	};
+	// The code is of rendered text, such as Markdown, which isn't built here, so it is found by its tag
+	// eslint-disable-next-line eslint-js/no-restricted-syntax
+	alignToDevicePixels(element, () => Array.from(element.getElementsByTagName('code')).filter(code => !isWithinBlockOrCode(code)), targetWindow, cancellation.token, true);
+	return toDisposable(() => cancellation.dispose(true));
 }
 
 function renderCodeBlock(codeFragmentService: ICodeFragmentService, code: string, resource: URI, options: ICodeFragmentHoverOptions): HTMLElement {

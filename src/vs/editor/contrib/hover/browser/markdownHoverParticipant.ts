@@ -7,7 +7,8 @@ import * as dom from '../../../../base/browser/dom.js';
 import { asArray, compareBy, numberComparator } from '../../../../base/common/arrays.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { IMarkdownString, isEmptyMarkdownString, MarkdownString } from '../../../../base/common/htmlContent.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { alignInlineCodeToDevicePixels } from '../../../browser/codeFragmentRenderer.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { DECREASE_HOVER_VERBOSITY_ACTION_ID, INCREASE_HOVER_VERBOSITY_ACTION_ID, HIDE_LONG_LINE_WARNING_HOVER_ACTION_ID } from './hoverActionIds.js';
 import { ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -515,6 +516,12 @@ function renderMarkdown(
 	const renderedMarkdown = $('div.hover-row');
 	const renderedMarkdownContents = $('div.hover-row-contents');
 	renderedMarkdown.appendChild(renderedMarkdownContents);
+	// The code within the text is in the font of code, which can be a pixel font that blurs between pixels, where
+	// following text in another font puts it. It is moved onto them once the hover shows, and again when the contents
+	// changed, as when a code block was colored, which can move the code of every Markdown string of the hover.
+	const targetWindow = dom.getWindow(editor.getDomNode());
+	const alignment = disposables.add(new MutableDisposable());
+	const alignCode = () => alignment.value = alignInlineCodeToDevicePixels(renderedMarkdownContents, targetWindow);
 	const markdownStrings = markdownHover.contents;
 	for (const markdownString of markdownStrings) {
 		if (isEmptyMarkdownString(markdownString)) {
@@ -529,11 +536,13 @@ function renderMarkdown(
 			asyncRenderCallback: () => {
 				hoverContentsElement.className = 'hover-contents code-hover-contents';
 				onFinishedRendering();
+				alignCode();
 			}
 		}));
 		hoverContentsElement.appendChild(renderedContents.element);
 		renderedMarkdownContents.appendChild(markdownHoverElement);
 	}
+	alignCode();
 	const renderedHoverPart: IRenderedHoverPart<MarkdownHover> = {
 		hoverPart: markdownHover,
 		hoverElement: renderedMarkdown,

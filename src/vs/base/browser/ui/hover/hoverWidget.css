@@ -60,6 +60,37 @@
 	line-height: 1.1;
 }
 
+/* Code in a heading is the size of the text of the hover, rather than the heading's, which is a size a pixel font isn't
+ * made for: the sizes of headings are fractions of it. */
+.monaco-hover h1 code {
+	font-size: calc(1em / 2);
+}
+
+.monaco-hover h2 code {
+	font-size: calc(1em / 1.5);
+}
+
+.monaco-hover h3 code {
+	font-size: calc(1em / 1.17);
+}
+
+.monaco-hover h5 code {
+	font-size: calc(1em / 0.83);
+}
+
+.monaco-hover h6 code {
+	font-size: calc(1em / 0.67);
+}
+
+/* Code within the code of a heading is the size of the code it is in, which is the size of the hover's text already */
+.monaco-hover h1 code code,
+.monaco-hover h2 code code,
+.monaco-hover h3 code code,
+.monaco-hover h5 code code,
+.monaco-hover h6 code code {
+	font-size: 1em;
+}
+
 .monaco-hover code {
 	font-family: var(--monaco-monospace-font);
 	text-rendering: var(--monaco-monospace-text-rendering, auto);

@@ -323,3 +323,153 @@ export function findQuotedCodeFragments(message: string): ICodeFragmentRange[] {
 
 	return result;
 }
+
+/**
+ * A part of a message shown on one line: text, or code the message quotes, which is shown without its quotes.
+ */
+export interface IMessageLabelPart<T extends ICodeFragmentRange> {
+	readonly text: string;
+	readonly isCode: boolean;
+	/**
+	 * Of code, the code as the message quotes it, which the text is the layout of.
+	 */
+	readonly code?: string;
+	/**
+	 * The ranges of the message's that are in the part, as ranges of its text.
+	 */
+	readonly ranges: T[];
+}
+
+/**
+ * The ranges that are within a part of a message, as ranges of the part.
+ */
+function getRangesWithin<T extends ICodeFragmentRange>(ranges: readonly T[], start: number, end: number): T[] {
+	const result: T[] = [];
+	for (const range of ranges) {
+		const rangeStart = Math.max(range.start, start);
+		const rangeEnd = Math.min(range.end, end);
+		if (rangeStart < rangeEnd) {
+			result.push({ ...range, start: rangeStart - start, end: rangeEnd - start });
+		}
+	}
+	return result;
+}
+
+/**
+ * The ranges of code as ranges of its layout, which spaces the code differently and can move parts of it, as a
+ * qualifier of a type: each range is where its characters are in the layout, the nearest to where they were where
+ * they are there more than once. Where the characters of a range aren't together in the layout, one range covers all of
+ * it.
+ */
+function getRangesOfLayout<T extends ICodeFragmentRange>(ranges: readonly T[], code: string, layout: string): T[] {
+	if (!ranges.length || code === layout) {
+		return [...ranges];
+	}
+
+	// The texts without their whitespace, with where each of their characters is
+	const compact = (text: string) => {
+		const offsets: number[] = [];
+		let characters = '';
+		for (let offset = 0; offset < text.length; ++offset) {
+			if (!/\s/.test(text[offset])) {
+				offsets.push(offset);
+				characters += text[offset];
+			}
+		}
+		return { offsets, characters };
+	};
+	const compactCode = compact(code);
+	const compactLayout = compact(layout);
+
+	const found: T[] = [];
+	let index = 0;
+	for (const range of ranges) {
+		while (index < compactCode.offsets.length && compactCode.offsets[index] < range.start) {
+			++index;
+		}
+		const first = index;
+		while (index < compactCode.offsets.length && compactCode.offsets[index] < range.end) {
+			++index;
+		}
+		if (index === first) {
+			continue;
+		}
+
+		const characters = compactCode.characters.substring(first, index);
+		let nearest = -1;
+		for (let candidate = compactLayout.characters.indexOf(characters); candidate >= 0; candidate = compactLayout.characters.indexOf(characters, candidate + 1)) {
+			if (nearest < 0 || Math.abs(candidate - first) < Math.abs(nearest - first)) {
+				nearest = candidate;
+			}
+		}
+		if (nearest < 0) {
+			return [{ ...ranges[0], start: 0, end: layout.length }];
+		}
+		found.push({ ...range, start: compactLayout.offsets[nearest], end: compactLayout.offsets[nearest + characters.length - 1] + 1 });
+	}
+
+	// Sorted and apart again, as moved code can have put them in another order, or two in the same place
+	found.sort((a, b) => a.start - b.start);
+	const result: T[] = [];
+	for (const range of found) {
+		const previous = result.at(-1);
+		if (previous && range.start < previous.end) {
+			result[result.length - 1] = { ...previous, end: Math.max(previous.end, range.end) };
+		} else {
+			result.push(range);
+		}
+	}
+	return result;
+}
+
+/**
+ * The parts of a message to show on one line: the code it quotes, without the quotes and as laid out on a line where a
+ * layout is given for it, and the text between. The ranges of the message, sorted and without overlaps, such as the
+ * matches of a filter, are given for each part. A message longer than a length is shown up to it, with an ellipsis: code
+ * the length cuts is shown as quoted, up to the end of the name it is cut in.
+ */
+export function getMessageLabelParts<T extends ICodeFragmentRange>(message: string, layouts: ReadonlyMap<string, string | undefined>, ranges: readonly T[], maxLength = Infinity): IMessageLabelPart<T>[] {
+	const parts: IMessageLabelPart<T>[] = [];
+	const shownEnd = Math.min(message.length, maxLength);
+	const addText = (start: number, end: number) => {
+		if (start < end) {
+			parts.push({ text: message.substring(start, end), isCode: false, ranges: getRangesWithin(ranges, start, end) });
+		}
+	};
+
+	let offset = 0;
+	for (const fragment of findQuotedCodeFragments(message)) {
+		if (fragment.start >= shownEnd) {
+			break;
+		}
+		addText(offset, fragment.start - 1);
+
+		if (fragment.end > shownEnd) {
+			// A name the length cuts is shown whole, unless it is too long to
+			let end = shownEnd;
+			while (end < fragment.end && end - shownEnd < 256 && wordCharacterOfMessage.test(message[end])) {
+				++end;
+			}
+			const code = message.substring(fragment.start, end);
+			parts.push({ text: code, isCode: true, ranges: getRangesWithin(ranges, fragment.start, end) });
+			offset = message.length;
+			break;
+		}
+
+		const code = message.substring(fragment.start, fragment.end);
+		const layout = layouts.get(code);
+		// On one line, so code that is laid out over lines, as two statements are, stays as quoted
+		const text = layout !== undefined && !/[\r\n]/.test(layout) ? layout : code;
+		parts.push({ text, isCode: true, code, ranges: getRangesOfLayout(getRangesWithin(ranges, fragment.start, fragment.end), code, text) });
+		offset = fragment.end + 1;
+	}
+	addText(offset, shownEnd);
+
+	if (message.length > maxLength) {
+		parts.push({ text: '...', isCode: false, ranges: [] });
+	}
+	return parts;
+}
+
+// A character of a name, which a length that cuts the name doesn't cut before it is shown
+const wordCharacterOfMessage = /[\p{L}\p{N}_$]/u;

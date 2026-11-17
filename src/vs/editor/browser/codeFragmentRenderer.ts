@@ -4,13 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as dom from '../../base/browser/dom.js';
-import { renderStyledText } from '../../base/browser/ui/highlightedlabel/highlightedLabel.js';
+import { IHighlight, renderStyledText } from '../../base/browser/ui/highlightedlabel/highlightedLabel.js';
 import { CancellationToken, CancellationTokenSource } from '../../base/common/cancellation.js';
-import { DisposableStore, IDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import { combinedDisposable, DisposableStore, IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { splitLines } from '../../base/common/strings.js';
 import { URI } from '../../base/common/uri.js';
 import { FontInfo } from '../common/config/fontInfo.js';
-import { CodeFragmentFormattingOptions, CodeFragmentKind, findQuotedCodeFragments } from '../common/languages/codeFragments.js';
+import { CodeFragmentFormattingOptions, CodeFragmentKind, findQuotedCodeFragments, getMessageLabelParts } from '../common/languages/codeFragments.js';
 import { ICodeFragmentService } from '../common/services/codeFragmentService.js';
 import './codeFragmentRenderer.css';
 import { applyFontInfo } from './config/domFontInfo.js';
@@ -84,6 +84,45 @@ function getFormattingOptions(options: ICodeFragmentHoverOptions): CodeFragmentF
 const codePadding = 3;
 
 /**
+ * How far right or down of a position the next whole device pixel of an element's window is.
+ */
+function toWholeDevicePixel(element: HTMLElement, position: number): number {
+	const devicePixelRatio = dom.getWindow(element).devicePixelRatio;
+	return (Math.ceil(position * devicePixelRatio - 0.01) - position * devicePixelRatio) / devicePixelRatio;
+}
+
+/**
+ * Where the text of an element starts: within its border and padding, which can be fractions of a pixel, as a padding
+ * that is relative to the font's size is.
+ */
+function getTextOrigin(code: HTMLElement): { left: number; top: number } {
+	const bounds = code.getBoundingClientRect();
+	const style = dom.getWindow(code).getComputedStyle(code);
+	const inset = (...values: string[]) => values.reduce((sum, value) => sum + (Number.parseFloat(value) || 0), 0);
+	return { left: bounds.left + inset(style.borderLeftWidth, style.paddingLeft), top: bounds.top + inset(style.borderTopWidth, style.paddingTop) };
+}
+
+/**
+ * Moves each of the elements less than a pixel, so that its text starts on a whole device pixel.
+ */
+function alignCodeElements(codeElements: readonly HTMLElement[]): void {
+	for (const code of codeElements) {
+		code.style.position = 'relative';
+		code.style.left = '';
+		code.style.top = '';
+	}
+	// A relative position doesn't move anything else, so all can be measured before any moves
+	const offsets = codeElements.map(code => {
+		const origin = getTextOrigin(code);
+		return { left: toWholeDevicePixel(code, origin.left), top: toWholeDevicePixel(code, origin.top) };
+	});
+	codeElements.forEach((code, index) => {
+		code.style.left = `${offsets[index].left}px`;
+		code.style.top = `${offsets[index].top}px`;
+	});
+}
+
+/**
  * The fonts of code can be pixel fonts, which blur where their text doesn't start on a whole device pixel, as code
  * within a line of text in another font usually doesn't. Once the element shows, its code moves less than a pixel
  * to start on one.
@@ -102,23 +141,7 @@ function alignToDevicePixels(element: HTMLElement, getCodeElements: () => readon
 			}
 			return;
 		}
-		const codeElements = getCodeElements();
-		for (const code of codeElements) {
-			code.style.position = 'relative';
-			code.style.left = '';
-			code.style.top = '';
-		}
-		// A relative position doesn't move anything else, so all can be measured before any moves
-		const devicePixelRatio = dom.getWindow(element).devicePixelRatio;
-		const toWholePixel = (position: number) => (Math.ceil(position * devicePixelRatio - 0.01) - position * devicePixelRatio) / devicePixelRatio;
-		const offsets = codeElements.map(code => {
-			const bounds = code.getBoundingClientRect();
-			return { left: toWholePixel(bounds.left), top: toWholePixel(bounds.top) };
-		});
-		codeElements.forEach((code, index) => {
-			code.style.left = `${offsets[index].left}px`;
-			code.style.top = `${offsets[index].top}px`;
-		});
+		alignCodeElements(getCodeElements());
 	};
 	// In the window it shows in, whose frames run while it shows, unlike those of another that can be minimized
 	dom.scheduleAtNextAnimationFrame(targetWindow ?? dom.getWindow(element), align);
@@ -353,4 +376,346 @@ export async function renderCodeHover(codeFragmentService: ICodeFragmentService,
 	dom.reset(element, ...renderStyledText(text, [], codeFragmentService.getStyles(text, resource, { kind })));
 	alignToDevicePixels(element, () => [element], options.targetWindow, token);
 	return element;
+}
+
+/**
+ * How a label shows a message on one line.
+ */
+export interface ICodeFragmentLabelOptions {
+	/**
+	 * The font code is shown in, asked for each time the label is rendered. Without it, the code has the font that the
+	 * stylesheet of where the label is gives it, such as one of a size that fits the rows of a list whatever the size of
+	 * the font of editors is.
+	 */
+	readonly getFontInfo?: () => FontInfo;
+	readonly tabSize: number;
+	/**
+	 * The ranges of the message to highlight, sorted and without overlaps, such as the matches of a filter.
+	 */
+	readonly highlights?: readonly IHighlight[];
+	/**
+	 * The length the message is shown up to, with an ellipsis after it.
+	 */
+	readonly maxLength?: number;
+	/**
+	 * The element that is the line the label is on, such as a row of a list, which the background of the label's code
+	 * fills but for a pixel above and below, rather than being as tall as the code.
+	 */
+	readonly lineElement?: HTMLElement;
+}
+
+// The width that code on one line is formatted for, which no code is as long as, so it is written the way the
+// extension writes code, without being laid out over lines
+const labelFormattingColumns = 100_000;
+
+// The labels rendered together, such as the rows of a list, ask for the layouts of their code of a resource at once
+const labelFormattingRequests = new WeakMap<ICodeFragmentService, Map<string, { readonly fragments: Set<string>; readonly done: Promise<ReadonlyMap<string, string | undefined>> }>>();
+
+/**
+ * The layouts of the fragments, with those of the labels that ask with this one. The service keeps them too, for the
+ * labels that are rendered later, but only so many, which labels that ask for more at once don't all find there.
+ */
+function formatLabelCode(codeFragmentService: ICodeFragmentService, fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions): Promise<ReadonlyMap<string, string | undefined>> {
+	let requests = labelFormattingRequests.get(codeFragmentService);
+	if (!requests) {
+		requests = new Map();
+		labelFormattingRequests.set(codeFragmentService, requests);
+	}
+	const key = `${resource.toString()}\n${options.tabSize}`;
+	let request = requests.get(key);
+	if (!request) {
+		const requested = new Set<string>();
+		const format = async () => {
+			// After the labels that are rendered with this one
+			await Promise.resolve();
+			requests.delete(key);
+			const asked = [...requested];
+			const layouts = await codeFragmentService.format(asked, resource, options, CancellationToken.None);
+			return new Map(asked.map((fragment, index) => [fragment, layouts[index]]));
+		};
+		request = { fragments: requested, done: format() };
+		requests.set(key, request);
+	}
+	for (const fragment of fragments) {
+		request.fragments.add(fragment);
+	}
+	return request.done;
+}
+
+/**
+ * A label whose code is to be moved to whole device pixels once it shows.
+ */
+interface ILabelAlignment {
+	readonly getCodeElements: () => readonly HTMLElement[];
+	/**
+	 * For a label whose code fills its line, the line, and what its code's place on it is remembered by.
+	 */
+	readonly line: { readonly element: HTMLElement; readonly key: string } | undefined;
+}
+
+/**
+ * Where code is on a line it fills: how far it is raised from where the text around it has it, to be on a whole device
+ * pixel, and the padding above and below it that its background has.
+ */
+interface ILinePlacement {
+	readonly raise: number;
+	readonly paddingTop: number;
+	readonly paddingBottom: number;
+}
+
+// The labels rendered together are measured together, and then moved, rather than each laying out the window
+const labelAlignments = new Map<Window, ILabelAlignment[]>();
+
+// The place of code on the lines it fills, as it was last measured, by the font of the code and where the label is. A
+// label shows its code there from its first rendering on, rather than a frame after it, when it is measured.
+const linePlacements = new Map<string, ILinePlacement>();
+
+// The background of code that fills its line ends this far from the line's top and bottom
+const lineInset = 1;
+
+// How often the code of labels is measured after it was moved from the left, to see that it is where it was moved to
+const maxLabelAlignmentPasses = 4;
+
+function applyLinePlacement(code: HTMLElement, placement: ILinePlacement): void {
+	code.style.verticalAlign = placement.raise ? `${placement.raise}px` : '';
+	code.style.paddingTop = `${placement.paddingTop}px`;
+	code.style.paddingBottom = `${placement.paddingBottom}px`;
+}
+
+/**
+ * Moves the code of labels to whole device pixels, like {@link alignCodeElements}, but within the line: a line that is
+ * cut with an ellipsis shows none where it has an element with a relative position. So the code moves right by a margin,
+ * which moves what follows it on the line as well, and down by where it is aligned on the line.
+ *
+ * The code of a label that fills its line stays where the text around it has it, and its background is given the padding
+ * that takes it to a pixel from the line's top and bottom.
+ */
+function alignLabels(labels: ReadonlyArray<{ readonly codeElements: readonly HTMLElement[]; readonly line: ILabelAlignment['line'] }>): void {
+	for (const label of labels) {
+		for (const code of label.codeElements) {
+			code.style.marginLeft = '';
+			code.style.verticalAlign = '';
+			if (label.line) {
+				code.style.paddingTop = '0';
+				code.style.paddingBottom = '0';
+			}
+		}
+	}
+
+	const measured = labels.map(label => ({
+		bounds: label.codeElements.map(code => code.getBoundingClientRect()),
+		line: label.line?.element.isConnected && label.codeElements.length ? label.line.element.getBoundingClientRect() : undefined
+	}));
+
+	// From the left. The code of a label is on one line, in the order it is shown, so the margin of each moves those
+	// after it by as much too, which they are moved less for. It doesn't where something between them takes the move
+	// up, as a tab does, so the code is measured again until none of it has to move.
+	const margins = labels.map(label => label.codeElements.map(() => 0));
+	for (let pass = 0, moved = true; moved && pass < maxLabelAlignmentPasses; ++pass) {
+		moved = false;
+		const lefts = labels.map(label => label.codeElements.map(code => getTextOrigin(code).left));
+		labels.forEach((label, labelIndex) => {
+			let shift = 0;
+			label.codeElements.forEach((code, index) => {
+				const left = toWholeDevicePixel(code, lefts[labelIndex][index] + shift);
+				if (left > 0.01) {
+					shift += left;
+					margins[labelIndex][index] += left;
+					code.style.marginLeft = `${margins[labelIndex][index]}px`;
+					moved = true;
+				}
+			});
+		});
+	}
+
+	// From the top
+	labels.forEach((label, labelIndex) => {
+		const { bounds, line } = measured[labelIndex];
+		label.codeElements.forEach((code, index) => {
+			if (!line || !label.line) {
+				const top = toWholeDevicePixel(code, bounds[index].top);
+				code.style.verticalAlign = top ? `${-top}px` : '';
+				return;
+			}
+
+			// On a whole device pixel: the one above where it is halfway between two
+			const devicePixelRatio = dom.getWindow(code).devicePixelRatio;
+			const top = Math.ceil(bounds[index].top * devicePixelRatio - 0.5) / devicePixelRatio;
+			const placement: ILinePlacement = {
+				raise: bounds[index].top - top,
+				paddingTop: Math.max(0, top - line.top - lineInset),
+				paddingBottom: Math.max(0, line.bottom - lineInset - (top + bounds[index].height))
+			};
+			applyLinePlacement(code, placement);
+			linePlacements.set(label.line.key, placement);
+		});
+	});
+}
+
+function alignLabelToDevicePixels(element: HTMLElement, alignment: ILabelAlignment): void {
+	const targetWindow = dom.getWindow(element);
+	let alignments = labelAlignments.get(targetWindow);
+	if (!alignments) {
+		const scheduled: ILabelAlignment[] = alignments = [];
+		labelAlignments.set(targetWindow, scheduled);
+		dom.scheduleAtNextAnimationFrame(targetWindow, () => {
+			labelAlignments.delete(targetWindow);
+			alignLabels(scheduled.map(({ getCodeElements, line }) => ({ codeElements: getCodeElements().filter(code => code.isConnected), line })));
+		});
+	}
+	alignments.push(alignment);
+}
+
+// The labels of a window that show code, which is measured again when what it was measured with changes: the window is
+// on a display with other pixels, or a font has loaded, as the font of code can after the label is rendered
+const shownLabels = new Map<Window, { readonly align: Set<() => void>; readonly listeners: IDisposable }>();
+
+function alignLabelWhenMeasuresChange(element: HTMLElement, align: () => void): IDisposable {
+	const targetWindow = dom.getWindow(element);
+	let labels = shownLabels.get(targetWindow);
+	if (!labels) {
+		const alignAll = new Set<() => void>();
+		const measureAgain = () => {
+			linePlacements.clear();
+			for (const alignLabel of alignAll) {
+				alignLabel();
+			}
+		};
+		labels = {
+			align: alignAll,
+			listeners: combinedDisposable(
+				PixelRatio.getInstance(targetWindow).onDidChange(measureAgain),
+				dom.addDisposableListener(targetWindow.document.fonts, 'loadingdone', measureAgain))
+		};
+		shownLabels.set(targetWindow, labels);
+	}
+	const windowLabels = labels;
+	windowLabels.align.add(align);
+	return toDisposable(() => {
+		windowLabels.align.delete(align);
+		if (!windowLabels.align.size && shownLabels.get(targetWindow) === windowLabels) {
+			windowLabels.listeners.dispose();
+			shownLabels.delete(targetWindow);
+		}
+	});
+}
+
+/**
+ * Renders a message into an element that shows it on one line, such as a row of a list of problems. For a language an
+ * extension colors or lays out code for, the code the message quotes shows without the quotes, in the font of code and
+ * colored, from the first rendering on. Where an extension lays out code, it is then written the way the extension
+ * writes code: as the message has it until the extension has formatted it, and from then on as formatted at once, also
+ * in the labels rendered later. Code that changes when it is formatted fades in. For another language the message shows
+ * as it is.
+ */
+export function renderMessageLabel(codeFragmentService: ICodeFragmentService, element: HTMLElement, message: string, resource: URI, options: ICodeFragmentLabelOptions): IDisposable {
+	const store = new DisposableStore();
+	let disposed = false;
+	store.add(toDisposable(() => disposed = true));
+	const highlights = options.highlights ?? [];
+	const maxLength = options.maxLength ?? Infinity;
+	const formattingOptions: CodeFragmentFormattingOptions = { maxColumns: labelFormattingColumns, tabSize: options.tabSize, insertSpaces: true };
+	const fragments = findQuotedCodeFragments(message);
+	// Whether any of the code shows, also code the length cuts
+	const hasCode = fragments.some(fragment => fragment.start < maxLength);
+	// The code that the length doesn't cut, which is formatted
+	const quoted = [...new Set(fragments.filter(fragment => fragment.end <= maxLength).map(fragment => message.substring(fragment.start, fragment.end)))];
+
+	// The code that shows, by the code as quoted
+	let shown = new Map<string, string>();
+	// The layouts the label asked for and was given
+	const asked = new Map<string, string | undefined>();
+	let codeElements: HTMLElement[] = [];
+	let generation = 0;
+	// Measures the code that shows, a frame from now
+	let align = () => { };
+	let measuresListener: IDisposable | undefined;
+	store.add(toDisposable(() => measuresListener?.dispose()));
+	const render = (request: boolean) => {
+		const current = ++generation;
+		// The code shows as code whether or not it is formatted, or was yet
+		const canFormat = codeFragmentService.canFormat(resource);
+		if (!hasCode || !(canFormat || codeFragmentService.canColor(resource))) {
+			const text = message.length > maxLength ? `${message.substring(0, maxLength)}...` : message;
+			resetChildren(element, renderStyledText(text, highlights, []));
+			shown = new Map();
+			codeElements = [];
+			return;
+		}
+
+		const layouts = new Map(asked);
+		if (canFormat) {
+			for (const [code, layout] of codeFragmentService.getFormatted(quoted, resource, formattingOptions)) {
+				layouts.set(code, layout);
+			}
+		}
+		const fontInfo = options.getFontInfo?.();
+		// Code that fills its line is placed by its font, and by what the line is and where the label is on it
+		const line = options.lineElement && { element: options.lineElement, key: `${fontInfo?.getId() ?? ''}\n${options.lineElement.className}\n${element.parentElement?.className ?? ''}` };
+		const linePlacement = line && linePlacements.get(line.key);
+		const previous = shown;
+		shown = new Map();
+		codeElements = [];
+		const children: Array<HTMLElement | string> = [];
+		for (const part of getMessageLabelParts(message, layouts, highlights, maxLength)) {
+			if (!part.isCode) {
+				children.push(...renderStyledText(part.text, part.ranges, []));
+				continue;
+			}
+			const code = dom.$('code.code-fragment-label');
+			if (fontInfo) {
+				applyFontInfo(code, fontInfo);
+			}
+			if (line) {
+				// The line is as tall as the text around the code makes it, wherever on it the code is put
+				code.style.lineHeight = '0';
+				if (linePlacement) {
+					applyLinePlacement(code, linePlacement);
+				}
+			} else {
+				// The line is as tall as the text around the code makes it
+				code.style.lineHeight = 'inherit';
+			}
+			dom.reset(code, ...renderStyledText(part.text, part.ranges, codeFragmentService.getStyles(part.text, resource, { kind: 'quoted' })));
+			if (part.code !== undefined) {
+				const before = previous.get(part.code);
+				code.classList.toggle('code-fragment-updated', before !== undefined && before !== part.text);
+				shown.set(part.code, part.text);
+			}
+			codeElements.push(code);
+			children.push(code);
+		}
+		resetChildren(element, children);
+		align = () => alignLabelToDevicePixels(element, { getCodeElements: () => current === generation && !disposed ? codeElements : [], line });
+		align();
+		// And again when the display or the fonts it was measured with change, while it shows code
+		measuresListener ??= alignLabelWhenMeasuresChange(element, () => align());
+
+		// Asked once for each rendering that the service or the label's owner starts, so that code the extension gives no
+		// layout for isn't asked for again and again
+		const missing = quoted.filter(code => !layouts.has(code));
+		if (request && canFormat && missing.length) {
+			formatLabelCode(codeFragmentService, missing, resource, formattingOptions).then(formatted => {
+				if (disposed || current !== generation) {
+					return;
+				}
+				// The label has the layouts it asked for from here on, whether or not the service still keeps them
+				for (const code of missing) {
+					if (formatted.has(code)) {
+						asked.set(code, formatted.get(code));
+					}
+				}
+				if (quoted.some(code => shown.has(code) && asked.has(code) && (asked.get(code) ?? code) !== shown.get(code))) {
+					render(false);
+				}
+			});
+		}
+	};
+	render(true);
+	store.add(codeFragmentService.onDidChange(() => {
+		// The layouts can be others now, as of another extension
+		asked.clear();
+		render(true);
+	}));
+	return store;
 }

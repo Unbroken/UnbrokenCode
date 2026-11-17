@@ -4,11 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { timeout } from '../../../base/common/async.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Event } from '../../../base/common/event.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
-import { renderCodeHover, renderMessageHover } from '../../browser/codeFragmentRenderer.js';
+import { renderCodeHover, renderMessageHover, renderMessageLabel } from '../../browser/codeFragmentRenderer.js';
 import { EditorFontLigatures, EditorFontVariations } from '../../common/config/editorOptions.js';
 import { FontInfo } from '../../common/config/fontInfo.js';
 import { CodeFragmentFormattingOptions } from '../../common/languages/codeFragments.js';
@@ -31,14 +33,31 @@ class TestCodeFragmentService implements ICodeFragmentService {
 		return true;
 	}
 
+	formats = true;
+
 	canFormat(): boolean {
-		return true;
+		return this.formats;
 	}
+
+	private readonly formatted = new Map<string, string | undefined>();
 
 	async format(fragments: readonly string[], _resource: URI, options: CodeFragmentFormattingOptions): Promise<(string | undefined)[]> {
 		this.requests.push({ fragments, maxColumns: options.maxColumns });
 		// Long code is laid out over lines, and code that fits is written with a space before its *
-		return fragments.map(fragment => fragment.startsWith('TCLong') ? 'TCLong\n<\n    A\n>' : fragment.endsWith('*') ? `${fragment.slice(0, -1)} *` : undefined);
+		const results = fragments.map(fragment => fragment.startsWith('TCLong') ? 'TCLong\n<\n    A\n>' : fragment.endsWith('*') ? `${fragment.slice(0, -1)} *` : undefined);
+		fragments.forEach((fragment, index) => this.formatted.set(`${options.maxColumns}\n${fragment}`, results[index]));
+		return results;
+	}
+
+	getFormatted(fragments: readonly string[], _resource: URI, options: CodeFragmentFormattingOptions): ReadonlyMap<string, string | undefined> {
+		const result = new Map<string, string | undefined>();
+		for (const fragment of fragments) {
+			const key = `${options.maxColumns}\n${fragment}`;
+			if (this.formatted.has(key)) {
+				result.set(fragment, this.formatted.get(key));
+			}
+		}
+		return result;
 	}
 }
 
@@ -108,6 +127,49 @@ suite('Code fragment renderer', () => {
 			requests: 2,
 			short: 'TCShort *',
 			long: 'TCLong\n<\n    A\n>',
+		});
+	});
+
+	test('message labels show the quoted code on a line, as formatted once it is', async () => {
+		const service = new TestCodeFragmentService();
+		const describeLabel = (element: HTMLElement) => [...element.childNodes].map(node => node instanceof HTMLElement && node.classList.contains('code-fragment-label')
+			? `{${node.textContent}}${node.classList.contains('code-fragment-updated') ? '!' : ''}`
+			: node.textContent ?? '');
+		const options = { getFontInfo: () => fontInfo, tabSize: 4 };
+		const first = document.createElement('span');
+		const second = document.createElement('span');
+		const store = new DisposableStore();
+		store.add(renderMessageLabel(service, first, 'no conversion from \'TCShort*\' to \'bool\'', resource, options));
+		store.add(renderMessageLabel(service, second, 'candidate \'TCOther*\'', resource, options));
+		const asQuoted = [describeLabel(first), describeLabel(second)];
+		await timeout(0);
+		const formatted = [describeLabel(first), describeLabel(second)];
+
+		// Code shows as code where no extension formats it, too
+		const colored = new TestCodeFragmentService();
+		colored.formats = false;
+		const unformatted = document.createElement('span');
+		store.add(renderMessageLabel(colored, unformatted, 'candidate \'TCOther*\'', resource, options));
+		await timeout(0);
+
+		// Code that the length of the label cuts shows as code too, also when it is all the code there is
+		const cut = document.createElement('span');
+		store.add(renderMessageLabel(service, cut, 'candidate \'TCOther<int, bool>*\' declared here', resource, { ...options, maxLength: 14 }));
+
+		// The layouts that are known show at once, without asking again
+		const later = document.createElement('span');
+		store.add(renderMessageLabel(service, later, 'again \'TCShort*\'', resource, options));
+		const known = describeLabel(later);
+		await timeout(0);
+		store.dispose();
+
+		assert.deepStrictEqual({ requests: service.requests, asQuoted, formatted, known, cut: describeLabel(cut), unformatted: { requests: colored.requests, rendered: describeLabel(unformatted) } }, {
+			requests: [{ fragments: ['TCShort*', 'bool', 'TCOther*'], maxColumns: 100000 }],
+			asQuoted: [['no conversion from ', '{TCShort*}', ' to ', '{bool}'], ['candidate ', '{TCOther*}']],
+			formatted: [['no conversion from ', '{TCShort *}!', ' to ', '{bool}'], ['candidate ', '{TCOther *}!']],
+			known: ['again ', '{TCShort *}'],
+			cut: ['candidate ', '{TCOther}', '...'],
+			unformatted: { requests: [], rendered: ['candidate ', '{TCOther*}'] },
 		});
 	});
 });

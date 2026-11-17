@@ -50,6 +50,15 @@
 	line-height: auto;
 }
 
+/* A row is an odd number of pixels high, so the text in its middle is between two pixels. A display that has no half
+ * pixels puts it on the lower one, which leaves the code in it less room below than above. On a line a pixel lower than
+ * the row it is on the upper one. */
+@media (max-resolution: 1dppx) {
+	.markers-panel .markers-panel-container .tree-container .monaco-tl-contents {
+		line-height: 14px;
+	}
+}
+
 .markers-panel .markers-panel-container .tree-container .monaco-tl-contents .marker-stats {
 	display: inline-block;
 	margin-left: 10px;
@@ -152,7 +161,7 @@
 }
 
 .markers-panel .monaco-list-row .monaco-action-bar .actions-container {
-	height: 16px;
+	height: 15px;
 }
 
 .markers-panel .monaco-list-row:hover .monaco-tl-contents > .marker-icon.quickFix,
@@ -322,8 +331,23 @@
 	white-space: nowrap;
 }
 
-/* Code in messages, colored like code in the editor, is in the color of the selection in a selected row, as the rest of
- * the message is, since its colors can be hard to read on the selection's background */
-.markers-panel .monaco-list:focus .monaco-list-row.selected .code-fragment-token {
+/* Code in messages is on the background of editors, as the background of code in text can be the view's own, which the
+ * code would blend into */
+.markers-panel code.code-fragment-label {
+	/* The font of code at the size that fits the rows, whatever the size of the font of editors is */
+	font-family: var(--monaco-monospace-font);
+	text-rendering: var(--monaco-monospace-text-rendering, auto);
+	font-size: 10px;
+	/* With the color of code in editors for what isn't colored, which is the one that shows on their background */
+	color: var(--vscode-editor-foreground);
+	background-color: var(--vscode-editor-background);
+	/* Until the code is measured, which puts it in the middle of its row, on a background a pixel from the row's edges */
+	padding-top: 1px;
+	padding-bottom: 1px;
+}
+
+/* A selected row shows the code in its colors on the selection, without the background */
+.markers-panel .monaco-list:focus .monaco-list-row.selected code.code-fragment-label {
 	color: inherit;
+	background-color: transparent;
 }

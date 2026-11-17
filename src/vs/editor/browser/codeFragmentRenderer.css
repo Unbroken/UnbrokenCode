@@ -38,3 +38,29 @@
 .monaco-hover .hover-contents.html-hover-contents > .code-fragment-hover {
 	padding: 4px 8px;
 }
+
+/* Code in a message on one line, such as a row of the Problems view, is set off by the font and the background of code.
+ * It stays within the line, so it has no border or padding above and below, and is cut with the line where that is. */
+code.code-fragment-label {
+	padding: 0 3px;
+	border-radius: var(--vscode-cornerRadius-small, 3px);
+	background-color: var(--vscode-textPreformat-background);
+}
+
+/* Code that was shown as quoted until it was formatted fades in as formatted */
+@keyframes code-fragment-updated {
+	from {
+		opacity: 0.3;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+code.code-fragment-label.code-fragment-updated {
+	animation: code-fragment-updated 200ms ease-out;
+}
+
+.monaco-reduce-motion code.code-fragment-label.code-fragment-updated {
+	animation: none;
+}

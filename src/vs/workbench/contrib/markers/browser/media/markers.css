@@ -331,12 +331,6 @@
 	white-space: nowrap;
 }
 
-/* Code in messages, colored like code in the editor, is in the color of the selection in a selected row, as the rest of
- * the message is, since its colors can be hard to read on the selection's background */
-.markers-panel .monaco-list:focus .monaco-list-row.selected .code-fragment-token {
-	color: inherit;
-}
-
 /* Code in messages is on the background of editors, as the background of code in text can be the view's own, which the
  * code would blend into */
 .markers-panel code.code-fragment-label {
@@ -352,7 +346,7 @@
 	padding-bottom: 1px;
 }
 
-/* And in a selected row without it, as its colors are the selection's there */
+/* A selected row shows the code in its colors on the selection, without the background */
 .markers-panel .monaco-list:focus .monaco-list-row.selected code.code-fragment-label {
 	color: inherit;
 	background-color: transparent;

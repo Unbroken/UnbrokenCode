@@ -13,7 +13,7 @@ import { ResourceMarkers, Marker, RelatedInformation, MarkerElement, MarkerTable
 import Messages from './messages.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
-import { IDisposable, dispose, Disposable, toDisposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { IDisposable, dispose, Disposable, toDisposable, DisposableStore, combinedDisposable } from '../../../../base/common/lifecycle.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { QuickFixAction, QuickFixActionViewItem } from './markersViewActions.js';
 import { ILabelService } from '../../../../platform/label/common/label.js';
@@ -27,7 +27,7 @@ import { IListAccessibilityProvider } from '../../../../base/browser/ui/list/lis
 import { isUndefinedOrNull } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ICodeFragmentService } from '../../../../editor/common/services/codeFragmentService.js';
-import { readEditorFontInfo, renderMessageHover } from '../../../../editor/browser/codeFragmentRenderer.js';
+import { readEditorFontInfo, renderMessageHover, renderMessageLabel } from '../../../../editor/browser/codeFragmentRenderer.js';
 import { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Action, IAction, toAction } from '../../../../base/common/actions.js';
@@ -69,14 +69,18 @@ interface IMarkerTemplateData {
 interface IRelatedInformationTemplateData {
 	resourceLabel: HighlightedLabel;
 	lnCol: HTMLElement;
-	description: HighlightedLabel;
+	description: HTMLElement;
+	descriptionHover: IManagedHover;
+	row: HTMLElement;
 	elementDisposables: DisposableStore;
 }
 
 interface ISubProblemTemplateData {
 	resourceLabel: HighlightedLabel;
 	lnCol: HTMLElement;
-	description: HighlightedLabel;
+	description: HTMLElement;
+	descriptionHover: IManagedHover;
+	row: HTMLElement;
 	elementDisposables: DisposableStore;
 }
 
@@ -101,26 +105,34 @@ function getMessageHoverContent(codeFragmentService: ICodeFragmentService, confi
 }
 
 /**
- * Sets a label to a message, showing it in a hover of its own when extensions color or lay out the code it quotes.
+ * Shows a message on a line of a row, with a hover that shows all of it: the code it quotes colored, and for a language
+ * an extension lays out code for, in the font of code, formatted and without the quotes.
  */
-function setMessageLabelWithHover(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, label: HighlightedLabel, message: string, highlights: IHighlight[], resource: URI): IDisposable {
-	// The label's own hover shows the code, as a second hover on the label would replace it. Whether it does is decided
-	// on each rendering, as an extension can start coloring or laying out the code after the first.
-	let hoverContent: IManagedHoverTooltipHTMLElement | undefined;
-	return setMessageLabel(codeFragmentService, label, message, highlights, () => {
-		// The same content while there is one, so the label renders again only when it changes
-		const content = getMessageHoverContent(codeFragmentService, configurationService, message, resource, label.element);
-		hoverContent = content ? hoverContent ?? content : undefined;
-		return hoverContent ?? message;
-	}, resource);
+function renderMessageWithHover(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, label: HTMLElement, row: HTMLElement, hover: IManagedHover, message: string, highlights: readonly IHighlight[], resource: URI): IDisposable {
+	// Decided again when the code's coloring or layout changes, as when an extension that lays it out registers
+	const updateHover = () => hover.update(getMessageHoverContent(codeFragmentService, configurationService, message, resource, label) ?? message);
+	updateHover();
+	return combinedDisposable(codeFragmentService.onDidChange(updateHover), renderMessage(codeFragmentService, configurationService, label, row, message, highlights, resource));
 }
 
-function setMessageLabel(codeFragmentService: ICodeFragmentService, label: HighlightedLabel, message: string, highlights: IHighlight[], title: string | (() => string | IManagedHoverTooltipHTMLElement), resource: URI, maxLength = Infinity): IDisposable {
-	// A message longer than shown is cut after its code is found in all of it, so code the cut ends is colored too
-	const text = message.length > maxLength ? `${message.substring(0, maxLength)}...` : message;
-	const render = () => label.set(text, highlights, typeof title === 'string' ? title : title(), undefined, undefined, codeFragmentService.getQuotedCodeStyles(message, resource, Math.min(message.length, maxLength)));
-	render();
-	return codeFragmentService.onDidChange(render);
+/**
+ * Shows a message on a line of a row. The line is the row's contents.
+ */
+function renderMessage(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, label: HTMLElement, line: HTMLElement, message: string, highlights: readonly IHighlight[], resource: URI, maxLength?: number): IDisposable {
+	// The code has the font of the view's stylesheet, which fits its rows whatever the size of the font of editors is
+	return renderMessageLabel(codeFragmentService, label, message, resource, {
+		tabSize: configurationService.getValue<number>('editor.tabSize') ?? 4,
+		highlights,
+		maxLength,
+		lineElement: line
+	});
+}
+
+/**
+ * The element of a message in a row, which shows its matches as a highlighted label does.
+ */
+function appendMessageLabel(container: HTMLElement): HTMLElement {
+	return dom.append(container, dom.$('span.monaco-highlighted-label'));
 }
 
 interface ICategoryTemplateData {
@@ -175,6 +187,10 @@ const enum TemplateId {
 export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 
 	static LINE_HEIGHT: number = 12;
+	/**
+	 * The height a row has beside its lines.
+	 */
+	static readonly ROW_PADDING = 3;
 
 	constructor(private readonly markersViewState: MarkersViewModel) { }
 
@@ -182,9 +198,9 @@ export class VirtualDelegate implements IListVirtualDelegate<MarkerElement> {
 		if (element instanceof Marker) {
 			const viewModel = this.markersViewState.getViewModel(element);
 			const noOfLines = !viewModel || viewModel.multiline ? element.lines.length : 1;
-			return noOfLines * VirtualDelegate.LINE_HEIGHT + 4;
+			return noOfLines * VirtualDelegate.LINE_HEIGHT + VirtualDelegate.ROW_PADDING;
 		}
-		return VirtualDelegate.LINE_HEIGHT + 4;
+		return VirtualDelegate.LINE_HEIGHT + VirtualDelegate.ROW_PADDING;
 	}
 
 	getTemplateId(element: MarkerElement): string {
@@ -471,8 +487,7 @@ class MarkerWidget extends Disposable {
 		for (let index = 0; index < (multiline ? lines.length : 1); index++) {
 			const lineElement = dom.append(this.messageAndDetailsContainer, dom.$('.marker-message-line'));
 			const messageElement = dom.append(lineElement, dom.$('.marker-message'));
-			const highlightedLabel = this.disposables.add(new HighlightedLabel(messageElement));
-			this.disposables.add(setMessageLabel(this._codeFragmentService, highlightedLabel, lines[index], lineMatches[index], '', marker.resource, 1000));
+			this.disposables.add(renderMessage(this._codeFragmentService, this._configurationService, appendMessageLabel(messageElement), this.parent, lines[index], lineMatches[index] ?? [], marker.resource, 1000));
 			if (lines[index] === '') {
 				lineElement.style.height = `${VirtualDelegate.LINE_HEIGHT}px`;
 			}
@@ -520,7 +535,8 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 	constructor(
 		@ILabelService private readonly labelService: ILabelService,
 		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
-		@IConfigurationService private readonly configurationService: IConfigurationService
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IHoverService private readonly hoverService: IHoverService
 	) { }
 
 	templateId = TemplateId.RelatedInformation;
@@ -531,7 +547,9 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		dom.append(container, dom.$('.actions'));
 		dom.append(container, dom.$('.icon'));
 
-		data.description = new HighlightedLabel(dom.append(container, dom.$('.marker-description')));
+		data.description = appendMessageLabel(dom.append(container, dom.$('.marker-description')));
+		data.descriptionHover = this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), data.description, '');
+		data.row = container;
 
 		const resourceLineContainer = dom.append(container, dom.$('.resource-line-container'));
 
@@ -552,7 +570,7 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 		const resourceLabelTitle = this.labelService.getUriLabel(relatedInformation.resource, { relative: true });
 		templateData.resourceLabel.set(basename(relatedInformation.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(relatedInformation.startLineNumber, relatedInformation.startColumn);
-		templateData.elementDisposables.add(setMessageLabelWithHover(this.codeFragmentService, this.configurationService, templateData.description, relatedInformation.message, messageMatches, relatedInformation.resource));
+		templateData.elementDisposables.add(renderMessageWithHover(this.codeFragmentService, this.configurationService, templateData.description, templateData.row, templateData.descriptionHover, relatedInformation.message, messageMatches, relatedInformation.resource));
 	}
 
 	disposeElement(_element: ITreeNode<RelatedInformation, RelatedInformationFilterData>, _index: number, templateData: IRelatedInformationTemplateData): void {
@@ -561,7 +579,7 @@ export class RelatedInformationRenderer implements ITreeRenderer<RelatedInformat
 
 	disposeTemplate(templateData: IRelatedInformationTemplateData): void {
 		templateData.resourceLabel.dispose();
-		templateData.description.dispose();
+		templateData.descriptionHover.dispose();
 		templateData.elementDisposables.dispose();
 	}
 }
@@ -571,7 +589,8 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 	constructor(
 		@ILabelService private readonly labelService: ILabelService,
 		@ICodeFragmentService private readonly codeFragmentService: ICodeFragmentService,
-		@IConfigurationService private readonly configurationService: IConfigurationService
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IHoverService private readonly hoverService: IHoverService
 	) { }
 
 	templateId = TemplateId.SubProblem;
@@ -582,7 +601,9 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		dom.append(container, dom.$('.actions'));
 		dom.append(container, dom.$('.icon'));
 
-		data.description = new HighlightedLabel(dom.append(container, dom.$('.marker-description')));
+		data.description = appendMessageLabel(dom.append(container, dom.$('.marker-description')));
+		data.descriptionHover = this.hoverService.setupManagedHover(getDefaultHoverDelegate('mouse'), data.description, '');
+		data.row = container;
 
 		const resourceLineContainer = dom.append(container, dom.$('.resource-line-container'));
 
@@ -603,7 +624,7 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 		const resourceLabelTitle = this.labelService.getUriLabel(subProblem.resource, { relative: true });
 		templateData.resourceLabel.set(basename(subProblem.resource), uriMatches, resourceLabelTitle);
 		templateData.lnCol.textContent = Messages.MARKERS_PANEL_AT_LINE_COL_NUMBER(subProblem.resourceMarker.marker.startLineNumber, subProblem.resourceMarker.marker.startColumn);
-		templateData.elementDisposables.add(setMessageLabelWithHover(this.codeFragmentService, this.configurationService, templateData.description, subProblem.resourceMarker.marker.message, messageMatches, subProblem.resource));
+		templateData.elementDisposables.add(renderMessageWithHover(this.codeFragmentService, this.configurationService, templateData.description, templateData.row, templateData.descriptionHover, subProblem.resourceMarker.marker.message, messageMatches, subProblem.resource));
 	}
 
 	disposeElement(_element: ITreeNode<SubProblem, SubProblemFilterData>, _index: number, templateData: ISubProblemTemplateData): void {
@@ -612,7 +633,7 @@ export class SubProblemRenderer implements ITreeRenderer<SubProblem, SubProblemF
 
 	disposeTemplate(templateData: ISubProblemTemplateData): void {
 		templateData.resourceLabel.dispose();
-		templateData.description.dispose();
+		templateData.descriptionHover.dispose();
 		templateData.elementDisposables.dispose();
 	}
 }

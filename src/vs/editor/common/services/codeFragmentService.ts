@@ -92,6 +92,12 @@ export interface ICodeFragmentService {
 	 * does that for the resource's language, or undefined where there is none or it leaves the fragment as is.
 	 */
 	format(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | undefined)[]>;
+
+	/**
+	 * Of the fragments of the code of a resource, those whose layout is known without asking the extension, as
+	 * {@link format} gave it before, with the layout, which is undefined for a fragment that is left as is.
+	 */
+	getFormatted(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions): ReadonlyMap<string, string | undefined>;
 }
 
 // A number, with its sign where one starts it, its digit separators and its suffix, as the C family and languages such
@@ -121,7 +127,8 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 	readonly onDidChange = this._onDidChange.event;
 
 	private readonly _cache = new LRUCache<string, readonly ICodeFragmentStyle[]>(500);
-	private readonly _formattedCache = new LRUCache<string, string | undefined>(500);
+	// As many as the code of a long list of problems, whose rows show the layouts that are known as they scroll into view
+	private readonly _formattedCache = new LRUCache<string, string | undefined>(5000);
 	private _formattingProviderGeneration = 0;
 	private readonly _requestedLanguages = new Set<string>();
 	private readonly _activatedLanguages = new Set<string>();
@@ -189,6 +196,27 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 		return !!languageId && this._languageFeaturesService.codeFragmentFormattingProvider.orderedForResource(resource, languageId).length > 0;
 	}
 
+	private _getFormattedKeyPrefix(languageId: string, resource: URI, options: CodeFragmentFormattingOptions): string {
+		return `${languageId}\n${resource.toString()}\n${options.maxColumns}\n${options.tabSize}\n${options.insertSpaces}\n`;
+	}
+
+	getFormatted(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions): ReadonlyMap<string, string | undefined> {
+		const result = new Map<string, string | undefined>();
+		const languageId = this._getLanguageId(resource);
+		if (!languageId || !this._languageFeaturesService.codeFragmentFormattingProvider.orderedForResource(resource, languageId).length) {
+			return result;
+		}
+
+		const keyPrefix = this._getFormattedKeyPrefix(languageId, resource, options);
+		for (const fragment of fragments) {
+			const key = keyPrefix + fragment;
+			if (this._formattedCache.has(key)) {
+				result.set(fragment, this._formattedCache.get(key));
+			}
+		}
+		return result;
+	}
+
 	async format(fragments: readonly string[], resource: URI, options: CodeFragmentFormattingOptions, token: CancellationToken): Promise<(string | undefined)[]> {
 		const result: (string | undefined)[] = fragments.map(() => undefined);
 		const languageId = this._getLanguageId(resource);
@@ -197,7 +225,7 @@ export class CodeFragmentService extends Disposable implements ICodeFragmentServ
 			return result;
 		}
 
-		const keyPrefix = `${languageId}\n${resource.toString()}\n${options.maxColumns}\n${options.tabSize}\n${options.insertSpaces}\n`;
+		const keyPrefix = this._getFormattedKeyPrefix(languageId, resource, options);
 		const missing: number[] = [];
 		fragments.forEach((fragment, index) => {
 			const key = keyPrefix + fragment;

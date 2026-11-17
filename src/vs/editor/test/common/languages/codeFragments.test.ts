@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { computeCodeFragmentTokens, findQuotedCodeFragments } from '../../../common/languages/codeFragments.js';
+import { computeCodeFragmentTokens, findQuotedCodeFragments, getMessageLabelParts } from '../../../common/languages/codeFragments.js';
 
 suite('Code fragments', () => {
 
@@ -71,5 +71,36 @@ suite('Code fragments', () => {
 
 		const expression = 'requirement \'X::Value == \'a\' || X::Other == L\'b\'\'; \'L\' or \'u8\', expected \'=\' before \'x\', because \'Check("foo\' \\"bar")\' failed';
 		assert.deepStrictEqual(findQuotedCodeFragments(expression).map(range => expression.substring(range.start, range.end)), ['X::Value == \'a\' || X::Other == L\'b\'', 'L', 'u8', '=', 'x', 'Check("foo\' \\"bar")']);
+	});
+
+	test('the parts of a message on a line are its quoted code, as laid out, and the text between', () => {
+		const describe = (message: string, layouts: [string, string | undefined][], ranges: [number, number][], maxLength?: number) =>
+			getMessageLabelParts(message, new Map(layouts), ranges.map(([start, end]) => ({ start, end })), maxLength)
+				.map(part => `${part.isCode ? `{${part.text}}` : part.text}${part.ranges.map(range => `[${part.text.substring(range.start, range.end)}]`).join('')}`);
+
+		const message = 'no conversion from \'const TCAuto<int,bool>*\' to \'bool\', sorry';
+		assert.deepStrictEqual({
+			asQuoted: describe(message, [], [[3, 13], [20, 25], [49, 53]]),
+			// A layout that spaces the code differently, or moves code, has the ranges where their characters are, and
+			// one that parts the characters of a range has one range, of all of it
+			spaced: describe(message, [['const TCAuto<int,bool>*', 'const TCAuto<int, bool> *'], ['bool', undefined]], [[26, 42]]),
+			moved: describe(message, [['const TCAuto<int,bool>*', 'TCAuto<int, bool> const *']], [[20, 25], [33, 41]]),
+			parted: describe(message, [['const TCAuto<int,bool>*', 'TCAuto<int, bool> const *']], [[20, 32]]),
+			// Code laid out over lines stays as quoted
+			overLines: describe('\'int a; int b\'', [['int a; int b', 'int a;\nint b']], []),
+			// A message longer than shown is cut, in code after the name it is cut in
+			cutInText: describe(message, [], [], 10),
+			cutInCode: describe(message, [['const TCAuto<int,bool>*', 'TCAuto<int, bool> const *']], [[26, 60]], 29),
+			cutAtQuote: describe(message, [], [], 19),
+		}, {
+			asQuoted: ['no conversion from [conversion]', '{const TCAuto<int,bool>*}[const]', ' to ', '{bool}[bool]', ', sorry'],
+			spaced: ['no conversion from ', '{const TCAuto<int, bool> *}[TCAuto<int, bool>]', ' to ', '{bool}', ', sorry'],
+			moved: ['no conversion from ', '{TCAuto<int, bool> const *}[int, bool][const]', ' to ', '{bool}', ', sorry'],
+			parted: ['no conversion from ', '{TCAuto<int, bool> const *}[TCAuto<int, bool> const *]', ' to ', '{bool}', ', sorry'],
+			overLines: ['{int a; int b}'],
+			cutInText: ['no convers', '...'],
+			cutInCode: ['no conversion from ', '{const TCAuto}[TCAuto]', '...'],
+			cutAtQuote: ['no conversion from ', '...'],
+		});
 	});
 });

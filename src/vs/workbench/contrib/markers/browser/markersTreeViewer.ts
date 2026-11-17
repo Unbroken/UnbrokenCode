@@ -116,7 +116,7 @@ function renderMessageWithHover(codeFragmentService: ICodeFragmentService, confi
 }
 
 /**
- * Shows a message on a line of a row. The line is the row's contents.
+ * Shows a message on a line of a row. The line is the row's contents, or the line's own element where the row has several.
  */
 function renderMessage(codeFragmentService: ICodeFragmentService, configurationService: IConfigurationService, label: HTMLElement, line: HTMLElement, message: string, highlights: readonly IHighlight[], resource: URI, maxLength?: number): IDisposable {
 	// The code has the font of the view's stylesheet, which fits its rows whatever the size of the font of editors is
@@ -483,11 +483,18 @@ class MarkerWidget extends Disposable {
 		updateHover();
 		this.disposables.add(this._codeFragmentService.onDidChange(updateHover));
 
+		// The lines of a message on several lines are a line's height each, rather than the row's, which a line of a
+		// message on one line is in the middle of. They are in the middle of the row together.
+		const lineCount = multiline ? lines.length : 1;
+		this.messageAndDetailsContainer.style.paddingTop = lineCount > 1 ? `${Math.floor(VirtualDelegate.ROW_PADDING / 2)}px` : '';
 		const lineElements: HTMLElement[] = [];
-		for (let index = 0; index < (multiline ? lines.length : 1); index++) {
+		for (let index = 0; index < lineCount; index++) {
 			const lineElement = dom.append(this.messageAndDetailsContainer, dom.$('.marker-message-line'));
+			if (lineCount > 1) {
+				lineElement.style.lineHeight = `${VirtualDelegate.LINE_HEIGHT}px`;
+			}
 			const messageElement = dom.append(lineElement, dom.$('.marker-message'));
-			this.disposables.add(renderMessage(this._codeFragmentService, this._configurationService, appendMessageLabel(messageElement), this.parent, lines[index], lineMatches[index] ?? [], marker.resource, 1000));
+			this.disposables.add(renderMessage(this._codeFragmentService, this._configurationService, appendMessageLabel(messageElement), lineCount > 1 ? lineElement : this.parent, lines[index], lineMatches[index] ?? [], marker.resource, 1000));
 			if (lines[index] === '') {
 				lineElement.style.height = `${VirtualDelegate.LINE_HEIGHT}px`;
 			}

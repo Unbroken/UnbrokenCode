@@ -1585,6 +1585,8 @@ suite('ChatListWidget', () => {
 			const states: { fullRefreshes: number; requests: string[]; text: boolean }[] = [];
 			const record = async (text: string) => {
 				await timeout(0);
+				// Streamed words render progressively, which doesn't change the layout of text appended to a line, so wait for the text itself.
+				await retry(async () => assert.ok(container.textContent?.includes(text)), 100, 30).catch(() => { });
 				await waitForStableLayout(widget);
 				states.push({
 					fullRefreshes: fullRefreshes(),

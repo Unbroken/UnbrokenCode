@@ -512,6 +512,12 @@ export abstract class Layout extends Disposable implements IWorkbenchLayoutServi
 			// Modern UI Update (floating panels presentation)
 			if (e.affectsConfiguration(LayoutSettings.MODERN_UI) || e.affectsConfiguration(LayoutSettings.MODERN_UI_DENSITY)) {
 				this.updateFloatingPanels();
+				// The density changes the margins of the cards inside their grid cells, which keep their
+				// sizes, so the grid would skip laying out the parts, as it would for a change of spacing
+				if (this.workbenchGrid) {
+					this.layout();
+					relayoutWorkbenchParts(this.workbenchGrid);
+				}
 			}
 
 			// Auxiliary Sidebar

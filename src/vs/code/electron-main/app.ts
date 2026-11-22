@@ -57,6 +57,8 @@ import { DiskFileSystemProviderChannel } from '../../platform/files/electron-mai
 import { DiskFileSystemProvider } from '../../platform/files/node/diskFileSystemProvider.js';
 import { IFontSmoothingService } from '../../platform/fontSmoothing/common/fontSmoothingService.js';
 import { FontSmoothingService } from '../../platform/fontSmoothing/electron-main/fontSmoothingService.js';
+import { IReleaseNotesFeedService } from '../../platform/update/common/updateFeed.js';
+import { ReleaseNotesFeedService } from '../../platform/update/electron-main/releaseNotesFeedService.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IInstantiationService, ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
@@ -1270,6 +1272,9 @@ export class CodeApplication extends Disposable {
 		// Font Smoothing
 		services.set(IFontSmoothingService, new SyncDescriptor(FontSmoothingService, undefined, false));
 
+		// Release Notes Feed
+		services.set(IReleaseNotesFeedService, new SyncDescriptor(ReleaseNotesFeedService, undefined, false));
+
 		// Launch
 		services.set(ILaunchMainService, new SyncDescriptor(LaunchMainService, undefined, false /* proxied to other processes */));
 
@@ -1540,6 +1545,10 @@ export class CodeApplication extends Disposable {
 		// Font Smoothing
 		const fontSmoothingChannel = ProxyChannel.fromService(accessor.get(IFontSmoothingService), disposables);
 		mainProcessElectronServer.registerChannel('fontSmoothing', fontSmoothingChannel);
+
+		// Release Notes Feed
+		const releaseNotesFeedChannel = ProxyChannel.fromService(accessor.get(IReleaseNotesFeedService), disposables);
+		mainProcessElectronServer.registerChannel('releaseNotesFeed', releaseNotesFeedChannel);
 
 		// Logger
 		const loggerChannel = this._register(new LoggerChannel(accessor.get(ILoggerMainService)));

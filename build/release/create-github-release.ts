@@ -508,7 +508,10 @@ async function generateReleaseNotes(buildCommit: string, currentTag: string, oct
 
 	if (rebased) {
 		// Add a note indicating the rebase occurred
-		releaseNotes.unshift('Rebased on upstream');
+		// With the upstream version, so that rebases of pre-releases onto different upstream versions
+		// read as different changes, which the release notes in the app don't merge
+		const upstreamVersion = /^release\/(?<version>\d+\.\d+)\./.exec(currentTag)?.groups?.version;
+		releaseNotes.unshift(upstreamVersion ? `Rebased on upstream VS Code ${upstreamVersion}` : 'Rebased on upstream');
 		debugLog('Added rebase note to release notes');
 	}
 
@@ -1327,6 +1330,13 @@ async function main() {
 				console.log(`- ${note}`);
 			}
 		}
+
+		// Builds from sources show these release notes, with the releases before it from the latest release
+		const { createLocalReleaseNotesFeed, LOCAL_RELEASE_NOTES_FEED_PATH } = await import('./release-notes-feed.ts');
+		const localFeedPath = path.join(__dirname, '../..', LOCAL_RELEASE_NOTES_FEED_PATH);
+		fs.mkdirSync(path.dirname(localFeedPath), { recursive: true });
+		fs.writeFileSync(localFeedPath, JSON.stringify(createLocalReleaseNotesFeed(versionFromPackage, releaseNotes, `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`, new Date()), null, 2));
+		console.log(`\nWrote the release notes of ${versionFromPackage} for builds from sources to ${LOCAL_RELEASE_NOTES_FEED_PATH}`);
 		return;
 	}
 
@@ -1370,6 +1380,16 @@ async function main() {
 			makeLatest: isStable,
 			prerelease: !isStable,
 		});
+
+		// After publishing the release, attach the release notes the app shows before and after an update
+		console.log(`\nAttaching release notes to ${tagNameFromVersion}...`);
+		try {
+			const { uploadReleaseNotes } = await import('./update-feed-generator.ts');
+			await uploadReleaseNotes(octokit, tagNameFromVersion);
+		} catch (error) {
+			console.warn('Could not attach release notes:', error);
+			console.log(`Run manually: node build/release/update-feed-generator.ts release-notes ${tagNameFromVersion}`);
+		}
 
 		// After publishing the release, update the feed for selected streams
 		console.log(`\nUpdating release feed for streams: ${releaseStreams.join(', ')}...`);

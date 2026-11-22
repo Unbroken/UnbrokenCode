@@ -221,6 +221,10 @@ import './contrib/fontSmoothing/electron-browser/fontSmoothing.contribution.js';
 // Unbroken Code Onboarding
 import './contrib/unbrokenOnboarding/electron-browser/unbrokenOnboarding.contribution.js';
 
+// Unbroken Code Release Notes
+import './contrib/unbrokenReleaseNotes/electron-browser/unbrokenReleaseNotes.contribution.js';
+import './contrib/update/electron-browser/simulateUpdate.contribution.js';
+
 // MCP
 import './contrib/mcp/electron-browser/mcp.contribution.js';
 

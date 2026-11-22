@@ -22,6 +22,7 @@ import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { ITelemetryService } from '../../telemetry/common/telemetry.js';
 import { AvailableForDownload, DisablementReason, IQuitAndInstallOptions, IUpdate, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
+import { getUpdateFeedPrefix } from '../common/updateFeed.js';
 
 const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
 
@@ -33,13 +34,8 @@ export interface IUpdateURLOptions {
 
 export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, commit: string, options?: IUpdateURLOptions): string {
 	// Unbroken Code: Use static GitHub releases feed structure
-	// The feed prefix is determined by the release stream setting:
-	// - 'stable' (default) -> 'latest'
-	// - 'beta'             -> 'latest-beta'
-	// - 'rc'               -> 'latest-rc'
-
-	const releaseStream = options?.releaseStream ?? 'stable';
-	const prefix = releaseStream === 'stable' ? 'latest' : `latest-${releaseStream}`;
+	// The feed prefix is determined by the release stream setting
+	const prefix = getUpdateFeedPrefix(options?.releaseStream);
 
 	// Use consistent naming for all platforms: {prefix}-{platform}.json
 	// The feed generator creates platform-specific feeds with the appropriate format:

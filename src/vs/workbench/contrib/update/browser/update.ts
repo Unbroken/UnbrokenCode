@@ -332,7 +332,10 @@ export class UpdateContribution extends Disposable implements IWorkbenchContribu
 
 		appendUpdateMenuItems(MenuId.GlobalActivity, '7_update');
 
-		if (this.productService.quality === 'stable') {
+		// Unbroken Code shows the release notes of updates from its release notes feed instead, in
+		// desktop products with update feeds and without release notes of their own
+		const hasReleaseNotesFeed = !isWeb && !this.productService.releaseNotesUrl && !!this.productService.updateUrl;
+		if (this.productService.quality === 'stable' && !hasReleaseNotesFeed) {
 			CommandsRegistry.registerCommand('update.showUpdateReleaseNotes', () => {
 				if (this.updateService.state.type !== StateType.Ready) {
 					return;

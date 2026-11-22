@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { type RestEndpointMethodTypes, Octokit } from '@octokit/rest';
 import { getGitHubToken } from './create-github-release.ts';
 import { fileURLToPath } from 'url';
+import { createReleaseNotesFeed, RELEASE_NOTES_FEED_FILE_NAME } from './release-notes-feed.ts';
 
 type GitHubReleaseAsset = RestEndpointMethodTypes['repos']['listReleaseAssets']['response']['data'][number] & { digest?: string };
 type GitHubRelease = RestEndpointMethodTypes['repos']['listReleases']['response']['data'][number];
@@ -149,16 +150,21 @@ async function downloadAssetContent(octokit: Octokit, assetId: number): Promise<
 	}
 }
 
-async function fetchLatestProductRelease(octokit: Octokit): Promise<GitHubRelease | null> {
-	// Find the most recent published release (including prereleases) so that
-	// beta/rc feeds point to the correct build. The stream-specific file
-	// naming (latest-beta-*, latest-rc-*, latest-*) is what separates streams
-	// on the client side.
+async function fetchProductReleases(octokit: Octokit): Promise<GitHubRelease[]> {
 	const { data: releases } = await octokit.repos.listReleases({
 		owner: REPO_OWNER,
 		repo: REPO_NAME,
 		per_page: 100
 	});
+	return releases;
+}
+
+async function fetchLatestProductRelease(octokit: Octokit): Promise<GitHubRelease | null> {
+	// Find the most recent published release (including prereleases) so that
+	// beta/rc feeds point to the correct build. The stream-specific file
+	// naming (latest-beta-*, latest-rc-*, latest-*) is what separates streams
+	// on the client side.
+	const releases = await fetchProductReleases(octokit);
 	return releases.find((release): release is GitHubRelease => !release.draft && release.tag_name !== FEED_RELEASE_TAG) ?? null;
 }
 
@@ -539,6 +545,26 @@ export async function generatePlatformFeed(octokit: Octokit, platform: string, q
 	return entry || null;
 }
 
+/**
+ * Attaches the release notes of a published release and the releases before it to the release,
+ * which the app shows before and after an update. Without a tag, attaches them to the latest
+ * stable release.
+ */
+export async function uploadReleaseNotes(octokit: Octokit, tagName?: string): Promise<void> {
+	const releases = await fetchProductReleases(octokit);
+	const release = tagName
+		? releases.find(candidate => candidate.tag_name === tagName)
+		: (await octokit.repos.getLatestRelease({ owner: REPO_OWNER, repo: REPO_NAME })).data as GitHubRelease;
+	if (!release || release.draft) {
+		throw new Error(`No published release ${tagName ?? 'latest'} to attach release notes to`);
+	}
+
+	const version = parseVersion(release.tag_name).replace(/^release\//, '');
+	const feed = createReleaseNotesFeed(releases, version, `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`);
+	console.log(`Release notes of ${release.tag_name}: ${feed.releases.map(entry => `${entry.version} (${entry.notes.length})`).join(', ')}`);
+	await uploadOrSkipAsset(octokit, release.id, (release.assets ?? []) as GitHubReleaseAsset[], RELEASE_NOTES_FEED_FILE_NAME, JSON.stringify(feed, null, 2), `release notes of ${release.tag_name}`);
+}
+
 // Export function for use by create-github-release.ts
 export async function updateReleaseFeed(octokit?: Octokit, streams?: string[]): Promise<void> {
 	if (!octokit) {
@@ -587,6 +613,10 @@ async function main() {
 				break;
 			}
 
+		case 'release-notes':
+			await uploadReleaseNotes(octokit, args[1]);
+			break;
+
 		case 'platform':
 			// Used for testing platform-specific queries
 			{
@@ -607,6 +637,7 @@ async function main() {
 			console.log('Usage:');
 			console.log('  ts-node update-feed-generator.ts generate [--streams=stable,beta,rc] - Generate and upload feed');
 			console.log('  ts-node update-feed-generator.ts platform [platform] [quality]       - Test platform query');
+			console.log('  ts-node update-feed-generator.ts release-notes [tag]                 - Attach release notes to a release (default: latest)');
 	}
 }
 

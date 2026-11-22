@@ -58,6 +58,38 @@ Files: `latest-{linux-x64|linux-arm64|win32-x64|win32-arm64}.json`
 }
 ```
 
+#### Release notes
+File: `release-notes.json`, attached to each release
+
+Publishing a release attaches the "What's New" lists of the release and the 9 releases before it, read from the release descriptions. A stable release has only the stable releases before it; a pre-release also has pre-releases. To attach it to a published release by hand: `node build/release/update-feed-generator.ts release-notes [tag]`, which defaults to the latest release.
+
+The app downloads the file of the version it needs in the main process, once per session. It falls back to the file of the latest release (`releases/latest/download/release-notes.json`) when that version's release has none, such as for builds that aren't released. It shows the release notes in an editor:
+- After an update, everything since the version it was updated from.
+- Before an update, from the Release Notes button of the update indicator in the title bar or Show Update Release Notes in the Manage menu, what the update brings.
+- From Help → Show Release Notes, the running version.
+
+Each page also shows the earlier releases in the file, and links to all releases on GitHub.
+
+Builds from sources aren't released, so to see the release notes of the version being built, run `./build-unbroken-code.sh --show-release-notes`. Besides printing the "What's New" list, it writes it to `.build/release-notes.json`, which builds from sources show for their version, with the releases before it from the latest release. They are the notes of the release being prepared, so a simulated update to a newer version that isn't released shows them as that update's.
+
+To see the update UI and the release notes of an update without one, run **Developer: Simulate Update...**, which puts the update indicator in the title bar, its tooltip and the Manage menu in the state of an update you pick, such as Available for Download or Ready to Restart, for a version you enter. Its actions do nothing while simulating; **Stop Simulating** goes back to the real state.
+
+Release notes open by themselves only at the first start after the version goes up, which builds from sources usually don't have, since a profile that has run the version before doesn't count as an update. To see them as they are after an update, run **Developer: Simulate Restart After Update...** and enter the version to have updated from.
+```json
+{
+  "releasesUrl": "https://github.com/Unbroken/UnbrokenCode/releases",
+  "releases": [
+    {
+      "version": "1.146.71",
+      "date": "2026-11-17T19:34:54Z",
+      "prerelease": false,
+      "url": "https://github.com/Unbroken/UnbrokenCode/releases/tag/release/1.146.71",
+      "notes": ["Show the code in the messages of the Problems view in the code font"]
+    }
+  ]
+}
+```
+
 ## How It Works
 
 ### Update URL Configuration

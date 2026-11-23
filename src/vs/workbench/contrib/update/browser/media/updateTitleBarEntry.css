@@ -15,8 +15,21 @@
 	border: 1px solid transparent;
 }
 
+/*
+ * While the update is in progress, such as downloading or installing, the indicator opens the update
+ * tooltip, so it's framed like the command center beside it, to show that it can be pressed.
+ */
+.monaco-action-bar .update-indicator:not(.prominent) {
+	background-color: var(--vscode-commandCenter-background);
+	border-color: var(--vscode-commandCenter-border);
+}
+
 .monaco-action-bar .update-indicator:hover {
 	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.monaco-action-bar .update-indicator:not(.prominent):hover {
+	border-color: var(--vscode-commandCenter-activeBorder);
 }
 
 .monaco-action-bar .update-indicator .indicator-label {

@@ -408,7 +408,15 @@ export class TerminalTabbedView extends Disposable {
 			void this._handleContainerDrop(event);
 		}));
 		this._register(dom.addDisposableListener(terminalContainer, 'mousedown', async (event: MouseEvent) => {
-			const terminal = this._terminalGroupService.activeInstance;
+			// Each right press decides for its own context menu, also when an earlier one ended its
+			// click elsewhere
+			if (event.button === 2) {
+				this._cancelContextMenu = false;
+			}
+			// The split that was clicked, which may not be the active one
+			const target = event.target;
+			const terminal = (dom.isHTMLElement(target) ? this._terminalGroupService.instances.find(instance => instance.xterm?.raw.element?.contains(target)) : undefined)
+				?? this._terminalGroupService.activeInstance;
 			if (this._terminalGroupService.instances.length > 0 && terminal) {
 				const result = await terminal.handleMouseEvent(event, this._instanceMenu);
 				if (typeof result === 'object' && result.cancelContextMenu) {
@@ -428,6 +436,11 @@ export class TerminalTabbedView extends Disposable {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			this._cancelContextMenu = false;
+		}));
+		this._register(dom.addDisposableListener(this._tabContainer, 'mousedown', (event: MouseEvent) => {
+			if (event.button === 2) {
+				this._cancelContextMenu = false;
+			}
 		}));
 		this._register(dom.addDisposableListener(this._tabContainer, 'contextmenu', (event: MouseEvent) => {
 			const rightClickBehavior = this._terminalConfigurationService.config.rightClickBehavior;

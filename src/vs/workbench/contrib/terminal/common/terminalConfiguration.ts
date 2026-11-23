@@ -141,6 +141,12 @@ export const terminalConfiguration: IStringDictionary<IConfigurationPropertySche
 		type: 'boolean',
 		default: true,
 	},
+	[TerminalSettingId.DisableClaudeCodeWheelAcceleration]: {
+		description: localize('terminal.integrated.disableClaudeCodeWheelAcceleration', "Controls whether Claude Code started in a local terminal scrolls a line for each step of the wheel, without its own wheel acceleration, which makes momentum scrolling move too far. It applies in terminals opened after a change, and on Windows only in POSIX shells such as Git Bash. Acceleration is turned off for interactive sessions, started without arguments or with a prompt, --continue, --resume with a session, or common options such as --model. Turn it off to use Claude Code's own settings."),
+		type: 'boolean',
+		// On by default only on macOS, where scrolling has momentum
+		default: isMacintosh
+	},
 	[TerminalSettingId.MacOptionIsMeta]: {
 		description: localize('terminal.integrated.macOptionIsMeta', "Controls whether to treat the option key as the meta key in the terminal on macOS."),
 		type: 'boolean',

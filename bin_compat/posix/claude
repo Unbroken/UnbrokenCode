@@ -1,0 +1,206 @@
+#!/bin/sh
+#
+# Claude Code wrapper for the terminal of Unbroken Code, on macOS and Linux, where builds put it in
+# bin_compat/, and in POSIX shells such as Git Bash on Windows, where builds put it in
+# bin_compat/posix/, which only those shells get on PATH (PowerShell would also run an extensionless
+# file).
+#
+# Claude Code treats a terminal with TERM_PROGRAM=vscode as VS Code's xterm.js, and smooths and
+# accelerates wheel scrolling for upstream xterm.js, which sends few wheel events. The terminal of
+# Unbroken Code sends a wheel event for each row, like Alacritty, which that tuning makes lag and
+# cap. So Claude Code runs with a TERM_PROGRAM of its own, as in other terminals, and keeps what it
+# only turns on for VS Code by name: links, strikethrough, synchronized output, and connecting to
+# the IDE by default.
+#
+# With terminal.integrated.disableClaudeCodeWheelAcceleration (on by default on macOS, and off on
+# Linux and Windows), the terminal sets UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION=off, and the wrapper turns off
+# Claude Code's own wheel acceleration, which makes momentum scrolling move too far, and has it
+# scroll a line for each wheel report, which Claude Code makes 3 on Windows.
+
+# Whether this runs in a POSIX layer on Windows, and the separator of its PATH: Git Bash, MSYS2 and
+# Cygwin keep a POSIX PATH, separated by colons, as macOS and Linux do, and BusyBox the Windows one,
+# separated by semicolons. uname tells them apart (MINGW64_NT-, UCRT64_NT-, MSYS_NT-, CYGWIN_NT-, or
+# BusyBox's Windows_NT), and a Windows_NT from a uname such as BusyBox's on Git Bash's PATH is
+# corrected by bash itself (BASH_VERSION and OSTYPE msys or cygwin). Without uname, bash tells the
+# same way, and otherwise the OS variable, which other shells may have inherited, tells Windows, and
+# a drive letter at the start of PATH a Windows PATH.
+claude_windows=
+claude_path_separator=:
+case "$(uname -s 2>/dev/null)" in
+	*_NT-*) claude_windows=1 ;;
+	Windows_NT)
+		claude_windows=1
+		case "${BASH_VERSION:+bash}:${OSTYPE-}" in
+			bash:msys* | bash:cygwin*) ;;
+			*) claude_path_separator=';' ;;
+		esac
+		;;
+	"")
+		case "${BASH_VERSION:+bash}:${OSTYPE-}" in
+			bash:msys* | bash:cygwin*) claude_windows=1 ;;
+			*)
+				if [ "${OS-}" = Windows_NT ]; then
+					claude_windows=1
+					case ${PATH-} in
+						[A-Za-z]:[\\/]*) claude_path_separator=';' ;;
+					esac
+				fi
+				;;
+		esac
+		;;
+esac
+
+# Whether a file is a copy of this wrapper
+claude_wrapper_copy() {
+	{ head -c 300 -- "$1" | grep -qF "Claude Code wrapper for the terminal of Unbroken Code"; } 2>/dev/null
+}
+
+# Finds the next claude on PATH after this wrapper, in CLAUDE, skipping copies of it; without one,
+# the first
+claude_find() {
+	local dir candidate first="" self="" IFS="$claude_path_separator"
+	CLAUDE=
+	set -f
+	# With a separator after it, so that splitting keeps a last, empty entry, the current directory
+	for dir in ${PATH-}$claude_path_separator; do
+		# An empty entry is the current directory, and a relative one mustn't read as an option
+		case $dir in
+			"") dir=. ;;
+			/* | [A-Za-z]:* | \\*) ;;
+			*) dir="./$dir" ;;
+		esac
+		candidate="$dir/claude"
+		# On Windows, also claude.exe, where file tests don't find an executable without its extension
+		if [ -n "$claude_windows" ] && ! [ -f "$candidate" ] && [ -f "$candidate.exe" ]; then
+			candidate="$candidate.exe"
+		fi
+		if ! [ -f "$candidate" ] || ! [ -x "$candidate" ]; then
+			continue
+		fi
+		if [ "$candidate" -ef "$0" ]; then
+			self=1
+		elif ! claude_wrapper_copy "$candidate"; then
+			if [ -n "$self" ]; then
+				CLAUDE=$candidate
+				break
+			fi
+			first=${first:-$candidate}
+		fi
+	done
+	set +f
+	CLAUDE=${CLAUDE:-$first}
+	[ -n "$CLAUDE" ]
+}
+
+# Whether the arguments start or resume an interactive session, and take settings before them:
+# none, -c or --continue, -r or --resume with a session, -w or --worktree with or
+# without a name, common options of an interactive session such as --model, and a prompt, which has
+# a space. Settings before anything else can change what Claude Code (2.1.330) does, such as a
+# command that must come first or an SDK's launch.
+claude_takes_settings() {
+	local arg previous="" value="" resume=""
+	for arg in "$@"; do
+		# The session after -r or --resume: without one, Claude Code opens its picker of sessions,
+		# which settings would change
+		if [ -n "$resume" ]; then
+			case $arg in
+				-* | "") return 1 ;;
+			esac
+			resume=
+			previous=$arg
+			continue
+		fi
+		# The value of the previous option, or the values of an option that takes every word up to
+		# the next option
+		case $value in
+			one)
+				value=
+				previous=$arg
+				continue
+				;;
+			many)
+				case $arg in
+					-*) value= ;;
+					*)
+						previous=$arg
+						continue
+						;;
+				esac
+				;;
+		esac
+		case $arg in
+			-c | --continue | --fork-session | --dangerously-skip-permissions | --allow-dangerously-skip-permissions \
+				| --ide | --chrome | --no-chrome | --verbose | --debug=* | --brief | --safe-mode \
+				| --disable-slash-commands | --strict-mcp-config | --ax-screen-reader | --tmux | --tmux=*) ;;
+			-r | --resume) resume=1 ;;
+			--resume=) return 1 ;;
+			# The rest is a prompt
+			--) return 0 ;;
+			--resume=* | -r?* | -w | --worktree | --worktree=* | -w?* | -d | --debug | -d?*) ;;
+			--model | --permission-mode | --effort | --agent | --append-system-prompt | --system-prompt \
+				| --fallback-model | -n | --name | --plugin-dir) value=one ;;
+			--add-dir | --mcp-config | --tools | --allowed-tools | --allowedTools | --disallowed-tools | --disallowedTools) value=many ;;
+			--model=* | --permission-mode=* | --effort=* | --agent=* | --add-dir=* | --append-system-prompt=* \
+				| --system-prompt=* | --fallback-model=* | --mcp-config=* | --name=* | --tools=* | --allowed-tools=* | --allowedTools=* \
+				| --disallowed-tools=* | --disallowedTools=* | --plugin-dir=*) ;;
+			-*) return 1 ;;
+			*" "* | *"	"*) ;;
+			*)
+				# Only a worktree after -w or --worktree, or a filter after -d or --debug
+				case $previous in
+					-w | --worktree | -d | --debug) ;;
+					*) return 1 ;;
+				esac
+				;;
+		esac
+		previous=$arg
+	done
+	[ -z "$resume" ]
+}
+
+# Whether the global config sets defaultToAgentsView, which opens the Agents view for a bare claude
+# and some options such as -d, and which settings on the command line keep it from
+claude_agents_view() {
+	local config="${CLAUDE_CONFIG_DIR:-${HOME-}}/.claude.json"
+	[ -f "$config" ] && grep -qsE '"defaultToAgentsView"[[:space:]]*:[[:space:]]*true' "$config"
+}
+
+if ! claude_find; then
+	echo "claude: command not found" >&2
+	exit 127
+fi
+
+# The terminal's setting, which also reaches programs such as tmux that it runs, and not when output
+# goes elsewhere, which makes Claude Code print instead of starting a session
+if [ "${UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION-}" = off ] && [ -t 1 ] && claude_takes_settings "$@" && ! claude_agents_view; then
+	set -- --settings '{"wheelScrollAccelerationEnabled":false}' "$@"
+fi
+# Whether a scroll speed is already set, even an empty one, which Claude Code takes for its
+# default, and on Windows, whose variables ignore case, in any case
+claude_scroll_speed_set() {
+	[ -n "${CLAUDE_CODE_SCROLL_SPEED+set}" ] && return 0
+	[ -n "$claude_windows" ] || return 1
+	# Without awk to read the names, only the exact one, which the shell checked
+	command -v awk >/dev/null 2>&1 || return 1
+	awk 'BEGIN { for (name in ENVIRON) if (toupper(name) == "CLAUDE_CODE_SCROLL_SPEED") exit 0; exit 1 }'
+}
+
+# A line for each wheel report, unless a scroll speed is already set
+if [ "${UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION-}" = off ] && ! claude_scroll_speed_set; then
+	CLAUDE_CODE_SCROLL_SPEED=1
+	export CLAUDE_CODE_SCROLL_SPEED
+fi
+
+if [ "${TERM_PROGRAM-}" = "vscode" ]; then
+	TERM_PROGRAM=UnbrokenCode
+	# Links only for a terminal, not for output that goes elsewhere
+	if [ -t 1 ]; then
+		FORCE_HYPERLINK="${FORCE_HYPERLINK:-1}"
+	fi
+	CLAUDE_CODE_FORCE_STRIKETHROUGH="${CLAUDE_CODE_FORCE_STRIKETHROUGH:-1}"
+	CLAUDE_CODE_FORCE_SYNC_OUTPUT="${CLAUDE_CODE_FORCE_SYNC_OUTPUT:-1}"
+	FORCE_CODE_TERMINAL="${FORCE_CODE_TERMINAL:-1}"
+	export TERM_PROGRAM FORCE_HYPERLINK CLAUDE_CODE_FORCE_STRIKETHROUGH CLAUDE_CODE_FORCE_SYNC_OUTPUT FORCE_CODE_TERMINAL
+fi
+
+exec "$CLAUDE" "$@"

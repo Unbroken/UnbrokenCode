@@ -430,23 +430,28 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 	 * Prepend the app's bin_compat/ directory to PATH so that a 'code' CLI
 	 * command is available inside integrated terminals. This provides
 	 * compatibility with VS Code extensions (e.g. Claude Code) that invoke
-	 * the 'code' command to install extensions or open files.
+	 * the 'code' command to install extensions or open files. On macOS and
+	 * Linux, and in POSIX shells such as Git Bash on Windows, its 'claude'
+	 * wrapper runs Claude Code as in other terminals (see
+	 * bin_compat/posix/claude).
 	 */
 	private _addCompatBinToPath(env: IProcessEnvironment, shellExecutable?: string): void {
 		const appRoot = this._environmentService.appRoot;
-		let compatBinDir: string;
-		if (this._environmentService.isBuilt) {
-			// Built mode:
-			// macOS: bin_compat/ is inside the app bundle (appRoot/bin_compat/)
-			// Linux/Windows: bin_compat/ is at the install root (appRoot/../../bin_compat/)
-			compatBinDir = isMacintosh
-				? path.join(appRoot, 'bin_compat')
-				: path.join(appRoot, '..', '..', 'bin_compat');
-		} else {
-			// Dev mode: bin_compat/ is in the source root (appRoot/bin_compat/)
-			compatBinDir = path.join(appRoot, 'bin_compat');
-		}
+		// Built mode:
+		// macOS: bin_compat/ is inside the app bundle (appRoot/bin_compat/)
+		// Linux/Windows: bin_compat/ is at the install root (appRoot/../../bin_compat/)
+		// Dev mode: bin_compat/ is in the source root (appRoot/bin_compat/)
+		const compatDir = !this._environmentService.isBuilt || isMacintosh
+			? path.join(appRoot, 'bin_compat')
+			: path.join(appRoot, '..', '..', 'bin_compat');
+		// The wrappers in bin_compat/posix/: on Windows for POSIX shells such as Git Bash only, and on
+		// macOS and Linux in dev mode, where builds put them in bin_compat/ instead
+		const posixDir = path.join(compatDir, 'posix');
+		const usesPosixDir = isWindows ? isWindowsPosixShell(shellExecutable) : !this._environmentService.isBuilt;
 		const pathSep = isWindows ? ';' : ':';
+		const compatDirs = usesPosixDir ? [posixDir, compatDir] : [compatDir];
+		// One or more directories, separated as in PATH
+		const compatBinPath = compatDirs.join(pathSep);
 		// On Windows, the PATH variable name may be 'Path', 'PATH', or another
 		// casing since environment variable names are case-insensitive on Windows
 		// but JS object keys are case-sensitive. Find the actual key to avoid
@@ -454,10 +459,16 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		const pathKey = isWindows
 			? (Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH')
 			: 'PATH';
+		// Other shells on Windows don't get the wrapper from a PATH inherited from a POSIX shell's
+		// terminal either, such as by a window that its code command opened, of this install or
+		// another
+		if (isWindows && !usesPosixDir && env[pathKey]) {
+			env[pathKey] = withoutClaudeWrapperDirectories(env[pathKey]);
+		}
 		if (env[pathKey]) {
-			env[pathKey] = compatBinDir + pathSep + env[pathKey];
+			env[pathKey] = compatBinPath + pathSep + env[pathKey];
 		} else {
-			env[pathKey] = compatBinDir;
+			env[pathKey] = compatBinPath;
 		}
 
 		// Also add to VSCODE_ENV_PREPEND so the shell integration script
@@ -469,12 +480,15 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		// format (/c/... with ':' separator) since their integration scripts
 		// expect POSIX paths. MSYS2 auto-converts PATH but not custom env vars
 		// like VSCODE_ENV_PREPEND. PowerShell keeps native Windows format.
-		let prependDir = compatBinDir;
+		let prependDir = compatBinPath;
 		let prependSep = pathSep;
 		const shell = shellExecutable ? path.basename(shellExecutable).toLowerCase() : '';
 		const isPosixShellOnWindows = isWindows && shell !== 'pwsh.exe' && shell !== 'powershell.exe' && shell !== 'cmd.exe';
 		if (isPosixShellOnWindows) {
-			prependDir = prependDir.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => '/' + d.toLowerCase());
+			// Each directory on its own, since an install path may contain a ';'
+			prependDir = compatDirs
+				.map(dir => dir.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => '/' + d.toLowerCase()))
+				.join(':');
 			prependSep = ':';
 		}
 		const encodedValue = (prependDir + prependSep).replaceAll(':', '\\x3a');
@@ -489,6 +503,15 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		// script can match the singleton IPC handle (e.g. when the debug launcher
 		// uses a custom --user-data-dir that differs from the VSCODE_DEV default).
 		env.VSCODE_COMPAT_USER_DATA_DIR = this._environmentService.userDataPath;
+
+		// Tells the 'claude' wrapper to turn off Claude Code's wheel acceleration (see
+		// bin_compat/posix/claude), and not when a value inherited from another terminal says so.
+		// On Windows, only POSIX shells such as Git Bash run the wrapper.
+		if (this._configurationService.getValue<boolean>(TerminalSettingId.DisableClaudeCodeWheelAcceleration)) {
+			env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION = 'off';
+		} else {
+			delete env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION;
+		}
 	}
 
 	private _getWorkspaceName(): string {
@@ -505,4 +528,37 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 	}
 
 	// #endregion
+}
+
+/**
+ * Whether a shell on Windows is a POSIX shell such as Git Bash, which runs the Claude Code wrapper
+ * in bin_compat/posix/: not PowerShell or cmd, which would also run an extensionless file, not
+ * WSL's bash, whose Linux PATH comes before the Windows one, and sh.exe only in a usr\bin, as Git
+ * for Windows and MSYS2 have it, or in the bin of a Git install, such as PortableGit's, not elsewhere,
+ * such as BusyBox's, which reads PATH as Windows does. A bare name, such as bash.exe, which PATH may
+ * resolve to WSL's, doesn't count.
+ */
+export function isWindowsPosixShell(shellExecutable: string | undefined): boolean {
+	const executable = shellExecutable && path.win32.normalize(shellExecutable);
+	if (!executable || !executable.includes('\\')) {
+		return false;
+	}
+	const shell = path.win32.basename(executable).toLowerCase();
+	// WSL's launchers in System32 and anywhere in WindowsApps, such as its package's aliases
+	const directories = path.win32.dirname(executable).toLowerCase().split('\\');
+	const isMsysSh = shell === 'sh.exe' && directories.at(-1) === 'bin' && (directories.at(-2) === 'usr' || !!directories.at(-2)?.includes('git'));
+	return (['bash.exe', 'zsh.exe', 'fish.exe', 'dash.exe'].includes(shell) || isMsysSh) && directories.at(-1) !== 'system32' && !directories.includes('windowsapps');
+}
+
+/**
+ * A Windows PATH without the directories of Claude Code wrappers, bin_compat\posix of any install,
+ * matched as Windows does: ignoring case and trailing slashes.
+ */
+export function withoutClaudeWrapperDirectories(pathValue: string): string {
+	// Also relative entries, entries quoted or with spaces around them, which PowerShell removes,
+	// and names with the trailing dots and spaces that Windows ignores, as in ...\posix.
+	return pathValue.split(';').filter(entry => {
+		const directory = entry.replaceAll('"', '').trim();
+		return !directory || !/(^|\\)bin_compat[. ]*\\posix[. ]*\\?$/i.test(path.win32.normalize(directory));
+	}).join(';');
 }

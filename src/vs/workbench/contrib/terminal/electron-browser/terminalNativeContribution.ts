@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ipcRenderer } from '../../../../base/parts/sandbox/electron-browser/globals.js';
-import { INativeOpenFileRequest } from '../../../../platform/window/common/window.js';
+import { INativeOpenFileRequest, isIntegratedTerminalProgram } from '../../../../platform/window/common/window.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { registerRemoteContributions } from './terminalRemote.js';
@@ -65,7 +65,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		// if the request to open files is coming in from the integrated terminal (identified though
 		// the termProgram variable) and we are instructed to wait for editors close, wait for the
 		// marker file to get deleted and then focus back to the integrated terminal.
-		if (request.termProgram === 'vscode' && request.filesToWait) {
+		if (isIntegratedTerminalProgram(request.termProgram) && request.filesToWait) {
 			const waitMarkerFileUri = URI.revive(request.filesToWait.waitMarkerFileUri);
 			await this._whenFileDeleted(waitMarkerFileUri);
 

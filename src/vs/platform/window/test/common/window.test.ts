@@ -6,7 +6,7 @@
 import assert from 'assert';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { extractChatSessionToOpen, getMacOSWindowControlsPosition, isValidCopilotCliSessionId, parseExternalAgentsWindowNewSessionLinkUri } from '../../common/window.js';
+import { extractChatSessionToOpen, getMacOSWindowControlsPosition, isIntegratedTerminalProgram, isValidCopilotCliSessionId, parseExternalAgentsWindowNewSessionLinkUri } from '../../common/window.js';
 
 suite('window', () => {
 
@@ -135,6 +135,13 @@ suite('window', () => {
 		assert.deepStrictEqual(
 			['0b6f9a4e-1c2d-4e5f-8a9b-0c1d2e3f4a5b', 'my_session-1', '', 'a/b', 'a.b', 'a b', 'é', 'a'.repeat(256), 'a'.repeat(257)].map(isValidCopilotCliSessionId),
 			[true, true, false, false, false, false, false, true, false],
+		);
+	});
+
+	test('recognizes the integrated terminal, also through the Claude Code wrapper', () => {
+		assert.deepStrictEqual(
+			['vscode', 'UnbrokenCode', 'iTerm.app', undefined].map(isIntegratedTerminalProgram),
+			[true, true, false, false]
 		);
 	});
 });

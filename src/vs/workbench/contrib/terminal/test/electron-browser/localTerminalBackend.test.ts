@@ -30,7 +30,7 @@ import { ITerminalProfileResolverService } from '../../common/terminal.js';
 import { TerminalStorageKeys } from '../../common/terminalStorageKeys.js';
 import { TestContextService, TestHistoryService, TestStorageService } from '../../../../test/common/workbenchTestServices.js';
 import { LocalPty } from '../../electron-browser/localPty.js';
-import { LocalTerminalBackend } from '../../electron-browser/localTerminalBackend.js';
+import { isWindowsPosixShell, LocalTerminalBackend, withoutClaudeWrapperDirectories } from '../../electron-browser/localTerminalBackend.js';
 
 class RecordingLogService extends NullLogService {
 	readonly warnings: { message: string; args: unknown[] }[] = [];
@@ -42,6 +42,36 @@ class RecordingLogService extends NullLogService {
 
 suite('LocalTerminalBackend', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('isWindowsPosixShell gets the Claude Code wrapper only to POSIX shells such as Git Bash', () => {
+		const shells = [
+			'C:\\Program Files\\Git\\bin\\bash.exe',
+			'C:\\msys64\\usr\\bin\\zsh.exe',
+			'C:\\Program Files\\Git\\usr\\bin\\sh.exe',
+			'C:\\Program Files\\Git\\bin\\sh.exe',
+			'C:\\Tools\\PortableGit\\bin\\sh.exe',
+			'C:\\tools\\busybox\\sh.exe',
+			'.\\bash.exe',
+			'C:\\Windows\\System32\\bash.exe',
+			'C:\\Windows\\System32\\.\\bash.exe',
+			'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe',
+			'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\MicrosoftCorporationII.WindowsSubsystemForLinux_8wekyb3d8bbwe\\bash.exe',
+			'C:\\Windows\\System32\\wsl.exe',
+			'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+			'powershell.exe',
+			'C:\\Windows\\System32\\cmd.exe',
+			'bash.exe',
+			undefined
+		];
+		deepStrictEqual(shells.map(shell => isWindowsPosixShell(shell)), [true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false]);
+	});
+
+	test('withoutClaudeWrapperDirectories removes the Claude Code wrapper\'s directories of any install, however they are written', () => {
+		deepStrictEqual(
+			withoutClaudeWrapperDirectories('C:\\App\\BIN_COMPAT\\posix\\;C:\\App\\bin_compat;;C:/Other App/bin_compat/posix;C:\\App\\bin_compat\\posix\\.;C:\\App\\bin_compat\\posix.;C:\\App\\bin_compat.\\posix;.\\bin_compat\\posix;C:\\App\\bin_compat\\posix\\ ;\"C:\\Program Files\\App\\bin_compat\\posix\";C:\\Users\\me\\.local\\bin;C:\\tools\\posix'),
+			'C:\\App\\bin_compat;;C:\\Users\\me\\.local\\bin;C:\\tools\\posix'
+		);
+	});
 
 	test('attachToRevivedProcess only falls back to the original process when it still has the saved pid', async () => {
 		const livePids = new Map([[1, 101], [2, 202], [3, 303]]);
@@ -126,14 +156,14 @@ suite('LocalTerminalBackend', () => {
 			onDidChangeExtensions: Event.None,
 			extensions: registeredExtensions
 		}));
-		instantiationService.stub(IConfigurationService, new TestConfigurationService());
+		instantiationService.stub(IConfigurationService, new TestConfigurationService({ terminal: { integrated: { disableClaudeCodeWheelAcceleration: true } } }));
 		instantiationService.stub(IConfigurationResolverService, upcastPartial<IConfigurationResolverService>({
 			resolveWithEnvironment: async (_environment, _folder, value) => value
 		}));
 		instantiationService.stub(IHistoryService, new TestHistoryService());
 		instantiationService.stub(IProductService, upcastPartial<IProductService>({ version: 'test' }));
 		instantiationService.stub(ITerminalProfileResolverService, upcastPartial<ITerminalProfileResolverService>({
-			getEnvironment: async () => ({ PATH: '/base/bin' })
+			getEnvironment: async () => ({ PATH: '/base/bin', UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: 'inherited' })
 		}));
 		const environmentVariableService = store.add(instantiationService.createInstance(EnvironmentVariableService));
 		const foreignCollection = {
@@ -152,7 +182,7 @@ suite('LocalTerminalBackend', () => {
 			onPtyHostUnresponsive: Event.None,
 			onPtyHostResponsive: Event.None,
 			onPtyHostRequestResolveVariables: Event.None,
-			getEnvironment: async () => ({ PATH: '/base/bin' }),
+			getEnvironment: async () => ({ PATH: '/base/bin', UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: 'inherited' }),
 			reviveTerminalProcesses: async (_workspaceId, state) => {
 				revivedState = state;
 			},
@@ -198,11 +228,18 @@ suite('LocalTerminalBackend', () => {
 		deepStrictEqual({
 			env: {
 				PATH: revivedState[0].processLaunchConfig.env.PATH,
-				SHARED_VALUE: revivedState[0].processLaunchConfig.env.SHARED_VALUE
+				SHARED_VALUE: revivedState[0].processLaunchConfig.env.SHARED_VALUE,
+				UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: revivedState[0].processLaunchConfig.env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION
 			},
 			collections: revivedState[0].processLaunchConfig.options.environmentVariableCollections
 		}, {
-			env: { PATH: `${join('/app', 'bin_compat')}${isWindows ? ';' : ':'}/base/bin`, SHARED_VALUE: 'available' },
+			// Development builds also add the wrappers for macOS and Linux only
+			env: {
+				PATH: isWindows ? `${join('/app', 'bin_compat')};/base/bin` : `${join('/app', 'bin_compat', 'posix')}:${join('/app', 'bin_compat')}:/base/bin`,
+				SHARED_VALUE: 'available',
+				// The Claude Code wrapper's setting, replacing an inherited value
+				UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: 'off'
+			},
 			collections: [[
 				'foreign.extension',
 				[['shared-value', { variable: 'SHARED_VALUE', value: 'available', type: EnvironmentVariableMutatorType.Replace }]],

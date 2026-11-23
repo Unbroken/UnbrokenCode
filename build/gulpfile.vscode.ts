@@ -444,9 +444,12 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(replace('@@NAME@@', product.nameShort))
 				.pipe(rename('bin_compat/code'));
+			// Claude Code wrapper, see bin_compat/posix/claude
+			const compatClaude = gulp.src('bin_compat/posix/claude', { base: 'bin_compat/posix' })
+				.pipe(rename(f => f.dirname = 'bin_compat'));
 			const policyDest = gulp.src('.build/policies/darwin/**', { base: '.build/policies/darwin' })
 				.pipe(rename(f => f.dirname = `policies/${f.dirname}`));
-			all = es.merge(all, shortcut, compatShortcut, policyDest);
+			all = es.merge(all, shortcut, compatShortcut, compatClaude, policyDest);
 		}
 
 		const electronConfig = {
@@ -553,6 +556,12 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 					.pipe(rename('bin_compat/code')));
 			}
 
+			// Claude Code wrapper for POSIX shells such as Git Bash, see bin_compat/posix/claude. It stays in
+			// a folder of its own, which only they get on PATH, since PowerShell would also run an
+			// extensionless file
+			result = es.merge(result, gulp.src('bin_compat/posix/claude', { base: 'bin_compat' })
+				.pipe(rename(f => f.dirname = 'bin_compat/posix')));
+
 			result = es.merge(result, gulp.src('resources/win32/VisualElementsManifest.xml', { base: 'resources/win32' })
 				.pipe(replace('@@VERSIONFOLDER@@', versionedResourcesFolder ? `${versionedResourcesFolder}\\` : ''))
 				.pipe(rename(product.nameShort + '.VisualElementsManifest.xml')));
@@ -601,6 +610,10 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@PRODNAME@@', product.nameLong))
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(rename('bin_compat/code')));
+
+			// Claude Code wrapper, see bin_compat/posix/claude
+			result = es.merge(result, gulp.src('bin_compat/posix/claude', { base: 'bin_compat/posix' })
+				.pipe(rename(f => f.dirname = 'bin_compat')));
 		}
 
 		result = inlineMeta(result, {

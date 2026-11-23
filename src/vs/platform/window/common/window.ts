@@ -550,6 +550,15 @@ export interface IOpenFileRequest {
 }
 
 /**
+ * Whether a TERM_PROGRAM is the integrated terminal's: `vscode`, or `UnbrokenCode`, which the
+ * terminal's Claude Code wrapper (bin_compat/posix/claude) passes on to Claude Code and the commands
+ * it runs.
+ */
+export function isIntegratedTerminalProgram(termProgram: string | undefined): boolean {
+	return termProgram === 'vscode' || termProgram === 'UnbrokenCode';
+}
+
+/**
  * Additional context for the request on native only.
  */
 export interface INativeOpenFileRequest extends IOpenFileRequest {

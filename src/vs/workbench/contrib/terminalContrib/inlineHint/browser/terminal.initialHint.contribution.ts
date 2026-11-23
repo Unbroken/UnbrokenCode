@@ -11,7 +11,7 @@ import { KeybindingLabel } from '../../../../../base/browser/ui/keybindingLabel/
 import { WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../../base/common/actions.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../base/common/lifecycle.js';
-import { OS } from '../../../../../base/common/platform.js';
+import { isMacintosh, OS } from '../../../../../base/common/platform.js';
 import { hasKey } from '../../../../../base/common/types.js';
 import { localize } from '../../../../../nls.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -376,6 +376,11 @@ class TerminalInitialHintWidget extends Disposable {
 			}));
 
 			this._toDispose.add(dom.addDisposableListener(this._domNode, dom.EventType.CONTEXT_MENU, (e) => {
+				// A right click, or Control+click on macOS, that went to the app, which has mouse
+				// reporting on, is the app's
+				if ((e.button === 2 || (isMacintosh && e.button === 0 && e.ctrlKey)) && !e.shiftKey && this._instance.xterm?.raw.isPressReported) {
+					return;
+				}
 				this._contextMenuService.showContextMenu({
 					getAnchor: () => { return new StandardMouseEvent(dom.getActiveWindow(), e); },
 					getActions: () => {

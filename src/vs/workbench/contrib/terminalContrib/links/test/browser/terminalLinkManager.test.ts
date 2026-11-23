@@ -5,6 +5,7 @@
 
 import { deepStrictEqual, strictEqual } from 'assert';
 import { equals } from '../../../../../../base/common/arrays.js';
+import { isMacintosh } from '../../../../../../base/common/platform.js';
 import { IEditorOptions } from '../../../../../../editor/common/config/editorOptions.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../../platform/configuration/test/common/testConfigurationService.js';
@@ -29,7 +30,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { TestXtermLogger } from '../../../../../../platform/terminal/test/common/terminalTestHelpers.js';
 import { runWithFakedTimers } from '../../../../../../base/test/common/timeTravelScheduler.js';
 import { timeout } from '../../../../../../base/common/async.js';
-import { IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { IDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { IMarkdownString, MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { renderMarkdown } from '../../../../../../base/browser/markdownRenderer.js';
@@ -64,6 +65,9 @@ class TestLinkManager extends TerminalLinkManager {
 	}
 	setLinks(links: IDetectedLinks): void {
 		this._links = links;
+	}
+	isLinkClickForApp(type = 'mouseup', button = 0, modifiers: MouseEventInit = { ctrlKey: true }): boolean {
+		return this._isLinkClickForApp(new MouseEvent(type, { button, ...modifiers }));
 	}
 }
 
@@ -110,6 +114,49 @@ suite('TerminalLinkManager', () => {
 				return undefined;
 			}
 		} as Partial<ITerminalCapabilityStore> as any, instantiationService.createInstance(TerminalLinkResolver)));
+	});
+
+	suite('link clicks with mouse reporting', () => {
+		test('leaves a link click to the app that got it with the modifier that opens links', async () => {
+			const container = document.createElement('div');
+			container.style.width = '800px';
+			container.style.height = '300px';
+			document.body.appendChild(container);
+			store.add(toDisposable(() => container.remove()));
+			xterm.open(container);
+			const ctrlClick = (button = 0) => xterm.element!.querySelector('.xterm-screen')!.dispatchEvent(new MouseEvent('mousedown', { button, ctrlKey: true, bubbles: true, clientX: 5, clientY: 5 }));
+			ctrlClick();
+			const plain = linkManager.isLinkClickForApp();
+			await new Promise<void>(resolve => xterm.write('\x1b[?1000h', resolve));
+			ctrlClick();
+			const reported = linkManager.isLinkClickForApp('mouseup', 0, isMacintosh ? { metaKey: true } : { ctrlKey: true });
+			// Cmd+Ctrl+click on macOS, whose report carries Ctrl
+			const reportedCmdCtrl = linkManager.isLinkClickForApp('mouseup', 0, { metaKey: true, ctrlKey: true });
+			// A right click that the app got, also with Cmd on macOS
+			ctrlClick(2);
+			const reportedRight = linkManager.isLinkClickForApp('mouseup', 2);
+			ctrlClick();
+			// With Alt as the link modifier, as on macOS when Cmd is the multi-cursor modifier
+			await configurationService.setUserConfiguration('editor', { multiCursorModifier: 'ctrlCmd' });
+			const reportedAlt = linkManager.isLinkClickForApp();
+			// Opened from a hover, which passes its mouse move, not the click's release
+			const fromHover = linkManager.isLinkClickForApp('mousemove');
+			// A press in scrollback, which the report's row on the app's screen doesn't point to
+			await new Promise<void>(resolve => xterm.write('\r\n'.repeat(40), resolve));
+			xterm.scrollLines(-5);
+			ctrlClick();
+			const inScrollback = linkManager.isLinkClickForApp();
+			xterm.scrollToBottom();
+			// X10 reports don't carry modifiers either
+			await new Promise<void>(resolve => xterm.write('\x1b[?1000l\x1b[?9h', resolve));
+			ctrlClick();
+			const reportedX10 = linkManager.isLinkClickForApp();
+			// Cmd+click on macOS, which mouse reports don't carry, opens links in the terminal
+			deepStrictEqual(
+				{ plain, reported, reportedCmdCtrl, reportedRight, reportedAlt, fromHover, inScrollback, reportedX10 },
+				{ plain: false, reported: !isMacintosh, reportedCmdCtrl: true, reportedRight: true, reportedAlt: true, fromHover: false, inScrollback: false, reportedX10: false }
+			);
+		});
 	});
 
 	suite('registerExternalLinkProvider', () => {

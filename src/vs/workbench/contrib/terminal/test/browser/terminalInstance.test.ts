@@ -15,6 +15,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { isWindows, OperatingSystem, type IProcessEnvironment } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { mock, upcastPartial } from '../../../../../base/test/common/mock.js';
+import { IMenu } from '../../../../../platform/actions/common/actions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../../platform/configuration/test/common/testConfigurationService.js';
@@ -363,6 +364,39 @@ suite('Workbench - TerminalInstance', () => {
 			instance.setVisible(true);
 			instance.layout(new Dimension(800, 300));
 			strictEqual(instance.xterm!.raw.buffer.active.getLine(0)?.translateToString(true), prompt);
+		});
+
+		test('leaves a right click on the terminal to the app while it has mouse reporting on', async () => {
+			const instance = await createTerminalInstance();
+			const container = document.createElement('div');
+			document.body.appendChild(container);
+			store.add(toDisposable(() => container.remove()));
+			instance.attachToElement(container);
+			instance.setVisible(true);
+			instance.layout(new Dimension(800, 300));
+			const menu = upcastPartial<IMenu>({});
+			// A right click with its target set, as the terminal's container gets it
+			const rightClick = (target: HTMLElement) => {
+				const event = new MouseEvent('mousedown', { button: 2, bubbles: true });
+				target.dispatchEvent(event);
+				return instance.handleMouseEvent(event, menu);
+			};
+			const terminal = instance.xterm!.raw.element!;
+			const plain = await rightClick(terminal);
+			await writeP(instance.xterm!.raw, '\x1b[?1000h');
+			const reported = await rightClick(terminal);
+			// Beside the terminal, as in a split's margin, the click doesn't reach the app
+			const beside = await rightClick(container);
+			// Nor while the terminal takes no input, as after its process exits
+			instance.xterm!.raw.options.disableStdin = true;
+			const inputDisabled = await rightClick(terminal);
+			instance.xterm!.raw.options.disableStdin = false;
+			await writeP(instance.xterm!.raw, '\x1b[?1000l');
+			const afterReporting = await rightClick(terminal);
+			deepStrictEqual(
+				{ plain, reported, beside, inputDisabled, afterReporting },
+				{ plain: undefined, reported: { cancelContextMenu: true }, beside: undefined, inputDisabled: undefined, afterReporting: undefined }
+			);
 		});
 
 		test('should create an instance of TerminalInstance with env from default profile', async () => {

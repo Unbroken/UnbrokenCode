@@ -116,7 +116,7 @@ export class TerminalLinkManager extends DisposableStore {
 		this._xterm.options.linkHandler = {
 			allowNonHttpProtocols: true,
 			activate: async (event, text) => {
-				if (!this._isLinkActivationModifierDown(event)) {
+				if (!this._isLinkActivationModifierDown(event) || this._isLinkClickForApp(event)) {
 					return;
 				}
 				const colonIndex = text.indexOf(':');
@@ -203,7 +203,7 @@ export class TerminalLinkManager extends DisposableStore {
 			// Prevent default electron link handling so Alt+Click mode works normally
 			e.event?.preventDefault();
 			// Require correct modifier on click unless event is coming from linkQuickPick selection
-			if (e.event && !(e.event instanceof TerminalLinkQuickPickEvent) && !this._isLinkActivationModifierDown(e.event)) {
+			if (e.event && !(e.event instanceof TerminalLinkQuickPickEvent) && (!this._isLinkActivationModifierDown(e.event) || this._isLinkClickForApp(e.event))) {
 				return;
 			}
 			// Just call the handler if there is no before listener
@@ -450,6 +450,30 @@ export class TerminalLinkManager extends DisposableStore {
 		for (const p of this._standardLinkProviders.values()) {
 			this._linkProvidersDisposables.push(this._xterm.registerLinkProvider(p));
 		}
+	}
+
+	/**
+	 * Whether a link click belongs to the app, which has mouse reporting on and got the click with
+	 * the modifier that opens links, as for Ctrl+click, so that it can open the link itself, as
+	 * Claude Code does, as in other terminals. Cmd+click on macOS, and X10 reporting, whose reports
+	 * don't carry the modifier, still open the link here, as does a link opened otherwise than by
+	 * the click's release, such as from its hover. A press in scrollback doesn't count as reported.
+	 */
+	protected _isLinkClickForApp(event: MouseEvent): boolean {
+		if (event.type !== 'mouseup') {
+			return false;
+		}
+		if (!this._xterm.isPressReported) {
+			return false;
+		}
+		// Another button's click that the app got is the app's, whatever the modifier
+		if (event.button !== 0) {
+			return true;
+		}
+		const editorConf = this._configurationService.getValue<{ multiCursorModifier: 'ctrlCmd' | 'alt' }>('editor');
+		// Cmd+click without a modifier that the report carries, as Ctrl or Option would be
+		const opensWithCmd = isMacintosh && editorConf.multiCursorModifier !== 'ctrlCmd' && !event.ctrlKey && !event.altKey;
+		return !opensWithCmd && this._xterm.modes.mouseTrackingMode !== 'x10';
 	}
 
 	protected _isLinkActivationModifierDown(event: MouseEvent): boolean {

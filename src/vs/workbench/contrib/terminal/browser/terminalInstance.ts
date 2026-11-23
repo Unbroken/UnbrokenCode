@@ -2657,6 +2657,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return { cancelContextMenu: true };
 		}
 
+		// A right click, or Control+click on macOS, that the app gets, as in other terminals, isn't
+		// handled here too
+		if ((event.button === 2 || (isMacintosh && event.button === 0 && event.ctrlKey)) && this._isRightClickReportedToApp(event)) {
+			return { cancelContextMenu: true };
+		}
+
 		// Allow contributions to handle the mouse event first
 		for (const contrib of this._contributions.values()) {
 			const result = await contrib.handleMouseEvent?.(event);
@@ -2694,6 +2700,22 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				return;
 			}
 		}
+	}
+
+	/**
+	 * Whether a right click on this terminal went to the app, as xterm reports it once it has handled
+	 * the press: unless Shift asks for the terminal's own handling.
+	 */
+	private _isRightClickReportedToApp(event: MouseEvent): boolean {
+		if (event.shiftKey || !this.xterm) {
+			return false;
+		}
+		// A click beside the terminal, such as in a split's margin, doesn't reach xterm
+		const element = this.xterm.raw.element;
+		if (!element || !dom.isHTMLElement(event.target) || !element.contains(event.target)) {
+			return false;
+		}
+		return this.xterm.raw.isPressReported;
 	}
 }
 

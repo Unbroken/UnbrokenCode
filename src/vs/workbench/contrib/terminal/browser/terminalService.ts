@@ -1127,6 +1127,9 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 		if (options.readonly) {
 			xterm.raw.attachCustomKeyEventHandler(() => false);
+			// Nothing gets its input, so mouse reports that its output turns on don't reach an app,
+			// and its clicks stay the terminal's, such as Ctrl+click on links
+			xterm.raw.options.disableStdin = true;
 		}
 
 		const instance = new DetachedTerminal(xterm, { ...options, capabilities }, this._instantiationService);

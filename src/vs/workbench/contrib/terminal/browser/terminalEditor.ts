@@ -164,8 +164,14 @@ export class TerminalEditor extends EditorPane {
 			return;
 		}
 		this._register(dom.addDisposableListener(this._editorInstanceElement, 'mousedown', async (event: MouseEvent) => {
-			const terminal = this._terminalEditorService.activeInstance;
-			if (this._terminalEditorService.instances.length > 0 && terminal) {
+			// Each right press decides for its own context menu, also when an earlier one ended its
+			// click elsewhere
+			if (event.button === 2) {
+				this._cancelContextMenu = false;
+			}
+			// This editor's terminal, which may not be the active one
+			const terminal = this._editorInput?.terminalInstance;
+			if (terminal) {
 				const result = await terminal.handleMouseEvent(event, this._instanceMenu);
 				if (typeof result === 'object' && result.cancelContextMenu) {
 					this._cancelContextMenu = true;
@@ -185,6 +191,12 @@ export class TerminalEditor extends EditorPane {
 					if (!this._cancelContextMenu) {
 						openContextMenu(this.window, event, this._editorInput?.terminalInstance, this._instanceMenu, this._contextMenuService);
 					}
+					event.preventDefault();
+					event.stopImmediatePropagation();
+					this._cancelContextMenu = false;
+				} else if (this._cancelContextMenu) {
+					// The mouse press asked for no context menu, such as for a right click that the
+					// app gets, which mustn't keep later ones from opening it
 					event.preventDefault();
 					event.stopImmediatePropagation();
 					this._cancelContextMenu = false;

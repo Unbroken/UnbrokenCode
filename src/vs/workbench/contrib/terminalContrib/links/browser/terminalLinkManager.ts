@@ -26,7 +26,7 @@ import { TerminalWidgetManager } from '../../../terminal/browser/widgets/widgetM
 import { IXtermCore } from '../../../terminal/browser/xterm-private.js';
 import { ITerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { ITerminalConfiguration, ITerminalProcessInfo, TERMINAL_CONFIG_SECTION } from '../../../terminal/common/terminal.js';
-import type { ILink, ILinkProvider, IViewportRange, Terminal } from '@xterm/xterm';
+import type { IBufferRange, ILink, ILinkProvider, IViewportRange, Terminal } from '@xterm/xterm';
 import { convertBufferRangeToViewport } from './terminalLinkHelpers.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { ITerminalLogService } from '../../../../../platform/terminal/common/terminal.js';
@@ -115,8 +115,8 @@ export class TerminalLinkManager extends DisposableStore {
 		}));
 		this._xterm.options.linkHandler = {
 			allowNonHttpProtocols: true,
-			activate: async (event, text) => {
-				if (!this._isLinkActivationModifierDown(event) || this._isLinkClickForApp(event)) {
+			activate: async (event, text, range) => {
+				if (!this._isLinkActivationModifierDown(event) || this._isLinkClickForApp(event) || this._isLinkDragSelecting(event, range)) {
 					return;
 				}
 				const colonIndex = text.indexOf(':');
@@ -203,7 +203,7 @@ export class TerminalLinkManager extends DisposableStore {
 			// Prevent default electron link handling so Alt+Click mode works normally
 			e.event?.preventDefault();
 			// Require correct modifier on click unless event is coming from linkQuickPick selection
-			if (e.event && !(e.event instanceof TerminalLinkQuickPickEvent) && (!this._isLinkActivationModifierDown(e.event) || this._isLinkClickForApp(e.event))) {
+			if (e.event && !(e.event instanceof TerminalLinkQuickPickEvent) && (!this._isLinkActivationModifierDown(e.event) || this._isLinkClickForApp(e.event) || this._isLinkDragSelecting(e.event, e.link.bufferRange))) {
 				return;
 			}
 			// Just call the handler if there is no before listener
@@ -476,7 +476,32 @@ export class TerminalLinkManager extends DisposableStore {
 		return !opensWithCmd && this._xterm.modes.mouseTrackingMode !== 'x10';
 	}
 
+	/**
+	 * Whether the release on a link ends a drag that selected text, such as with Option, which also
+	 * opens links when it's the multi-cursor modifier's counterpart, rather than a click: whether a
+	 * selection covers part of the link, which an earlier selection elsewhere doesn't.
+	 */
+	protected _isLinkDragSelecting(event: MouseEvent, range: IBufferRange): boolean {
+		const selection = event.type === 'mouseup' ? this._xterm.getSelectionPosition() : undefined;
+		if (!selection) {
+			return false;
+		}
+		// The selection's 0-based start and end, which is past its last cell, and the link's
+		// 1-based cells, as offsets in the buffer
+		const cols = this._xterm.cols;
+		const selectionStart = selection.start.y * cols + selection.start.x;
+		const selectionEnd = selection.end.y * cols + selection.end.x;
+		const linkStart = (range.start.y - 1) * cols + range.start.x - 1;
+		const linkEnd = (range.end.y - 1) * cols + range.end.x;
+		return selectionStart < linkEnd && linkStart < selectionEnd;
+	}
+
 	protected _isLinkActivationModifierDown(event: MouseEvent): boolean {
+		// Only a primary click opens a link, not a secondary click such as a right click, which is
+		// for the context menu or the app
+		if (event.button !== 0) {
+			return false;
+		}
 		const editorConf = this._configurationService.getValue<{ multiCursorModifier: 'ctrlCmd' | 'alt' }>('editor');
 		if (editorConf.multiCursorModifier === 'ctrlCmd') {
 			return !!event.altKey;

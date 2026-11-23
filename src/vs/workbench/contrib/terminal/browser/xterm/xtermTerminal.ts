@@ -301,6 +301,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 			macOptionIsMeta: config.macOptionIsMeta,
 			macOptionClickForcesSelection: config.macOptionClickForcesSelection,
 			rightClickSelectsWord: config.rightClickBehavior === 'selectWord',
+			// A right click on the selection is kept from an app with mouse reporting only for the context
+			// menu to copy it
+			rightClickOnSelectionGoesToApp: !rightClickOpensContextMenu(config.rightClickBehavior),
 			fastScrollSensitivity: config.fastScrollSensitivity,
 			scrollSensitivity: config.mouseWheelScrollSensitivity,
 			scrollOnEraseInDisplay: true,
@@ -650,6 +653,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal, IDetach
 		this.raw.options.altClickMovesCursor = config.altClickMovesCursor && editorOptions.multiCursorModifier === 'alt';
 		this.raw.options.macOptionClickForcesSelection = config.macOptionClickForcesSelection;
 		this.raw.options.rightClickSelectsWord = config.rightClickBehavior === 'selectWord';
+		this.raw.options.rightClickOnSelectionGoesToApp = !rightClickOpensContextMenu(config.rightClickBehavior);
 		this.raw.options.wordSeparator = config.wordSeparators;
 		this.raw.options.scrollbar = this._getScrollbarOptions();
 		this.raw.options.ignoreBracketedPasteMode = config.ignoreBracketedPasteMode;
@@ -1349,4 +1353,12 @@ function vscodeToXtermCursorStyle<T extends 'cursorStyle' | 'cursorStyleInactive
 		return 'bar';
 	}
 	return style as ICursorStyleVscodeToXtermMap[T];
+}
+
+/**
+ * Whether a right click in the terminal opens its context menu, rather than copying, pasting or
+ * doing nothing.
+ */
+function rightClickOpensContextMenu(behavior: ITerminalConfiguration['rightClickBehavior']): boolean {
+	return behavior === 'default' || behavior === 'selectWord';
 }

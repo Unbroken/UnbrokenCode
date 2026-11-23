@@ -153,9 +153,9 @@ export const terminalConfiguration: IStringDictionary<IConfigurationPropertySche
 		default: false
 	},
 	[TerminalSettingId.MacOptionClickForcesSelection]: {
-		description: localize('terminal.integrated.macOptionClickForcesSelection', "Controls whether to force selection when using Option+click on macOS. This will force a regular (line) selection and disallow the use of column selection mode. This enables copying and pasting using the regular terminal selection, for example, when mouse mode is enabled in tmux."),
+		description: localize('terminal.integrated.macOptionClickForcesSelection', "Controls whether Option+click and Option+drag select text on macOS while an app has mouse reporting on, such as tmux or Claude Code, instead of sending the click to the app. This makes a regular (line) selection there; elsewhere Option+drag still selects a column."),
 		type: 'boolean',
-		default: false
+		default: true
 	},
 	[TerminalSettingId.AltClickMovesCursor]: {
 		markdownDescription: localize('terminal.integrated.altClickMovesCursor', "If enabled, alt/option + click will reposition the prompt cursor to underneath the mouse when {0} is set to {1} (the default value). This may not work reliably depending on your shell.", '`#editor.multiCursorModifier#`', '`\'alt\'`'),

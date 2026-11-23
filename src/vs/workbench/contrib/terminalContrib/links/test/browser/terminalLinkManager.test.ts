@@ -22,7 +22,7 @@ import { ITerminalCapabilityImplMap, ITerminalCapabilityStore, TerminalCapabilit
 import { ITerminalConfiguration, ITerminalProcessManager } from '../../../../terminal/common/terminal.js';
 import { TestViewDescriptorService } from '../../../../terminal/test/browser/xterm/xtermTestUtils.js';
 import { TestStorageService } from '../../../../../test/common/workbenchTestServices.js';
-import type { ILink, Terminal } from '@xterm/xterm';
+import type { IBufferRange, ILink, Terminal } from '@xterm/xterm';
 import { IXtermCore } from '../../../../terminal/browser/xterm-private.js';
 import { TerminalLinkResolver } from '../../browser/terminalLinkResolver.js';
 import { importAMDNodeModule } from '../../../../../../amdX.js';
@@ -68,6 +68,12 @@ class TestLinkManager extends TerminalLinkManager {
 	}
 	isLinkClickForApp(type = 'mouseup', button = 0, modifiers: MouseEventInit = { ctrlKey: true }): boolean {
 		return this._isLinkClickForApp(new MouseEvent(type, { button, ...modifiers }));
+	}
+	isLinkActivationModifierDown(button: number): boolean {
+		return this._isLinkActivationModifierDown(new MouseEvent('mouseup', { button, altKey: true, ctrlKey: true, metaKey: true }));
+	}
+	isLinkDragSelecting(range: IBufferRange, type = 'mouseup'): boolean {
+		return this._isLinkDragSelecting(new MouseEvent(type), range);
 	}
 }
 
@@ -156,6 +162,36 @@ suite('TerminalLinkManager', () => {
 				{ plain, reported, reportedCmdCtrl, reportedRight, reportedAlt, fromHover, inScrollback, reportedX10 },
 				{ plain: false, reported: !isMacintosh, reportedCmdCtrl: true, reportedRight: true, reportedAlt: true, fromHover: false, inScrollback: false, reportedX10: false }
 			);
+		});
+	});
+
+	suite('link activation', () => {
+		test('opens links only with the primary button', () => {
+			deepStrictEqual(
+				{ primary: linkManager.isLinkActivationModifierDown(0), right: linkManager.isLinkActivationModifierDown(2), middle: linkManager.isLinkActivationModifierDown(1) },
+				{ primary: true, right: false, middle: false }
+			);
+		});
+	});
+
+	suite('link clicks that select', () => {
+		test('doesn\'t open a link when its release ends a drag that selected text', async () => {
+			const container = document.createElement('div');
+			document.body.appendChild(container);
+			store.add(toDisposable(() => container.remove()));
+			xterm.open(container);
+			await new Promise<void>(resolve => xterm.write('see https://example.com/a', resolve));
+			// The link, at 1-based columns 5 to 25 of the first row
+			const link: IBufferRange = { start: { x: 5, y: 1 }, end: { x: 25, y: 1 } };
+			const click = linkManager.isLinkDragSelecting(link);
+			xterm.select(6, 0, 5);
+			const drag = linkManager.isLinkDragSelecting(link);
+			const fromHover = linkManager.isLinkDragSelecting(link, 'mousemove');
+			// An earlier selection elsewhere, such as of "see"
+			xterm.select(0, 0, 3);
+			const elsewhere = linkManager.isLinkDragSelecting(link);
+			xterm.clearSelection();
+			deepStrictEqual({ click, drag, fromHover, elsewhere }, { click: false, drag: true, fromHover: false, elsewhere: false });
 		});
 	});
 

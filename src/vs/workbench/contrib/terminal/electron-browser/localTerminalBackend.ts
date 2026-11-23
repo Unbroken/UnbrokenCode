@@ -430,21 +430,28 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 	 * Prepend the app's bin_compat/ directory to PATH so that a 'code' CLI
 	 * command is available inside integrated terminals. This provides
 	 * compatibility with VS Code extensions (e.g. Claude Code) that invoke
-	 * the 'code' command to install extensions or open files.
+	 * the 'code' command to install extensions or open files. On macOS and
+	 * Linux, its 'claude' wrapper runs Claude Code as in other terminals (see
+	 * bin_compat/posix/claude).
 	 */
 	private _addCompatBinToPath(env: IProcessEnvironment, shellExecutable?: string): void {
 		const appRoot = this._environmentService.appRoot;
-		let compatBinDir: string;
+		// One or more directories, separated as in PATH
+		let compatBinPath: string;
 		if (this._environmentService.isBuilt) {
 			// Built mode:
 			// macOS: bin_compat/ is inside the app bundle (appRoot/bin_compat/)
 			// Linux/Windows: bin_compat/ is at the install root (appRoot/../../bin_compat/)
-			compatBinDir = isMacintosh
+			compatBinPath = isMacintosh
 				? path.join(appRoot, 'bin_compat')
 				: path.join(appRoot, '..', '..', 'bin_compat');
 		} else {
-			// Dev mode: bin_compat/ is in the source root (appRoot/bin_compat/)
-			compatBinDir = path.join(appRoot, 'bin_compat');
+			// Dev mode: bin_compat/ is in the source root (appRoot/bin_compat/), and the wrappers
+			// for macOS and Linux only, which builds put in bin_compat/, are in bin_compat/posix/
+			compatBinPath = path.join(appRoot, 'bin_compat');
+			if (!isWindows) {
+				compatBinPath = path.join(appRoot, 'bin_compat', 'posix') + ':' + compatBinPath;
+			}
 		}
 		const pathSep = isWindows ? ';' : ':';
 		// On Windows, the PATH variable name may be 'Path', 'PATH', or another
@@ -455,9 +462,9 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 			? (Object.keys(env).find(k => k.toLowerCase() === 'path') ?? 'PATH')
 			: 'PATH';
 		if (env[pathKey]) {
-			env[pathKey] = compatBinDir + pathSep + env[pathKey];
+			env[pathKey] = compatBinPath + pathSep + env[pathKey];
 		} else {
-			env[pathKey] = compatBinDir;
+			env[pathKey] = compatBinPath;
 		}
 
 		// Also add to VSCODE_ENV_PREPEND so the shell integration script
@@ -469,7 +476,7 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		// format (/c/... with ':' separator) since their integration scripts
 		// expect POSIX paths. MSYS2 auto-converts PATH but not custom env vars
 		// like VSCODE_ENV_PREPEND. PowerShell keeps native Windows format.
-		let prependDir = compatBinDir;
+		let prependDir = compatBinPath;
 		let prependSep = pathSep;
 		const shell = shellExecutable ? path.basename(shellExecutable).toLowerCase() : '';
 		const isPosixShellOnWindows = isWindows && shell !== 'pwsh.exe' && shell !== 'powershell.exe' && shell !== 'cmd.exe';
@@ -489,6 +496,14 @@ export class LocalTerminalBackend extends BaseTerminalBackend implements ITermin
 		// script can match the singleton IPC handle (e.g. when the debug launcher
 		// uses a custom --user-data-dir that differs from the VSCODE_DEV default).
 		env.VSCODE_COMPAT_USER_DATA_DIR = this._environmentService.userDataPath;
+
+		// Tells the 'claude' wrapper to turn off Claude Code's wheel acceleration (see
+		// bin_compat/posix/claude), and not when a value inherited from another terminal says so
+		if (isMacintosh && this._configurationService.getValue<boolean>(TerminalSettingId.DisableClaudeCodeWheelAcceleration)) {
+			env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION = 'off';
+		} else {
+			delete env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION;
+		}
 	}
 
 	private _getWorkspaceName(): string {

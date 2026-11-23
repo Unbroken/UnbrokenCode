@@ -7,5 +7,6 @@ ThirdPartyNotices.txt eol=crlf
 *.cmd eol=crlf
 *.ps1 eol=lf
 *.sh eol=lf
+bin_compat/posix/* eol=lf
 *.rtf -text
 **/*.json linguist-language=jsonc

@@ -1,0 +1,150 @@
+#!/bin/sh
+#
+# Claude Code wrapper for the terminal of Unbroken Code, on macOS and Linux, where builds put it in
+# bin_compat/ (Windows runs an extensionless file in PowerShell, so it has none).
+#
+# Claude Code treats a terminal with TERM_PROGRAM=vscode as VS Code's xterm.js, and smooths and
+# accelerates wheel scrolling for upstream xterm.js, which sends few wheel events. The terminal of
+# Unbroken Code sends a wheel event for each row, like Alacritty, which that tuning makes lag and
+# cap. So Claude Code runs with a TERM_PROGRAM of its own, as in other terminals, and keeps what it
+# only turns on for VS Code by name: links, strikethrough, synchronized output, and connecting to
+# the IDE by default.
+#
+# With terminal.integrated.disableClaudeCodeWheelAcceleration (macOS, on by default), the terminal
+# sets UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION=off, and the wrapper turns off Claude Code's own
+# wheel acceleration, which makes momentum scrolling move too far.
+
+# Whether a file is a copy of this wrapper
+claude_wrapper_copy() {
+	{ head -c 300 -- "$1" | grep -qF "Claude Code wrapper for the terminal of Unbroken Code"; } 2>/dev/null
+}
+
+# Finds the next claude on PATH after this wrapper, in CLAUDE, skipping copies of it; without one,
+# the first
+claude_find() {
+	local dir candidate first="" self="" IFS=:
+	CLAUDE=
+	set -f
+	for dir in ${PATH-}; do
+		# An empty entry is the current directory, and a relative one mustn't read as an option
+		case $dir in
+			"") dir=. ;;
+			/*) ;;
+			*) dir="./$dir" ;;
+		esac
+		candidate="$dir/claude"
+		if ! [ -f "$candidate" ] || ! [ -x "$candidate" ]; then
+			continue
+		fi
+		if [ "$candidate" -ef "$0" ]; then
+			self=1
+		elif ! claude_wrapper_copy "$candidate"; then
+			if [ -n "$self" ]; then
+				CLAUDE=$candidate
+				break
+			fi
+			first=${first:-$candidate}
+		fi
+	done
+	set +f
+	CLAUDE=${CLAUDE:-$first}
+	[ -n "$CLAUDE" ]
+}
+
+# Whether the arguments start or resume an interactive session, and take settings before them:
+# none, -c or --continue, -r or --resume with a session, -w or --worktree with or
+# without a name, common options of an interactive session such as --model, and a prompt, which has
+# a space. Settings before anything else can change what Claude Code (2.1.330) does, such as a
+# command that must come first or an SDK's launch.
+claude_takes_settings() {
+	local arg previous="" value="" resume=""
+	for arg in "$@"; do
+		# The session after -r or --resume: without one, Claude Code opens its picker of sessions,
+		# which settings would change
+		if [ -n "$resume" ]; then
+			case $arg in
+				-* | "") return 1 ;;
+			esac
+			resume=
+			previous=$arg
+			continue
+		fi
+		# The value of the previous option, or the values of an option that takes every word up to
+		# the next option
+		case $value in
+			one)
+				value=
+				previous=$arg
+				continue
+				;;
+			many)
+				case $arg in
+					-*) value= ;;
+					*)
+						previous=$arg
+						continue
+						;;
+				esac
+				;;
+		esac
+		case $arg in
+			-c | --continue | --fork-session | --dangerously-skip-permissions | --allow-dangerously-skip-permissions \
+				| --ide | --chrome | --no-chrome | --verbose | --debug=* | --brief | --safe-mode \
+				| --disable-slash-commands | --strict-mcp-config | --ax-screen-reader | --tmux | --tmux=*) ;;
+			-r | --resume) resume=1 ;;
+			--resume=) return 1 ;;
+			# The rest is a prompt
+			--) return 0 ;;
+			--resume=* | -r?* | -w | --worktree | --worktree=* | -w?* | -d | --debug | -d?*) ;;
+			--model | --permission-mode | --effort | --agent | --append-system-prompt | --system-prompt \
+				| --fallback-model | -n | --name | --plugin-dir) value=one ;;
+			--add-dir | --mcp-config | --tools | --allowed-tools | --allowedTools | --disallowed-tools | --disallowedTools) value=many ;;
+			--model=* | --permission-mode=* | --effort=* | --agent=* | --add-dir=* | --append-system-prompt=* \
+				| --system-prompt=* | --fallback-model=* | --mcp-config=* | --name=* | --tools=* | --allowed-tools=* | --allowedTools=* \
+				| --disallowed-tools=* | --disallowedTools=* | --plugin-dir=*) ;;
+			-*) return 1 ;;
+			*" "* | *"	"*) ;;
+			*)
+				# Only a worktree after -w or --worktree, or a filter after -d or --debug
+				case $previous in
+					-w | --worktree | -d | --debug) ;;
+					*) return 1 ;;
+				esac
+				;;
+		esac
+		previous=$arg
+	done
+	[ -z "$resume" ]
+}
+
+# Whether the global config sets defaultToAgentsView, which opens the Agents view for a bare claude
+# and some options such as -d, and which settings on the command line keep it from
+claude_agents_view() {
+	local config="${CLAUDE_CONFIG_DIR:-${HOME-}}/.claude.json"
+	[ -f "$config" ] && grep -qsE '"defaultToAgentsView"[[:space:]]*:[[:space:]]*true' "$config"
+}
+
+if ! claude_find; then
+	echo "claude: command not found" >&2
+	exit 127
+fi
+
+# The terminal's setting, which also reaches programs such as tmux that it runs, and not when output
+# goes elsewhere, which makes Claude Code print instead of starting a session
+if [ "${UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION-}" = off ] && [ -t 1 ] && claude_takes_settings "$@" && ! claude_agents_view; then
+	set -- --settings '{"wheelScrollAccelerationEnabled":false}' "$@"
+fi
+
+if [ "${TERM_PROGRAM-}" = "vscode" ]; then
+	TERM_PROGRAM=UnbrokenCode
+	# Links only for a terminal, not for output that goes elsewhere
+	if [ -t 1 ]; then
+		FORCE_HYPERLINK="${FORCE_HYPERLINK:-1}"
+	fi
+	CLAUDE_CODE_FORCE_STRIKETHROUGH="${CLAUDE_CODE_FORCE_STRIKETHROUGH:-1}"
+	CLAUDE_CODE_FORCE_SYNC_OUTPUT="${CLAUDE_CODE_FORCE_SYNC_OUTPUT:-1}"
+	FORCE_CODE_TERMINAL="${FORCE_CODE_TERMINAL:-1}"
+	export TERM_PROGRAM FORCE_HYPERLINK CLAUDE_CODE_FORCE_STRIKETHROUGH CLAUDE_CODE_FORCE_SYNC_OUTPUT FORCE_CODE_TERMINAL
+fi
+
+exec "$CLAUDE" "$@"

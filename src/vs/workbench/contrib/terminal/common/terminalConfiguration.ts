@@ -141,6 +141,12 @@ export const terminalConfiguration: IStringDictionary<IConfigurationPropertySche
 		type: 'boolean',
 		default: true,
 	},
+	[TerminalSettingId.DisableClaudeCodeWheelAcceleration]: {
+		description: localize('terminal.integrated.disableClaudeCodeWheelAcceleration', "Controls whether Claude Code started in a local terminal scrolls without its own wheel acceleration, which makes momentum scrolling move too far. This applies to interactive sessions, started without arguments or with a prompt, --continue, --resume with a session, or common options such as --model, in terminals opened after a change. Turn it off to use Claude Code's own setting."),
+		type: 'boolean',
+		default: true,
+		included: isMacintosh
+	},
 	[TerminalSettingId.MacOptionIsMeta]: {
 		description: localize('terminal.integrated.macOptionIsMeta', "Controls whether to treat the option key as the meta key in the terminal on macOS."),
 		type: 'boolean',

@@ -8,7 +8,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Event } from '../../../../../base/common/event.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { join } from '../../../../../base/common/path.js';
-import { isWindows } from '../../../../../base/common/platform.js';
+import { isMacintosh, isWindows } from '../../../../../base/common/platform.js';
 import { INativeWorkbenchEnvironmentService } from '../../../../services/environment/electron-browser/environmentService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
@@ -126,14 +126,14 @@ suite('LocalTerminalBackend', () => {
 			onDidChangeExtensions: Event.None,
 			extensions: registeredExtensions
 		}));
-		instantiationService.stub(IConfigurationService, new TestConfigurationService());
+		instantiationService.stub(IConfigurationService, new TestConfigurationService({ terminal: { integrated: { disableClaudeCodeWheelAcceleration: true } } }));
 		instantiationService.stub(IConfigurationResolverService, upcastPartial<IConfigurationResolverService>({
 			resolveWithEnvironment: async (_environment, _folder, value) => value
 		}));
 		instantiationService.stub(IHistoryService, new TestHistoryService());
 		instantiationService.stub(IProductService, upcastPartial<IProductService>({ version: 'test' }));
 		instantiationService.stub(ITerminalProfileResolverService, upcastPartial<ITerminalProfileResolverService>({
-			getEnvironment: async () => ({ PATH: '/base/bin' })
+			getEnvironment: async () => ({ PATH: '/base/bin', UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: 'inherited' })
 		}));
 		const environmentVariableService = store.add(instantiationService.createInstance(EnvironmentVariableService));
 		const foreignCollection = {
@@ -152,7 +152,7 @@ suite('LocalTerminalBackend', () => {
 			onPtyHostUnresponsive: Event.None,
 			onPtyHostResponsive: Event.None,
 			onPtyHostRequestResolveVariables: Event.None,
-			getEnvironment: async () => ({ PATH: '/base/bin' }),
+			getEnvironment: async () => ({ PATH: '/base/bin', UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: 'inherited' }),
 			reviveTerminalProcesses: async (_workspaceId, state) => {
 				revivedState = state;
 			},
@@ -198,11 +198,18 @@ suite('LocalTerminalBackend', () => {
 		deepStrictEqual({
 			env: {
 				PATH: revivedState[0].processLaunchConfig.env.PATH,
-				SHARED_VALUE: revivedState[0].processLaunchConfig.env.SHARED_VALUE
+				SHARED_VALUE: revivedState[0].processLaunchConfig.env.SHARED_VALUE,
+				UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: revivedState[0].processLaunchConfig.env.UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION
 			},
 			collections: revivedState[0].processLaunchConfig.options.environmentVariableCollections
 		}, {
-			env: { PATH: `${join('/app', 'bin_compat')}${isWindows ? ';' : ':'}/base/bin`, SHARED_VALUE: 'available' },
+			// Development builds also add the wrappers for macOS and Linux only
+			env: {
+				PATH: isWindows ? `${join('/app', 'bin_compat')};/base/bin` : `${join('/app', 'bin_compat', 'posix')}:${join('/app', 'bin_compat')}:/base/bin`,
+				SHARED_VALUE: 'available',
+				// The Claude Code wrapper's setting, which is for macOS, replacing an inherited value
+				UNBROKEN_CODE_CLAUDE_WHEEL_ACCELERATION: isMacintosh ? 'off' : undefined
+			},
 			collections: [[
 				'foreign.extension',
 				[['shared-value', { variable: 'SHARED_VALUE', value: 'available', type: EnvironmentVariableMutatorType.Replace }]],

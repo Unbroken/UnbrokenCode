@@ -51,6 +51,7 @@ export const enum TerminalSettingId {
 	TabsLocation = 'terminal.integrated.tabs.location',
 	TabsFocusMode = 'terminal.integrated.tabs.focusMode',
 	TabsAllowAgentCliTitle = 'terminal.integrated.tabs.allowAgentCliTitle',
+	DisableClaudeCodeWheelAcceleration = 'terminal.integrated.disableClaudeCodeWheelAcceleration',
 	MacOptionIsMeta = 'terminal.integrated.macOptionIsMeta',
 	MacOptionClickForcesSelection = 'terminal.integrated.macOptionClickForcesSelection',
 	AltClickMovesCursor = 'terminal.integrated.altClickMovesCursor',

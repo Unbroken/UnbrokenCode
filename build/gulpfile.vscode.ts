@@ -444,9 +444,12 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(replace('@@NAME@@', product.nameShort))
 				.pipe(rename('bin_compat/code'));
+			// Claude Code wrapper, see bin_compat/posix/claude
+			const compatClaude = gulp.src('bin_compat/posix/claude', { base: 'bin_compat/posix' })
+				.pipe(rename(f => f.dirname = 'bin_compat'));
 			const policyDest = gulp.src('.build/policies/darwin/**', { base: '.build/policies/darwin' })
 				.pipe(rename(f => f.dirname = `policies/${f.dirname}`));
-			all = es.merge(all, shortcut, compatShortcut, policyDest);
+			all = es.merge(all, shortcut, compatShortcut, compatClaude, policyDest);
 		}
 
 		const electronConfig = {
@@ -601,6 +604,10 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 				.pipe(replace('@@PRODNAME@@', product.nameLong))
 				.pipe(replace('@@APPNAME@@', product.applicationName))
 				.pipe(rename('bin_compat/code')));
+
+			// Claude Code wrapper, see bin_compat/posix/claude
+			result = es.merge(result, gulp.src('bin_compat/posix/claude', { base: 'bin_compat/posix' })
+				.pipe(rename(f => f.dirname = 'bin_compat')));
 		}
 
 		result = inlineMeta(result, {

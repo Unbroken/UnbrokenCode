@@ -67,6 +67,9 @@ Name: "hungarian"; MessagesFile: "{#RepoDir}\build\win32\i18n\Default.hu.isl,{#R
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl,{#RepoDir}\build\win32\i18n\messages.tr.isl" {#LocalizedLanguageFile("trk")}
 
 [InstallDelete]
+; A staged background update, which one that replaces it must not add its files to, since the
+; updater moves the whole folder into place
+Type: filesandordirs; Name: "{app}\_"
 Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\out"; Check: IsNotBackgroundUpdate
 Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\plugins"; Check: IsNotBackgroundUpdate
 Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\extensions"; Check: IsNotBackgroundUpdate
